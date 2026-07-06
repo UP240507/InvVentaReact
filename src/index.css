@@ -1,0 +1,27 @@
+/* Importa el nuevo motor de Tailwind v4 */
+@import 'tailwindcss';
+
+/* 🌟 MODO OSCURO POR CLASE EN V4 🌟 */
+@variant dark (&:where(.dark, .dark *));
+
+/* 🌟 TU DESIGN SYSTEM (Identidad de Marca) 🌟 */
+@theme {
+  /* Colores Brand */
+  --color-brand-arrecife: #ff5f40;
+  --color-brand-cesped: #00e5a0;
+  --color-brand-amatista: #8b5cf6;
+  --color-brand-ambar: #ffb224;
+  --color-brand-nacar: #fdf2e9;
+
+  /* Colores UI */
+  --color-ui-obsidiana: #050a07;
+  --color-ui-humo: #101a13;
+  --color-ui-border: #1a2e23;
+  --color-ui-text: #fdf2e9;
+  --color-ui-muted: #4a7a58;
+
+  /* Radios y Tipografía */
+  --radius-brand: 2.5rem;
+  --font-syne: 'Syne', sans-serif;
+  --font-sans: 'DM Sans', sans-serif;
+}
