@@ -12,7 +12,6 @@ import {
   X,
   CheckCircle,
   AlertTriangle,
-  Upload,
   Clock,
 } from 'lucide-react';
 
@@ -87,6 +86,36 @@ export default function ConfiguracionScreen() {
 
   const conf = configuracion || {};
   const [tab, setTab] = useState('restaurante');
+
+  // Roles excluidos del reparto de propinas (columna real roles_sin_propina).
+  const ROLES_STAFF = [
+    'Admin',
+    'Administrador',
+    'Gerente',
+    'Cajero',
+    'Mesero',
+    'Chef',
+    'Barista',
+  ];
+  const [rolesSinPropina, setRolesSinPropina] = useState(
+    Array.isArray(conf.roles_sin_propina)
+      ? conf.roles_sin_propina
+      : ['Admin', 'Administrador', 'Gerente'],
+  );
+  const toggleRolSinPropina = (rol) =>
+    setRolesSinPropina((prev) =>
+      prev.includes(rol) ? prev.filter((r) => r !== rol) : [...prev, rol],
+    );
+
+  // Jornada mínima antes de poder checar salida (0 = sin restricción).
+  // SOLO la cuenta del dueño (Admin) puede modificarla; Gerente la ve
+  // deshabilitada. El candado vive en el checador y en el logout.
+  const esAdminSesion = ['Admin', 'Administrador'].includes(
+    user?.rol || user?.puesto,
+  );
+  const [horasJornada, setHorasJornada] = useState(
+    Number(conf.horas_jornada) || 0,
+  );
 
   // Parsear cfdi_config jsonb (donde guardamos los campos extra)
   const cfdiConf = (() => {
@@ -171,6 +200,10 @@ export default function ConfiguracionScreen() {
         fondo_caja_default: form.fondo_caja_default,
         impresoras,
       },
+      roles_sin_propina: rolesSinPropina,
+      horas_jornada: esAdminSesion
+        ? Number(horasJornada) || 0
+        : Number(conf.horas_jornada) || 0,
       restaurante_id: user?.restaurante_id || conf.restaurante_id,
       id: conf.id,
     };
@@ -514,6 +547,68 @@ export default function ConfiguracionScreen() {
                       form={form}
                       setForm={setForm}
                     />
+
+                    {/* Reparto de propinas: roles EXCLUIDOS por defecto */}
+                    <div className="pt-4 mt-2 border-t border-slate-100 dark:border-ui-border">
+                      <p className="text-sm font-black text-slate-800 dark:text-brand-nacar">
+                        Roles sin propina
+                      </p>
+                      <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-3">
+                        Estos roles quedan fuera del reparto en el Propinero (se
+                        puede reincluir manualmente en un reparto puntual).
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ROLES_STAFF.map((rol) => {
+                          const excluido = rolesSinPropina.includes(rol);
+                          return (
+                            <button
+                              key={rol}
+                              type="button"
+                              onClick={() => toggleRolSinPropina(rol)}
+                              className={`px-4 py-2 rounded-xl text-xs font-black border-2 transition-all ${
+                                excluido
+                                  ? 'border-rose-300 bg-rose-50 text-rose-600 dark:bg-brand-arrecife/10 dark:border-brand-arrecife/50 dark:text-brand-arrecife'
+                                  : 'border-slate-100 bg-slate-50 text-slate-500 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'
+                              }`}
+                            >
+                              {rol} {excluido ? '· sin propina' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Jornada laboral mínima (solo Admin) */}
+                    <div className="pt-4 mt-2 border-t border-slate-100 dark:border-ui-border">
+                      <p className="text-sm font-black text-slate-800 dark:text-brand-nacar">
+                        Jornada mínima para checar salida
+                      </p>
+                      <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-3">
+                        Horas que deben cumplirse desde la entrada para poder
+                        registrar salida y cerrar sesión. 0 = sin restricción.
+                        Salidas antes de tiempo requieren PIN del Admin.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          disabled={!esAdminSesion}
+                          value={horasJornada}
+                          onChange={(e) => setHorasJornada(e.target.value)}
+                          className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        />
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+                          horas
+                        </span>
+                        {!esAdminSesion && (
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-brand-ambar">
+                            Solo el Admin puede modificarla
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Vista previa ticket */}

@@ -35,7 +35,7 @@ import {
 import { useSyncStore } from '../store/useSyncStore';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../features/auth/useAuthStore';
-import { RUTAS_POR_ROL } from '../store/useSessionStore';
+import { RUTAS_POR_ROL, useSessionStore } from '../store/useSessionStore';
 
 // 🌟 FIX: Importamos el Modal directamente en lugar del Widget
 import CierreTurnoModal from '../features/dashboard/CierreTurnoModal';
@@ -139,6 +139,7 @@ export default function SidebarLayout() {
     configuracion,
     turnos,
     comandas_activas,
+    asistencias,
   } = useAppStore();
   // ⚠️ Realtime: la suscripción global YA NO se monta aquí. Vive en
   // fetchInitialData (useAppStore), que corre para CUALQUIER sesión autenticada.
@@ -154,6 +155,7 @@ export default function SidebarLayout() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [globalPopup, setGlobalPopup] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [bloqueoSalida, setBloqueoSalida] = useState(false);
   const [showCierreModal, setShowCierreModal] = useState(false);
 
   const [isDark, setIsDark] = useState(
@@ -566,7 +568,27 @@ export default function SidebarLayout() {
             </NavLink>
 
             <button
-              onClick={() => setConfirmLogout(true)}
+              onClick={() => {
+                // CANDADO: un empleado con jornada ABIERTA (su último registro
+                // de asistencia es 'entrada') no puede desloguearse sin checar
+                // salida — y la salida tiene su propio candado de horas en el
+                // checador (con autorización del Admin). Exentos: gestión.
+                const { empleadoActivo } = useSessionStore.getState();
+                const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;
+                const exento = ['Admin', 'Administrador'].includes(rolEmp);
+                if (empleadoActivo && !exento) {
+                  const regs = (asistencias || [])
+                    .filter((a) => a.empleado_nombre === empleadoActivo.nombre)
+                    .sort(
+                      (a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora),
+                    );
+                  if (regs[0]?.tipo === 'entrada') {
+                    setBloqueoSalida(true);
+                    return;
+                  }
+                }
+                setConfirmLogout(true);
+              }}
               className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife hover:bg-rose-50 dark:hover:bg-brand-arrecife/10 rounded-xl transition-colors"
               title="Cerrar Sesión"
             >
@@ -587,6 +609,42 @@ export default function SidebarLayout() {
       {/* 🌟 MODAL GLOBAL DE CIERRE DE TURNO */}
       {showCierreModal && (
         <CierreTurnoModal onClose={() => setShowCierreModal(false)} />
+      )}
+
+      {/* MODAL: LOGOUT BLOQUEADO POR JORNADA ABIERTA */}
+      {bloqueoSalida && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] border border-slate-100 dark:border-ui-border p-8 shadow-2xl w-full max-w-sm flex flex-col text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-brand-ambar/20 text-amber-500 dark:text-brand-ambar rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8" />
+            </div>
+            <h3 className="font-black text-slate-800 dark:text-brand-nacar text-2xl mb-2 font-syne">
+              Jornada abierta
+            </h3>
+            <p className="text-slate-500 dark:text-ui-muted text-sm font-medium mb-8">
+              Tienes una <strong>entrada sin salida</strong> en el checador.
+              Registra tu salida antes de cerrar sesión (si aún no cumples la
+              jornada, el Admin puede autorizarla con su PIN).
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBloqueoSalida(false)}
+                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-colors"
+              >
+                Seguir trabajando
+              </button>
+              <button
+                onClick={() => {
+                  setBloqueoSalida(false);
+                  navigate('/checador');
+                }}
+                className="flex-1 py-3.5 rounded-xl bg-amber-500 dark:bg-brand-ambar hover:bg-amber-600 shadow-lg shadow-amber-500/30 font-black text-white dark:text-ui-obsidiana transition-transform active:scale-95"
+              >
+                Ir al checador
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL CERRAR SESIÓN */}

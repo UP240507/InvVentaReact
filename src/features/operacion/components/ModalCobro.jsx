@@ -8,7 +8,11 @@ import {
   Receipt,
   HeartHandshake,
   Landmark,
+  Percent,
+  ShieldCheck,
 } from 'lucide-react';
+import { useAppStore } from '../../../store/useAppStore';
+import { useAuthStore } from '../../auth/useAuthStore';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -66,6 +70,82 @@ export default function ModalCobro({
   // null = sin diálogo. { metodo, monto, excedente } = mostrar confirmación.
   const [dialogoExcedente, setDialogoExcedente] = useState(null);
 
+  // ─── DESCUENTO (autorizado) ────────────────────────────────────────────────
+  // Cualquiera puede ABRIR la opción, pero aplicarla exige rol alto:
+  //  - Sesión Admin/Administrador/Gerente → aplica directo, sin fricción.
+  //  - Cualquier otra sesión → pinpad de autorización: un Gerente/Admin teclea
+  //    SU PIN (staff, 4-6 dígitos) y queda registrado como autorizador.
+  const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Administrador', 'Gerente'];
+  const { staff } = useAppStore();
+  const { user } = useAuthStore();
+  const sesionAutoriza = ROLES_AUTORIZAN_DESCUENTO.includes(
+    user?.rol || user?.puesto,
+  );
+
+  const [mostrarDescuento, setMostrarDescuento] = useState(false);
+  const [descTipo, setDescTipo] = useState('pct'); // 'pct' | 'monto'
+  const [descValor, setDescValor] = useState('');
+  // { tipo, valor, autorizadoPor } — solo existe cuando ya fue autorizado.
+  const [descuentoAplicado, setDescuentoAplicado] = useState(null);
+  const [pinAuthAbierto, setPinAuthAbierto] = useState(false);
+  const [pinAuth, setPinAuth] = useState('');
+  const [pinAuthError, setPinAuthError] = useState('');
+
+  const intentarAplicarDescuento = () => {
+    const v = safeNumber(descValor, 0);
+    if (v <= 0) return;
+    if (descTipo === 'pct' && v > 100) return;
+    if (sesionAutoriza) {
+      setDescuentoAplicado({
+        tipo: descTipo,
+        valor: v,
+        autorizadoPor: user?.nombre || 'Gestión',
+      });
+      setMostrarDescuento(false);
+    } else {
+      setPinAuthError('');
+      setPinAuth('');
+      setPinAuthAbierto(true);
+    }
+  };
+
+  const autorizarDescuentoConPin = () => {
+    const p = String(pinAuth).trim();
+    if (p.length < 4) {
+      setPinAuthError('PIN incompleto.');
+      return;
+    }
+    const autorizador = (staff || []).find((s) => {
+      const rolS = s.rol || s.puesto || '';
+      const activo =
+        s.activo !== false && s.activo !== 'false' && s.activo !== 0;
+      const p1 = String(s.pin ?? '').trim();
+      const p2 = String(s.pin_acceso ?? '').trim();
+      return (
+        ROLES_AUTORIZAN_DESCUENTO.includes(rolS) &&
+        activo &&
+        ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
+      );
+    });
+    if (!autorizador) {
+      setPinAuthError('PIN inválido o sin permiso para autorizar.');
+      setPinAuth('');
+      return;
+    }
+    setDescuentoAplicado({
+      tipo: descTipo,
+      valor: safeNumber(descValor, 0),
+      autorizadoPor: autorizador.nombre,
+    });
+    setPinAuthAbierto(false);
+    setMostrarDescuento(false);
+  };
+
+  const quitarDescuento = () => {
+    setDescuentoAplicado(null);
+    setDescValor('');
+  };
+
   const [tipoDivision, setTipoDivision] = useState('monto');
   const [divisorPersonas, setDivisorPersonas] = useState(comensalesSanitizado);
   const [seleccionPlatillos, setSeleccionPlatillos] = useState({});
@@ -83,16 +163,33 @@ export default function ModalCobro({
   const isCobroParcial = tipoDivision === 'platillos' && subtotalSeleccion > 0;
   const totalBase = isCobroParcial ? subtotalSeleccion : totalSanitizado;
 
+  // Descuento → SIEMPRE se normaliza a % del total. Un % escala base e IVA por
+  // igual, así que el % sobre el total mostrado es idéntico al descuentoPct
+  // sobre la base que espera calcularVenta (el motor recalcula IVA sobre la
+  // base neta). Un monto fijo se convierte a su % equivalente del total.
+  const pctDescuento = descuentoAplicado
+    ? descuentoAplicado.tipo === 'pct'
+      ? Math.min(100, Math.max(0, safeNumber(descuentoAplicado.valor, 0)))
+      : Math.min(
+          100,
+          (Math.min(safeNumber(descuentoAplicado.valor, 0), totalBase) /
+            (totalBase || 1)) *
+            100,
+        )
+    : 0;
+  const montoDescuento = round2(totalBase * (pctDescuento / 100));
+  const totalConDescuento = round2(totalBase - montoDescuento);
+
   const propinaCalculada = round2(
     propinaSeleccionada !== 'manual'
-      ? totalBase * (safeNumber(propinaSeleccionada, 0) / 100)
+      ? totalConDescuento * (safeNumber(propinaSeleccionada, 0) / 100)
       : safeNumber(propinaManual, 0),
   );
 
   // Propina total = la elegida (botones/manual) + la que entró por sobrepago.
   const propinaTotal = round2(propinaCalculada + safeNumber(propinaExtra, 0));
 
-  const granTotal = round2(totalBase + propinaTotal);
+  const granTotal = round2(totalConDescuento + propinaTotal);
   const totalPagado = round2(
     pagos.reduce((acc, p) => acc + safeNumber(p?.monto, 0), 0),
   );
@@ -192,6 +289,93 @@ export default function ModalCobro({
             <Calculator className="w-6 h-6 text-indigo-500 dark:text-brand-amatista" />{' '}
             Opciones de Cobro
           </h2>
+
+          {/* SECCIÓN DE DESCUENTO (autorizado) */}
+          <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted flex items-center gap-2">
+                <Percent className="w-4 h-4 text-indigo-500 dark:text-brand-amatista" />{' '}
+                Descuento
+              </p>
+              {!descuentoAplicado && (
+                <button
+                  onClick={() => setMostrarDescuento((v) => !v)}
+                  className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-brand-amatista hover:underline"
+                >
+                  {mostrarDescuento ? 'Cancelar' : 'Agregar'}
+                </button>
+              )}
+            </div>
+
+            {descuentoAplicado ? (
+              <div className="flex items-center justify-between bg-indigo-50 dark:bg-brand-amatista/10 border border-indigo-200 dark:border-brand-amatista/30 rounded-xl px-4 py-3 mt-2">
+                <div>
+                  <p className="font-black text-indigo-600 dark:text-brand-amatista">
+                    −$
+                    {montoDescuento.toLocaleString('es-MX', {
+                      minimumFractionDigits: 2,
+                    })}{' '}
+                    ({round2(pctDescuento)}%)
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted flex items-center gap-1 mt-0.5">
+                    <ShieldCheck className="w-3 h-3" /> Autorizó:{' '}
+                    {descuentoAplicado.autorizadoPor}
+                  </p>
+                </div>
+                <button
+                  onClick={quitarDescuento}
+                  className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg"
+                  title="Quitar descuento"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              mostrarDescuento && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setDescTipo('pct')}
+                      className={`flex-1 py-2.5 rounded-xl font-bold border-2 transition-all ${descTipo === 'pct' ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista' : 'border-slate-100 bg-slate-50 text-slate-500 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'}`}
+                    >
+                      %
+                    </button>
+                    <button
+                      onClick={() => setDescTipo('monto')}
+                      className={`flex-1 py-2.5 rounded-xl font-bold border-2 transition-all ${descTipo === 'monto' ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista' : 'border-slate-100 bg-slate-50 text-slate-500 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'}`}
+                    >
+                      $
+                    </button>
+                  </div>
+                  <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
+                    <span className="text-slate-400 dark:text-ui-muted font-black px-3 text-lg">
+                      {descTipo === 'pct' ? '%' : '$'}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder={
+                        descTipo === 'pct' ? 'Porcentaje...' : 'Monto...'
+                      }
+                      value={descValor}
+                      onChange={(e) => setDescValor(e.target.value)}
+                      className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none text-lg"
+                    />
+                  </div>
+                  <button
+                    onClick={intentarAplicarDescuento}
+                    disabled={safeNumber(descValor, 0) <= 0}
+                    className="w-full py-3 rounded-xl font-black bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {sesionAutoriza
+                      ? 'Aplicar descuento'
+                      : 'Solicitar autorización'}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
 
           {/* SECCIÓN DE PROPINA */}
           <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
@@ -499,6 +683,17 @@ export default function ModalCobro({
                 })}
               </span>
             </div>
+            {montoDescuento > 0 && (
+              <div className="flex justify-between items-center text-indigo-500 dark:text-brand-amatista font-bold mb-3">
+                <span>Descuento ({round2(pctDescuento)}%)</span>
+                <span>
+                  −$
+                  {montoDescuento.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            )}
             {propinaTotal > 0 && (
               <div className="flex justify-between items-center text-orange-500 dark:text-brand-arrecife font-bold mb-3">
                 <span>
@@ -619,6 +814,10 @@ export default function ModalCobro({
                   totalConPropina: granTotal,
                   isCobroParcial,
                   seleccion: seleccionPlatillos,
+                  descuentoPct: pctDescuento,
+                  descuentoMonto: montoDescuento,
+                  descuentoAutorizadoPor:
+                    descuentoAplicado?.autorizadoPor || null,
                 })
               }
               disabled={!estaPagado}
@@ -635,6 +834,59 @@ export default function ModalCobro({
           </div>
         </div>
       </div>
+
+      {/* PINPAD DE AUTORIZACIÓN DE DESCUENTO (Gerente/Admin) */}
+      {pinAuthAbierto && (
+        <div className="fixed inset-0 bg-slate-900/70 dark:bg-ui-obsidiana/85 backdrop-blur-sm z-[130] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-7 max-w-xs w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95">
+            <div className="w-14 h-14 bg-indigo-100 dark:bg-brand-amatista/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="w-7 h-7 text-indigo-500 dark:text-brand-amatista" />
+            </div>
+            <h3 className="font-black text-slate-900 dark:text-brand-nacar text-xl font-syne mb-1">
+              Autorización requerida
+            </h3>
+            <p className="text-slate-500 dark:text-ui-muted text-xs font-bold mb-5">
+              Un Gerente o Admin debe teclear su PIN para aplicar el descuento.
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              maxLength={6}
+              value={pinAuth}
+              onChange={(e) => {
+                setPinAuth(e.target.value.replace(/\D/g, ''));
+                setPinAuthError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') autorizarDescuentoConPin();
+              }}
+              placeholder="••••••"
+              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border focus:border-indigo-500 dark:focus:border-brand-amatista rounded-2xl py-4 outline-none text-slate-900 dark:text-brand-nacar transition-colors mb-3"
+            />
+            {pinAuthError && (
+              <p className="text-rose-500 dark:text-brand-arrecife text-xs font-bold mb-3">
+                {pinAuthError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPinAuthAbierto(false)}
+                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={autorizarDescuentoConPin}
+                disabled={pinAuth.length < 4}
+                className="flex-1 py-3.5 rounded-xl bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana font-black disabled:opacity-40 active:scale-95 transition-all"
+              >
+                Autorizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MINI-DIÁLOGO: ¿el excedente es propina? (solo tarjeta/transferencia) */}
       {dialogoExcedente && (

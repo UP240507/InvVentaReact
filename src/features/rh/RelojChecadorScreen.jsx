@@ -21,11 +21,26 @@ import {
 } from 'lucide-react';
 
 export default function RelojChecadorScreen() {
-  const { staff, asistencias, turnos, configuracion } = useAppStore();
+  // PIN: las altas nuevas son de 6 dígitos; PINs legados de 4-5 se toleran
+  // (mismo criterio que la edición en EmpleadosScreen). El match contra staff
+  // es por igualdad exacta de string, así que aceptar el rango es seguro.
+  const PIN_MIN = 4;
+  const PIN_MAX = 6;
+
+  // Candado de jornada: configuracion.horas_jornada (0 = desactivado).
+  // La SALIDA se bloquea hasta cumplir las horas; el dueño (Admin) puede
+  // autorizar una salida anticipada con su PIN. Exentos: Admin/Administrador.
+  const ROLES_EXENTOS_JORNADA = ['Admin', 'Administrador'];
+  const [salidaPendiente, setSalidaPendiente] = useState(null); // {empleado, horas, faltan}
+  const [pinAdminSalida, setPinAdminSalida] = useState('');
+  const [pinAdminError, setPinAdminError] = useState('');
+
+  const { staff, asistencias, turnos, configuracion, registrarAuditoria } =
+    useAppStore();
   const { enqueueAction } = useSyncStore();
   const { abrirSesionEmpleado, cerrarSesionEmpleado, empleadoActivo } =
     useSessionStore();
-  const { user } = useAuthStore(); // FIX 3: tenant user
+  const { user, logout } = useAuthStore(); // FIX 3: tenant user + salida real
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -44,7 +59,72 @@ export default function RelojChecadorScreen() {
     setTimeout(() => setFeedback(null), tipo === 'success' ? 2500 : 3000);
   };
 
-  const handleSalir = () => {
+  // Salida anticipada autorizada: un Admin teclea SU PIN → se registra la
+  // salida con rastro de auditoría (quién autorizó, horas cumplidas vs jornada).
+  const autorizarSalidaAnticipada = async () => {
+    const p = String(pinAdminSalida).trim();
+    if (p.length < PIN_MIN) {
+      setPinAdminError('PIN incompleto.');
+      return;
+    }
+    const autorizador = (staff || []).find((s) => {
+      const rolS = s.rol || s.puesto || '';
+      const activo =
+        s.activo !== false && s.activo !== 'false' && s.activo !== 0;
+      const p1 = String(s.pin ?? '').trim();
+      const p2 = String(s.pin_acceso ?? '').trim();
+      return (
+        ROLES_EXENTOS_JORNADA.includes(rolS) &&
+        activo &&
+        ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
+      );
+    });
+    if (!autorizador) {
+      setPinAdminError('PIN inválido: solo el Admin puede autorizar.');
+      setPinAdminSalida('');
+      return;
+    }
+
+    const { empleado, horas } = salidaPendiente;
+    const restauranteId =
+      empleado.restaurante_id ||
+      configuracion?.restaurante_id ||
+      useAuthStore.getState().restauranteId;
+
+    const registroSalida = {
+      id: Date.now(),
+      empleado_id: String(empleado.id),
+      empleado_nombre: empleado.nombre,
+      tipo: 'salida',
+      fecha_hora: new Date().toISOString(),
+      restaurante_id: restauranteId,
+    };
+    enqueueAction('asistencias', 'upsert', registroSalida);
+    useAppStore.setState((prev) => ({
+      asistencias: [registroSalida, ...(prev.asistencias || [])],
+    }));
+    if (String(empleadoActivo?.id) === String(empleado.id)) {
+      cerrarSesionEmpleado();
+    }
+
+    registrarAuditoria({
+      usuario: autorizador.nombre,
+      accion: 'SALIDA_ANTICIPADA',
+      modulo: 'CHECADOR',
+      nivel: 'warning',
+      detalles: `${empleado.nombre} salió con ${horas.toFixed(2)} hrs de ${Number(configuracion?.horas_jornada) || 0} hrs de jornada. Autorizó: ${autorizador.nombre}.`,
+    });
+
+    setSalidaPendiente(null);
+    mostrarFeedback(
+      'success',
+      `Salida anticipada autorizada por ${autorizador.nombre}.`,
+      empleado.nombre,
+      empleado.rol || empleado.puesto,
+    );
+  };
+
+  const handleSalir = async () => {
     // FIX 3: bloquear navegación si la tablet no tiene sesión base iniciada
     if (!user) {
       navigate('/login');
@@ -57,9 +137,27 @@ export default function RelojChecadorScreen() {
           empleadoActivo.rol || empleadoActivo.puesto || 'Mesero'
         ] || '/dashboard';
       navigate(ruta);
-    } else {
-      navigate('/dashboard');
+      return;
     }
+
+    // Estado "zombi": hay sesión de Supabase pero sin empleadoActivo.
+    // Antes: navigate('/dashboard') → EmpleadoRoute lo rebotaba a /checador
+    // (bucle infinito, imposible salir). Regla nueva:
+    //  - Sesión de gestión (kiosko/terminal del admin) → dashboard, como antes.
+    //  - Sesión de empleado → logout REAL y al login de empleados. Su sesión
+    //    sin identidad activa no sirve para nada más que rebotar.
+    const rolSesion = user?.rol || user?.puesto || '';
+    const esGestion = ['Admin', 'Administrador', 'Gerente'].includes(rolSesion);
+    if (esGestion && !user?.esEmpleado) {
+      navigate('/dashboard');
+      return;
+    }
+    try {
+      await logout();
+    } catch {
+      /* noop */
+    }
+    navigate('/loginempleados', { replace: true });
   };
 
   const registrarMovimiento = useCallback(
@@ -67,8 +165,8 @@ export default function RelojChecadorScreen() {
       const pinUsado = pinOverride || pin;
       const pinIngresadoStr = String(pinUsado).trim();
 
-      if (pinIngresadoStr.length < 4) {
-        mostrarFeedback('error', 'El PIN debe tener 4 dígitos.');
+      if (pinIngresadoStr.length < PIN_MIN) {
+        mostrarFeedback('error', `El PIN debe tener al menos ${PIN_MIN} dígitos.`);
         return;
       }
 
@@ -217,6 +315,31 @@ export default function RelojChecadorScreen() {
           return;
         }
 
+        // ── CANDADO DE JORNADA ──────────────────────────────────────────────
+        // horas_jornada > 0 → la salida exige haber cumplido la jornada,
+        // salvo rol exento o autorización del dueño (flujo del pinpad abajo).
+        const horasJornada = Number(configuracion?.horas_jornada) || 0;
+        const rolEmpleado = empleado.rol || empleado.puesto || '';
+        const exento = ROLES_EXENTOS_JORNADA.includes(rolEmpleado);
+        if (horasJornada > 0 && !exento) {
+          const entradaT = new Date(turnoActivoEmpleado.fecha_hora).getTime();
+          const horasTranscurridas = (Date.now() - entradaT) / 3600000;
+          if (horasTranscurridas < horasJornada) {
+            const faltanMin = Math.ceil(
+              (horasJornada - horasTranscurridas) * 60,
+            );
+            setSalidaPendiente({
+              empleado,
+              horas: horasTranscurridas,
+              faltanMin,
+            });
+            setPinAdminSalida('');
+            setPinAdminError('');
+            setPin('');
+            return;
+          }
+        }
+
         const registroSalida = {
           id: Date.now(),
           empleado_id: String(empleado.id),
@@ -270,7 +393,8 @@ export default function RelojChecadorScreen() {
   useEffect(() => {
     const pinUrl = searchParams.get('pin');
     if (
-      pinUrl?.length === 4 &&
+      pinUrl?.length >= PIN_MIN &&
+      pinUrl?.length <= PIN_MAX &&
       staff?.length > 0 &&
       !autoLoginIntentado.current
     ) {
@@ -287,7 +411,7 @@ export default function RelojChecadorScreen() {
     const onKey = (e) => {
       if (document.activeElement?.tagName === 'INPUT') return;
       if (e.key >= '0' && e.key <= '9') {
-        setPin((prev) => (prev.length < 4 ? prev + e.key : prev));
+        setPin((prev) => (prev.length < PIN_MAX ? prev + e.key : prev));
       }
       if (e.key === 'Backspace') setPin((prev) => prev.slice(0, -1));
       if (e.key === 'Enter') registrarMovimiento('Entrada');
@@ -434,14 +558,25 @@ export default function RelojChecadorScreen() {
             <p className="text-center text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4">
               Ingresa tu PIN personal
             </p>
-            <div className="flex justify-center gap-4">
-              {[0, 1, 2, 3].map((i) => (
+            {empleadoActivo && (
+              <div className="mb-4 px-4 py-3 rounded-2xl bg-indigo-50 dark:bg-brand-amatista/10 border border-indigo-200 dark:border-brand-amatista/30 text-center">
+                <p className="text-sm font-black text-indigo-600 dark:text-brand-amatista">
+                  Hola, {empleadoActivo.nombre?.split(' ')[0]} 👋
+                </p>
+                <p className="text-[11px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
+                  Registra tu <span className="font-black">Entrada</span> con
+                  tu PIN para comenzar el día.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-center gap-2.5">
+              {Array.from({ length: PIN_MAX }, (_, i) => i).map((i) => (
                 <div
                   key={i}
-                  className={`w-14 h-16 rounded-2xl flex items-center justify-center border-2 transition-all ${pin.length > i ? 'border-indigo-500 dark:border-brand-amatista bg-indigo-50 dark:bg-brand-amatista/10 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-slate-200 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana'}`}
+                  className={`w-11 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${pin.length > i ? 'border-indigo-500 dark:border-brand-amatista bg-indigo-50 dark:bg-brand-amatista/10 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-slate-200 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana'}`}
                 >
                   {pin.length > i && (
-                    <div className="w-4 h-4 bg-indigo-500 dark:bg-brand-amatista rounded-full" />
+                    <div className="w-3.5 h-3.5 bg-indigo-500 dark:bg-brand-amatista rounded-full" />
                   )}
                 </div>
               ))}
@@ -453,7 +588,7 @@ export default function RelojChecadorScreen() {
               <button
                 key={num}
                 onClick={() =>
-                  setPin((p) => (p.length < 4 ? p + String(num) : p))
+                  setPin((p) => (p.length < PIN_MAX ? p + String(num) : p))
                 }
                 className="aspect-square text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border rounded-2xl hover:bg-slate-200 dark:hover:bg-ui-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
               >
@@ -467,7 +602,7 @@ export default function RelojChecadorScreen() {
               Limpiar
             </button>
             <button
-              onClick={() => setPin((p) => (p.length < 4 ? p + '0' : p))}
+              onClick={() => setPin((p) => (p.length < PIN_MAX ? p + '0' : p))}
               className="aspect-square text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border rounded-2xl hover:bg-slate-200 dark:hover:bg-ui-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
             >
               0
@@ -484,7 +619,7 @@ export default function RelojChecadorScreen() {
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() => registrarMovimiento('Entrada')}
-              disabled={pin.length < 4}
+              disabled={pin.length < PIN_MIN}
               className="bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] disabled:bg-slate-200 dark:disabled:bg-ui-border disabled:text-slate-400 dark:disabled:text-ui-muted text-white dark:text-ui-obsidiana py-5 rounded-2xl font-black shadow-lg dark:shadow-[0_0_20px_rgba(0,229,160,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
             >
               <LogIn className="w-6 h-6 mb-1" />
@@ -495,7 +630,7 @@ export default function RelojChecadorScreen() {
             </button>
             <button
               onClick={() => registrarMovimiento('Salida')}
-              disabled={pin.length < 4}
+              disabled={pin.length < PIN_MIN}
               className="bg-slate-800 hover:bg-slate-900 dark:bg-brand-arrecife dark:hover:bg-orange-600 disabled:bg-slate-200 dark:disabled:bg-ui-border disabled:text-slate-400 dark:disabled:text-ui-muted text-white dark:text-ui-obsidiana py-5 rounded-2xl font-black shadow-lg dark:shadow-[0_0_20px_rgba(255,95,64,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
             >
               <LogOut className="w-6 h-6 mb-1" />
@@ -505,8 +640,83 @@ export default function RelojChecadorScreen() {
               <span className="text-lg leading-none">Salida</span>
             </button>
           </div>
+
+          {/* Escape del flujo dirigido: re-login a media jornada (la entrada ya
+              quedó registrada antes) no debe forzar otro registro. handleSalir
+              navega a la ruta por rol y TurnoRoute rebota a /espera si aplica. */}
+          {empleadoActivo && (
+            <button
+              onClick={handleSalir}
+              className="w-full mt-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted hover:text-indigo-500 dark:hover:text-brand-amatista transition-colors"
+            >
+              Ya registré mi entrada — continuar →
+            </button>
+          )}
         </div>
       </div>
+
+      {/* CANDADO DE JORNADA: salida antes de tiempo requiere PIN del dueño */}
+      {salidaPendiente && (
+        <div className="fixed inset-0 bg-slate-900/70 dark:bg-ui-obsidiana/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-7 max-w-sm w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-brand-ambar/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-amber-500 dark:text-brand-ambar" />
+            </div>
+            <h3 className="font-black text-slate-900 dark:text-brand-nacar text-xl font-syne mb-1">
+              Jornada incompleta
+            </h3>
+            <p className="text-slate-500 dark:text-ui-muted text-sm font-bold mb-1">
+              {salidaPendiente.empleado.nombre} lleva{' '}
+              <span className="text-slate-800 dark:text-brand-nacar">
+                {salidaPendiente.horas.toFixed(1)} hrs
+              </span>{' '}
+              de {Number(configuracion?.horas_jornada) || 0} hrs.
+            </p>
+            <p className="text-amber-600 dark:text-brand-ambar text-xs font-black uppercase tracking-widest mb-5">
+              Faltan ~{salidaPendiente.faltanMin} min para poder salir
+            </p>
+            <p className="text-slate-400 dark:text-ui-muted text-[11px] font-bold mb-3">
+              Para salir antes, el Admin autoriza con su PIN:
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              maxLength={PIN_MAX}
+              value={pinAdminSalida}
+              onChange={(e) => {
+                setPinAdminSalida(e.target.value.replace(/\D/g, ''));
+                setPinAdminError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') autorizarSalidaAnticipada();
+              }}
+              placeholder="••••••"
+              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border focus:border-amber-500 dark:focus:border-brand-ambar rounded-2xl py-4 outline-none text-slate-900 dark:text-brand-nacar transition-colors mb-3"
+            />
+            {pinAdminError && (
+              <p className="text-rose-500 dark:text-brand-arrecife text-xs font-bold mb-3">
+                {pinAdminError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSalidaPendiente(null)}
+                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-colors"
+              >
+                Esperar
+              </button>
+              <button
+                onClick={autorizarSalidaAnticipada}
+                disabled={pinAdminSalida.length < PIN_MIN}
+                className="flex-1 py-3.5 rounded-xl bg-amber-500 dark:bg-brand-ambar text-white dark:text-ui-obsidiana font-black disabled:opacity-40 active:scale-95 transition-all"
+              >
+                Autorizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

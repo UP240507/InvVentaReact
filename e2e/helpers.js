@@ -15,7 +15,7 @@ export const STATE_MESERO = 'e2e/.auth/mesero.json';
 //  - input del código: placeholder "Ej. AZUL-C172" (solo primera vez en el device)
 //  - numpad: botones con texto exacto del dígito
 //  - submit: botón "Entrar" (deshabilitado hasta PIN completo)
-//  - éxito: window.location.assign('/') → el router manda a /espera o /mesas
+//  - éxito: window.location.assign('/') → flujo dirigido: /checador primero
 export async function loginEmpleado(page, pin) {
   await page.goto('/loginempleados');
 
@@ -33,10 +33,23 @@ export async function loginEmpleado(page, pin) {
 
   await page.getByRole('button', { name: /entrar/i }).click();
 
-  // login-pin (EF) + setSession + assign('/') + redirect por rol.
-  await page.waitForURL(/\/(espera|mesas|kds|pos|dashboard)/, {
+  // login-pin (EF) + setSession + assign('/') + flujo dirigido: primero
+  // aterriza en /checador (registrar Entrada) y de ahí a la ruta por rol.
+  await page.waitForURL(/\/(checador|espera|mesas|kds|pos|dashboard)/, {
     timeout: 20_000,
   });
+
+  // Checador: NO registramos Entrada real (escribiría checadas en el tenant y
+  // activaría el candado de jornada). Con empleadoActivo el escape "Ya registré
+  // mi entrada — continuar" siempre está visible y navega a la ruta por rol.
+  if (/\/checador/.test(page.url())) {
+    await page
+      .getByRole('button', { name: /ya registré mi entrada/i })
+      .click();
+    await page.waitForURL(/\/(espera|mesas|kds|pos|dashboard)/, {
+      timeout: 20_000,
+    });
+  }
 }
 
 // ── Estado de caja ───────────────────────────────────────────────────────────
@@ -91,7 +104,7 @@ export async function cerrarTurnoSiAbierto(page) {
   return true;
 }
 
-// ── Captura de consola ───────────────────────────────────────────────────────
+// ── Captura de consola ──────────────────────────────────────────────────────
 // Devuelve un array vivo con los textos de console.* de la página, para
 // afirmar sobre los logs del store (⏭️, timeout-red, túnel realtime, etc.).
 export function capturarConsola(page) {

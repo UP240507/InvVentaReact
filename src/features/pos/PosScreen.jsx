@@ -393,6 +393,9 @@ export default function PosScreen() {
       ivaRate: ivaRaw,
       preciosIncluyenIva,
       propinaMonto: safeNumber(datosPago?.propina, 0),
+      // Descuento autorizado en ModalCobro (% ya normalizado): el motor
+      // reduce la base gravable y recalcula el IVA sobre la base neta.
+      descuentoPct: safeNumber(datosPago?.descuentoPct, 0),
     });
     const subtotalTicket = fiscalTicket.subtotal;
     const ivaTicket = fiscalTicket.iva;
@@ -465,8 +468,12 @@ export default function PosScreen() {
       usuario: user?.nombre || 'Sistema',
       accion: 'COBRO_TICKET',
       modulo: 'POS',
-      nivel: 'info',
-      detalles: `Folio ${nuevaVentaBD.folio} cobrado. Total: $${granTotalTicket}`,
+      nivel: fiscalTicket.descuento > 0 ? 'warning' : 'info',
+      detalles: `Folio ${nuevaVentaBD.folio} cobrado. Total: $${granTotalTicket}${
+        fiscalTicket.descuento > 0
+          ? ` | Descuento: $${fiscalTicket.descuento} autorizado por ${datosPago?.descuentoAutorizadoPor || 'sesión de gestión'}`
+          : ''
+      }`,
     });
 
     if (isMesa) {

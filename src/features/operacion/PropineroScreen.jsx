@@ -97,8 +97,15 @@ function horasTrabajadas(asistencias, nombre, desdeDt, hastaDt) {
 }
 
 export default function PropineroScreen() {
-  const { ventas, staff, turnos, asistencias, registrarAuditoria, showToast } =
-    useAppStore();
+  const {
+    ventas,
+    staff,
+    turnos,
+    asistencias,
+    configuracion,
+    registrarAuditoria,
+    showToast,
+  } = useAppStore();
   const { user } = useAuthStore();
   const isOffline = useSyncStore((s) => s.isOffline);
 
@@ -198,9 +205,26 @@ export default function PropineroScreen() {
   const [metodo, setMetodo] = useState('equitativo');
   const [ajustes, setAjustes] = useState({}); // por id: { incluido, montoManual }
 
+  // Toggle por tenant (configuracion.roles_sin_propina): exclusión DURA.
+  // Esos roles no aparecen en la lista ni se pueden reincluir a mano en un
+  // reparto puntual. Si un restaurante quiere pagarles propina, los quita del
+  // toggle en Configuración — una sola fuente de verdad, cero excepciones.
+  const rolesSinPropina = useMemo(
+    () =>
+      Array.isArray(configuracion?.roles_sin_propina)
+        ? configuracion.roles_sin_propina
+        : ['Admin', 'Administrador', 'Gerente'],
+    [configuracion],
+  );
+
   const staffActivo = useMemo(
-    () => (staff || []).filter((s) => s.activo !== false),
-    [staff],
+    () =>
+      (staff || []).filter(
+        (s) =>
+          s.activo !== false &&
+          !rolesSinPropina.includes(s.rol || s.puesto || ''),
+      ),
+    [staff, rolesSinPropina],
   );
 
   const setAjuste = (id, patch) =>
@@ -304,6 +328,7 @@ export default function PropineroScreen() {
       const participantesPayload = incluidosConMonto
         .filter((p) => p.monto !== 0)
         .map((p) => ({
+          id: p.id, // staff.id → match robusto en Nóminas (legados: solo nombre)
           nombre: p.nombre,
           rol: p.rol,
           base: round2(p.base),

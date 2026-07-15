@@ -88,9 +88,11 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
         // sin recargar. Recibe el empleado y la sesión ya establecida.
         onSuccess(data.empleado, session);
       } else {
-        // Default robusto: recarga a '/'. El bootstrap de la app rehidrata con la
-        // sesión viva, sin depender de setters internos del store desde aquí.
-        window.location.assign('/');
+        // FLUJO DIRIGIDO: login → CHECADOR (registrar entrada) → el propio
+        // checador navega a la ruta por rol, y TurnoRoute rebota a /espera si
+        // no hay caja abierta. Antes se recargaba a '/' y el checador quedaba
+        // huérfano: nadie registraba entrada a menos que navegara a mano.
+        window.location.assign('/checador');
       }
     } catch (e) {
       setError(`Error inesperado: ${e?.message || e}`);

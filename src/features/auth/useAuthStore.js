@@ -80,9 +80,135 @@ export const useAuthStore = create((set, get) => ({
   suscripcion: null, // Estado de suscripción del tenant
   isLoading: true,
   error: null,
+  _vigilancia: null, // ref del listener onAuthStateChange (idempotencia)
+  _expulsando: false, // guard anti-reentrada (signOut dispara SIGNED_OUT)
+
+  // ── 0. VIGILANCIA DE SESIÓN (D1 hardening) ───────────────────────────────
+  // El bug que cierra: el cache 'invventa-auth-ctx' puede pintar la UI como
+  // autenticada mientras la sesión real de Supabase ya murió → los writes
+  // fallan 401 en silencio y la cola se llena de tareas condenadas.
+  // Regla híbrida (respetando la resiliencia offline):
+  //   * OFFLINE → jamás expulsar. El cajero sigue operando contra Dexie+cola.
+  //   * ONLINE + token irrecuperable (refresh falla con error NO-red, o
+  //     supabase-js emite SIGNED_OUT) → expulsión limpia a /login.
+  //   * Al VOLVER la red ('online') → verificación activa inmediata.
+  iniciarVigilanciaSesion: () => {
+    if (get()._vigilancia) return; // idempotente (StrictMode / re-checkSession)
+
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        // Token nuevo (refresh, login, restauración): propagar a estado y realtime.
+        if (session?.access_token) {
+          fijarTokenRealtime(session);
+          set({ session });
+          return;
+        }
+        // supabase-js declaró la sesión terminada. Si fue nuestro propio
+        // logout/expulsión, el guard _expulsando (o user ya nulo) lo ignora.
+        // Solo expulsamos con red confirmada: un SIGNED_OUT en pleno apagón
+        // no debe tirar al cajero — el listener de 'online' re-verifica luego.
+        if (event === 'SIGNED_OUT') {
+          if (get()._expulsando || !get().user) return;
+          if (navigator.onLine) {
+            get()._expulsarSesionMuerta('SIGNED_OUT emitido por supabase-js');
+          } else {
+            console.warn(
+              '⚠️ [Auth] SIGNED_OUT estando offline: se conserva el contexto; se re-verificará al volver la red.',
+            );
+          }
+        }
+      });
+      set({ _vigilancia: data?.subscription || true });
+    } catch (e) {
+      console.warn('⚠️ [Auth] No se pudo montar la vigilancia:', e?.message);
+    }
+
+    // Al recuperar red: verificar de inmediato que el token siga vivo. Pequeño
+    // respiro para que el stack de red del navegador termine de levantarse.
+    try {
+      window.addEventListener('online', () => {
+        setTimeout(() => get().verificarSesionViva(), 1500);
+      });
+    } catch {
+      /* entorno sin window (tests) */
+    }
+  },
+
+  // Verificación activa. Devuelve true si la sesión es utilizable (o si no hay
+  // forma honesta de juzgarla, p.ej. offline). false = se expulsó.
+  verificarSesionViva: async () => {
+    if (!navigator.onLine) return true; // resiliencia offline: no juzgar sin red
+    if (!get().user) return true; // no hay contexto que proteger
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        fijarTokenRealtime(data.session);
+        set({ session: data.session });
+        return true;
+      }
+      // UI con contexto pero sin sesión local: el caso enmascarado exacto.
+      // Último intento honesto de revivirla antes de expulsar.
+      const { data: r, error: rErr } = await supabase.auth.refreshSession();
+      if (r?.session) {
+        fijarTokenRealtime(r.session);
+        set({ session: r.session });
+        console.log('✅ [Auth] Sesión recuperada vía refresh.');
+        return true;
+      }
+      if (rErr && esErrorDeRed(rErr)) return true; // la red mintió: no expulsar
+      await get()._expulsarSesionMuerta(
+        rErr?.message || 'sin sesión y refresh irrecuperable',
+      );
+      return false;
+    } catch (e) {
+      if (esErrorDeRed(e)) return true;
+      await get()._expulsarSesionMuerta(e?.message);
+      return false;
+    }
+  },
+
+  // Expulsión limpia y única: cierra realtime, limpia cache/identidades y deja
+  // el estado en null → los guards rebotan a /login en el siguiente render.
+  _expulsarSesionMuerta: async (motivo) => {
+    if (get()._expulsando) return;
+    set({ _expulsando: true });
+    console.warn(
+      `🔒 [Auth] Sesión muerta con red confirmada (${motivo}). Expulsando a login.`,
+    );
+    try {
+      const { useAppStore } = await import('../../store/useAppStore');
+      useAppStore.getState().detenerSuscripcionKDS?.();
+    } catch {
+      /* noop */
+    }
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ya estaba muerta; el objetivo es limpiar el estado local */
+    }
+    limpiarCacheCtx();
+    try {
+      const { useSessionStore } = await import('../../store/useSessionStore');
+      useSessionStore.getState().cerrarSesionEmpleado();
+    } catch {
+      /* noop */
+    }
+    set({
+      session: null,
+      user: null,
+      restauranteId: null,
+      suscripcion: null,
+      isLoading: false,
+      error: 'Tu sesión expiró. Vuelve a iniciar sesión.',
+      _expulsando: false,
+    });
+  },
 
   // ── 1. Verificar sesión al recargar ─────────────────────────────────────
   checkSession: async () => {
+    // La vigilancia se monta aquí porque checkSession corre en el arranque de
+    // toda la app (idempotente si se llama de nuevo).
+    get().iniciarVigilanciaSesion();
     try {
       const {
         data: { session },
@@ -131,7 +257,7 @@ export const useAuthStore = create((set, get) => ({
 
   // ── 3. Logout ────────────────────────────────────────────────────────────
   logout: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, _expulsando: true }); // silencia el SIGNED_OUT propio
     await supabase.auth.signOut();
     limpiarCacheCtx();
     // Limpiar también la sesión de empleado (PIN) para no dejar identidad cruzada.
@@ -147,6 +273,7 @@ export const useAuthStore = create((set, get) => ({
       restauranteId: null,
       suscripcion: null,
       isLoading: false,
+      _expulsando: false,
     });
   },
 

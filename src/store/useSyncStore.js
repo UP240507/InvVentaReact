@@ -4,10 +4,43 @@ import { supabase } from '../api/supabase';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { construirDeltasStock } from '../lib/inventario';
 
+// ── Clasificación de errores de sincronización ───────────────────────────────
+// PERMANENTE = el reintento NUNCA va a arreglarlo (RLS, columna inexistente,
+// constraint violada, payload malformado). Reintentarlo 5 veces con backoff
+// solo retrasa el diagnóstico y atasca la cola. Va DIRECTO a dead-letter.
+//
+// Señales de permanencia:
+//  - SQLSTATE de Postgres (error.code): 22xxx (datos inválidos, ej. uuid mal
+//    formado), 23xxx (constraints: unique/FK/not-null), 42xxx (esquema y
+//    permisos: columna/tabla inexistente, 42501 = RLS).
+//  - Códigos PostgREST PGRST1xx/2xx (parsing del request, columna no
+//    encontrada en el cache de esquema). PGRST3xx (JWT/auth) NO es permanente:
+//    el refresh de token o el D1 pueden revivirlo.
+//  - HTTP 4xx, EXCEPTO 401 (token vencido → refresh lo arregla), 408 (timeout)
+//    y 429 (rate-limit) que son transitorios.
+const esErrorPermanente = (error) => {
+  const code = String(error?.code || '');
+  if (/^(22|23|42)/.test(code)) return true;
+  if (/^PGRST[12]/.test(code)) return true;
+  const st = Number(error?.status);
+  if (
+    Number.isFinite(st) &&
+    st >= 400 &&
+    st < 500 &&
+    st !== 401 &&
+    st !== 408 &&
+    st !== 429
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export const useSyncStore = create((set, get) => ({
   isOffline: !navigator.onLine,
   isProcessingQueue: false,
   pendingTasks: 0,
+  deadTasks: 0, // tareas en dead-letter (para badge/diagnóstico en UI)
 
   setOfflineStatus: (status) => {
     set({ isOffline: status });
@@ -193,9 +226,7 @@ export const useSyncStore = create((set, get) => ({
     let pendingItems = [];
 
     try {
-      pendingItems = await localDB.sync_queue
-        .orderBy('createdAt')
-        .toArray();
+      pendingItems = await localDB.sync_queue.orderBy('createdAt').toArray();
 
       for (const item of pendingItems) {
         if (item.estado === 'done') continue;
@@ -214,7 +245,14 @@ export const useSyncStore = create((set, get) => ({
           if (item.metodo === 'rpc') {
             // ── Llamada RPC atómica (ej. decrementar_stock) ──
             res = await supabase.rpc(item.rpc, item.data);
-            if (res?.error) throw res.error;
+            if (res?.error) {
+              // El status HTTP vive en la respuesta, no en el error: adjuntarlo
+              // para que el clasificador de permanencia pueda usarlo.
+              if (res.error.status == null && res.status != null) {
+                res.error.status = res.status;
+              }
+              throw res.error;
+            }
 
             // Negocio: si algún producto quedó en negativo, NOTIFICAR sin rollback
             // (decisión del doc: preferir sobreventa notificada a venta fantasma).
@@ -248,7 +286,12 @@ export const useSyncStore = create((set, get) => ({
             } else {
               throw new Error(`Método remoto no soportado: ${item.metodo}`);
             }
-            if (res?.error) throw res.error;
+            if (res?.error) {
+              if (res.error.status == null && res.status != null) {
+                res.error.status = res.status;
+              }
+              throw res.error;
+            }
           }
 
           // Éxito → fuera de la cola
@@ -262,10 +305,19 @@ export const useSyncStore = create((set, get) => ({
             /failed to fetch|networkerror|network ?changed|name_not_resolved|fetch|load failed/i.test(
               msg,
             );
+          // ⛔ PERMANENTE (RLS, columna/tabla inexistente, constraint, payload
+          // inválido): reintentar es inútil. Fast-path a dead-letter en el
+          // PRIMER intento — antes daba 5 vueltas de backoff fingiendo ser red.
+          const esPermanente = !esTransitorio && esErrorPermanente(error);
 
-          if (attempts >= MAX_ATTEMPTS) {
+          if (esPermanente || attempts >= MAX_ATTEMPTS) {
+            const motivo = esPermanente
+              ? `permanente (${error?.code || error?.status || '4xx'})`
+              : 'reintentos_agotados';
             console.error(
-              `❌ Tarea ${item.id} a dead-letter tras ${attempts} intentos:`,
+              esPermanente
+                ? `⛔ Tarea ${item.id} (${item.tabla}/${item.metodo}): error PERMANENTE → dead-letter directo, sin reintentos:`
+                : `❌ Tarea ${item.id} a dead-letter tras ${attempts} intentos:`,
               msg,
             );
             try {
@@ -273,6 +325,7 @@ export const useSyncStore = create((set, get) => ({
                 ...item,
                 estado: 'dead',
                 intentos: attempts,
+                motivo,
                 lastError: msg || 'Error de red',
                 fecha_error: new Date().toISOString(),
               });
@@ -314,7 +367,12 @@ export const useSyncStore = create((set, get) => ({
       }
     } finally {
       const remaining = await localDB.sync_queue.count();
-      set({ isProcessingQueue: false, pendingTasks: remaining });
+      const dead = await localDB.sync_dead.count().catch(() => 0);
+      set({
+        isProcessingQueue: false,
+        pendingTasks: remaining,
+        deadTasks: dead,
+      });
 
       // ✅ Aviso de sincronización donde DE VERDAD ocurre (no en el evento de red,
       // que depende de navigator.onLine y es poco confiable). Se dispara siempre
@@ -360,5 +418,47 @@ export const useSyncStore = create((set, get) => ({
     }
 
     return processedCount;
+  },
+
+  // ── Gestión de dead-letter ───────────────────────────────────────────────
+  // Ganchos para una futura UI de diagnóstico (y para consola mientras tanto).
+
+  // Devuelve las tareas muertas (más recientes primero) para inspección.
+  listarDeadLetter: async () => {
+    try {
+      const items = await localDB.sync_dead.toArray();
+      return items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } catch {
+      return [];
+    }
+  },
+
+  // Reencola una tarea muerta (p.ej. tras corregir el esquema/policy que la
+  // mataba). Resetea intentos y backoff.
+  reencolarDeadLetter: async (deadId) => {
+    const item = await localDB.sync_dead.get(deadId);
+    if (!item) return false;
+    const { id, motivo, lastError, fecha_error, ...resto } = item;
+    await localDB.sync_queue.add({
+      ...resto,
+      estado: 'pending',
+      intentos: 0,
+      nextAttemptAt: null,
+      error: null,
+    });
+    await localDB.sync_dead.delete(deadId);
+    set({
+      pendingTasks: await localDB.sync_queue.count(),
+      deadTasks: await localDB.sync_dead.count().catch(() => 0),
+    });
+    Promise.resolve().then(() => get().processQueue());
+    return true;
+  },
+
+  // Descarta definitivamente: una tarea (con id) o toda la dead-letter (sin id).
+  descartarDeadLetter: async (deadId = null) => {
+    if (deadId != null) await localDB.sync_dead.delete(deadId);
+    else await localDB.sync_dead.clear();
+    set({ deadTasks: await localDB.sync_dead.count().catch(() => 0) });
   },
 }));

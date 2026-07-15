@@ -22,6 +22,7 @@ import {
   Link2,
   Link2Off,
   BellRing,
+  BookMarked,
 } from 'lucide-react';
 
 // id de cliente: estable online/offline, sin colisión de secuencia (mesas.id es uuid).
@@ -227,6 +228,7 @@ export default function MesasScreen() {
       libres: (mesas || []).filter((m) => m.estado === 'libre').length,
       ocupadas: (mesas || []).filter((m) => m.estado === 'ocupada').length,
       porCobrar: (mesas || []).filter((m) => m.estado === 'por_cobrar').length,
+      reservadas: (mesas || []).filter((m) => m.estado === 'reservada').length,
     }),
     [mesas],
   );
@@ -425,12 +427,68 @@ export default function MesasScreen() {
     setModalTraspaso({ show: false, mesaOrigen: null });
   };
 
+  // ── RESERVA DE MESA ────────────────────────────────────────────────────────
+  // Solo tiene sentido reservar mesas LIBRES; liberar regresa a 'libre'.
+  const toggleReserva = (mesa) => {
+    const esReservada = mesa.estado === 'reservada';
+    if (!esReservada && mesa.estado !== 'libre') {
+      showToast('Solo se pueden reservar mesas libres.', 'error');
+      return;
+    }
+    const mesaActualizada = {
+      ...mesa,
+      estado: esReservada ? 'libre' : 'reservada',
+    };
+    enqueueAction('mesas', 'upsert', mesaActualizada);
+    useAppStore.setState((prev) => ({
+      mesas: prev.mesas.map((m) =>
+        String(m.id) === String(mesa.id) ? mesaActualizada : m,
+      ),
+    }));
+    showToast(
+      esReservada ? `${mesa.nombre} liberada` : `${mesa.nombre} reservada`,
+      'info',
+    );
+  };
+
+  // Click en una mesa reservada: no se comanda sin ocuparla antes. Modal
+  // propio de la app (window.confirm es del navegador y rompe la experiencia).
+  const [modalReserva, setModalReserva] = useState(null); // mesa | null
+
+  const handleClickMesa = (mesa) => {
+    if (mesa.estado === 'reservada') {
+      setModalReserva(mesa);
+      return;
+    }
+    navigate(`/pos?mesa=${mesa.id}`);
+  };
+
+  const confirmarOcuparReservada = () => {
+    const mesa = modalReserva;
+    if (!mesa) return;
+    const mesaLiberada = { ...mesa, estado: 'libre' };
+    enqueueAction('mesas', 'upsert', mesaLiberada);
+    useAppStore.setState((prev) => ({
+      mesas: prev.mesas.map((m) =>
+        String(m.id) === String(mesa.id) ? mesaLiberada : m,
+      ),
+    }));
+    setModalReserva(null);
+    navigate(`/pos?mesa=${mesa.id}`);
+  };
+
   const getEstadoUI = (estado) => {
     if (estado === 'ocupada')
       return {
         color:
           'bg-rose-50 border-rose-200 text-rose-600 dark:bg-brand-arrecife/10 dark:text-brand-arrecife dark:border-brand-arrecife/40 shadow-[0_0_15px_rgba(255,95,64,0.15)]',
         icon: <Users className="w-5 h-5" />,
+      };
+    if (estado === 'reservada')
+      return {
+        color:
+          'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-brand-amatista/10 dark:text-brand-amatista dark:border-brand-amatista/40 shadow-[0_0_15px_rgba(139,92,246,0.15)]',
+        icon: <BookMarked className="w-5 h-5" />,
       };
     if (estado === 'por_cobrar')
       return {
@@ -571,7 +629,7 @@ export default function MesasScreen() {
             return (
               <div key={mesa.id} className="relative group flex flex-col">
                 <button
-                  onClick={() => navigate(`/pos?mesa=${mesa.id}`)}
+                  onClick={() => handleClickMesa(mesa)}
                   className={`flex-1 flex flex-col bg-white dark:bg-ui-humo border-2 rounded-[2rem] p-5 text-left transition-all hover:-translate-y-1 shadow-sm ${ui.color} ${estaAgrupada ? 'ring-2 ring-brand-cesped/40' : ''} ${rondaLista ? 'ring-2 ring-emerald-400 dark:ring-brand-cesped shadow-[0_0_20px_rgba(16,185,129,0.25)]' : ''}`}
                 >
                   {rondaLista && (
@@ -639,6 +697,26 @@ export default function MesasScreen() {
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
+                  {(mesa.estado === 'libre' || mesa.estado === 'reservada') && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleReserva(mesa);
+                      }}
+                      className={`p-2.5 rounded-full shadow-xl border transition-colors ${
+                        mesa.estado === 'reservada'
+                          ? 'bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana border-indigo-600 dark:border-brand-amatista/50'
+                          : 'bg-white dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted hover:text-indigo-500 dark:hover:text-brand-amatista border-slate-200 dark:border-ui-border'
+                      }`}
+                      title={
+                        mesa.estado === 'reservada'
+                          ? 'Liberar reserva'
+                          : 'Reservar mesa'
+                      }
+                    >
+                      <BookMarked className="w-4 h-4" />
+                    </button>
+                  )}
                   {mesa.estado !== 'libre' && (
                     <button
                       onClick={(e) => {
@@ -1038,6 +1116,38 @@ export default function MesasScreen() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ¿ocupar mesa reservada? */}
+      {modalReserva && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
+            <div className="w-20 h-20 bg-indigo-100 dark:bg-brand-amatista/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BookMarked className="w-10 h-10 text-indigo-500 dark:text-brand-amatista" />
+            </div>
+            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
+              {modalReserva.nombre} está reservada
+            </h2>
+            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
+              ¿Llegó el cliente? Al confirmar, la mesa se ocupa y podrás
+              comandar.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={confirmarOcuparReservada}
+                className="w-full bg-indigo-500 dark:bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 dark:shadow-brand-amatista/20 transition-transform active:scale-95"
+              >
+                Sí, ocupar y comandar
+              </button>
+              <button
+                onClick={() => setModalReserva(null)}
+                className="w-full bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+              >
+                Mantener reserva
+              </button>
+            </div>
           </div>
         </div>
       )}

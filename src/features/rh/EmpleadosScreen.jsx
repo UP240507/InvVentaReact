@@ -33,6 +33,7 @@ export default function EmpleadosScreen() {
   // la credencial de Auth (editar staff.pin NO actualiza la cuenta por sí solo).
   const [pinOriginal, setPinOriginal] = useState('');
   const [rolOriginal, setRolOriginal] = useState('');
+  const [emailOriginal, setEmailOriginal] = useState('');
 
   // Campo de sueldo = salario_base (nombre real de la columna), para que el
   // valor haga round-trip correcto al editar (antes leía sueldo_base inexistente
@@ -47,6 +48,7 @@ export default function EmpleadosScreen() {
     telefono: '',
     pin: '',
     salario_base: '',
+    tipo_sueldo: 'dia',
     activo: true,
     password: '',
   };
@@ -73,11 +75,13 @@ export default function EmpleadosScreen() {
       setFormData({ ...initialState, ...empleado, password: '' });
       setPinOriginal(empleado.pin || '');
       setRolOriginal(empleado.rol || '');
+      setEmailOriginal(empleado.email || '');
       setIsEditing(true);
     } else {
       setFormData(initialState);
       setPinOriginal('');
       setRolOriginal('');
+      setEmailOriginal('');
       setIsEditing(false);
     }
     setShowModal(true);
@@ -129,6 +133,32 @@ export default function EmpleadosScreen() {
       );
     }
 
+    // Sueldo OBLIGATORIO (base del cálculo de Nóminas): monto > 0 y tipo definido.
+    if (!(Number(formData.salario_base) > 0)) {
+      return showToast(
+        'El sueldo base es obligatorio y debe ser mayor a 0.',
+        'error',
+      );
+    }
+    if (!['hora', 'dia', 'turno'].includes(formData.tipo_sueldo)) {
+      return showToast(
+        'Especifica si el sueldo es por hora, día o turno.',
+        'error',
+      );
+    }
+
+    // Correo REAL obligatorio para Admin/Gerente: es su credencial de login.
+    // (El cuello de botella de Beto/Sairi: altas pre-v3 sin correo válido en
+    // Auth. Validar aquí evita el 400 tardío de la EF y deja el dato limpio.)
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const emailNormalizado = (formData.email || '').trim().toLowerCase();
+    if (esElevado && !EMAIL_RE.test(emailNormalizado)) {
+      return showToast(
+        'Admin/Gerente requieren un correo válido: con él inician sesión.',
+        'error',
+      );
+    }
+
     // Contraseña real obligatoria para Admin/Gerente en el ALTA (entran por contraseña).
     if (!isEditing && esElevado && (formData.password || '').length < 8) {
       return showToast(
@@ -147,7 +177,9 @@ export default function EmpleadosScreen() {
       puesto: formData.rol,
       // pin_acceso: columna duplicada de pin. Mirror por si el login operativo la lee.
       pin_acceso: formData.pin,
+      email: emailNormalizado,
       salario_base: Number(formData.salario_base) || 0,
+      tipo_sueldo: formData.tipo_sueldo || 'dia',
       activo: formData.activo !== false,
       restaurante_id: restauranteId,
     };
@@ -222,8 +254,13 @@ export default function EmpleadosScreen() {
         const rolCambio = formData.rol !== rolOriginal;
         const quiereCambiarPassword =
           esElevado && (formData.password || '').length > 0;
+        // El correo es credencial de login de los elevados: cambiarlo exige
+        // re-sincronizar la cuenta de Auth (EF v2), igual que PIN/contraseña.
+        const emailCambio =
+          esElevado &&
+          emailNormalizado !== (emailOriginal || '').trim().toLowerCase();
         const credencialCambio =
-          pinCambio || rolCambio || quiereCambiarPassword;
+          pinCambio || rolCambio || quiereCambiarPassword || emailCambio;
 
         // El cambio de credencial necesita conexión (updateUserById es server-side).
         // Si estamos offline, NO tocamos el PIN en BD para no desincronizar; el resto
@@ -249,8 +286,12 @@ export default function EmpleadosScreen() {
         upsertStaff(empleadoGuardar);
 
         if (credencialCambio) {
-          // Validación temprana: un elevado nuevo (o cambio a elevado) exige contraseña.
-          if (esElevado && (formData.password || '').length < 8) {
+          // Validación temprana: cambiar de rol a elevado o querer nueva
+          // contraseña exige >=8 chars. Un cambio SOLO de correo no obliga a
+          // resetear la contraseña (EF v2 los trata como independientes).
+          const exigePassword =
+            esElevado && (rolCambio || quiereCambiarPassword);
+          if (exigePassword && (formData.password || '').length < 8) {
             return showToast(
               'Define una contraseña de al menos 8 caracteres para el rol Admin/Gerente.',
               'error',
@@ -263,7 +304,11 @@ export default function EmpleadosScreen() {
                 staffId: empleadoGuardar.id,
                 rol: empleadoGuardar.rol,
                 pin: empleadoGuardar.pin,
-                password: esElevado ? formData.password : undefined,
+                password:
+                  esElevado && (formData.password || '').length > 0
+                    ? formData.password
+                    : undefined,
+                email: esElevado && emailCambio ? emailNormalizado : undefined,
               },
             },
           );
@@ -525,7 +570,13 @@ export default function EmpleadosScreen() {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
-                    Sueldo Base (Mensual/Quincenal)
+                    Sueldo Base * (
+                    {formData.tipo_sueldo === 'hora'
+                      ? 'por hora'
+                      : formData.tipo_sueldo === 'turno'
+                        ? 'por turno'
+                        : 'por día'}
+                    )
                   </label>
                   <div className="relative">
                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
@@ -543,6 +594,28 @@ export default function EmpleadosScreen() {
                       className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
                       placeholder="0.00"
                     />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    {[
+                      ['hora', 'Por hora'],
+                      ['dia', 'Por día'],
+                      ['turno', 'Por turno'],
+                    ].map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, tipo_sueldo: val })
+                        }
+                        className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition-all ${
+                          formData.tipo_sueldo === val
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista'
+                            : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -563,7 +636,9 @@ export default function EmpleadosScreen() {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
-                    Correo (Opcional)
+                    {esElevado
+                      ? 'Correo * (con él inicia sesión)'
+                      : 'Correo (Opcional)'}
                   </label>
                   <input
                     type="email"

@@ -520,6 +520,42 @@ export const useAppStore = create((set, get) => ({
           });
         },
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'mesas' },
+        (payload) => {
+          const mesa = payload.new;
+          const tipo = payload.eventType;
+
+          if (tipo === 'DELETE') {
+            set((state) => ({
+              mesas: (state.mesas || []).filter(
+                (m) => String(m.id) !== String(payload.old?.id),
+              ),
+            }));
+            return;
+          }
+
+          // INSERT/UPDATE: upsert por id (mismo patrón que turnos). Propaga
+          // ocupación, orden_actual y 'por_cobrar' entre dispositivos: el
+          // popup de cobro del cajero y el mapa de mesas del mesero reaccionan
+          // en vivo sin recargar. El dispositivo que hizo el cambio ya lo
+          // tiene optimista → el eco solo reemplaza, no duplica.
+          set((state) => {
+            const existe = (state.mesas || []).some(
+              (m) => String(m.id) === String(mesa?.id),
+            );
+            if (existe) {
+              return {
+                mesas: state.mesas.map((m) =>
+                  String(m.id) === String(mesa.id) ? mesa : m,
+                ),
+              };
+            }
+            return { mesas: [...(state.mesas || []), mesa] };
+          });
+        },
+      )
       .subscribe();
 
     set({ _kdsChannel: suscripcion, _kdsIniciando: false });

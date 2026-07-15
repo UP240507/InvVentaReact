@@ -1,6 +1,9 @@
 //./rh/NominasScreeen
 
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../../api/supabase';
+import { parseUTC } from '../../utils/parseUTC';
+import { unidadesDeSueldo, propinasPorEmpleado } from '../../lib/Nominas';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
@@ -14,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function NominaScreen() {
-  const { staff, nominas, showToast } = useAppStore();
+  const { staff, nominas, asistencias, turnos, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [tab, setTab] = useState('generar');
@@ -29,6 +32,64 @@ export default function NominaScreen() {
   const [fechaFin, setFechaFin] = useState(hoy.toISOString().split('T')[0]);
 
   const [draft, setDraft] = useState({});
+  // Repartos del Propinero que caen en el periodo (fuente de verdad de propinas).
+  const [repartosPeriodo, setRepartosPeriodo] = useState([]);
+  const [propinasStatus, setPropinasStatus] = useState('cargando'); // cargando|ok|offline
+
+  useEffect(() => {
+    let cancelado = false;
+    const cargar = async () => {
+      setPropinasStatus('cargando');
+      if (!navigator.onLine) {
+        setRepartosPeriodo([]);
+        setPropinasStatus('offline');
+        return;
+      }
+      try {
+        const restauranteId = useAuthStore.getState().restauranteId;
+        const { data, error } = await supabase
+          .from('propinas_reparto')
+          .select('*')
+          .eq('restaurante_id', restauranteId);
+        if (error) throw error;
+
+        // Ventana del reparto: rango explícito (modo dia/semana/rango) o la
+        // ventana del turno (modo turno, resuelta contra los turnos en RAM);
+        // fallback: fecha de creación del reparto.
+        const desdeDt = parseUTC(fechaInicio + 'T00:00:00.000');
+        const hastaDt = parseUTC(fechaFin + 'T23:59:59.999');
+        const enPeriodo = (data || []).filter((rep) => {
+          let a = rep.rango_desde ? parseUTC(rep.rango_desde) : null;
+          let b = rep.rango_hasta ? parseUTC(rep.rango_hasta) : null;
+          if (!a && rep.turno_id) {
+            const t = (turnos || []).find(
+              (x) => String(x.id) === String(rep.turno_id),
+            );
+            a = t?.fecha_apertura ? parseUTC(t.fecha_apertura) : null;
+            b = t?.fecha_cierre ? parseUTC(t.fecha_cierre) : a;
+          }
+          if (!a) a = rep.creado_en ? parseUTC(rep.creado_en) : null;
+          if (!b) b = a;
+          if (!a) return false;
+          return a <= hastaDt && b >= desdeDt; // solapamiento de ventanas
+        });
+        if (!cancelado) {
+          setRepartosPeriodo(enPeriodo);
+          setPropinasStatus('ok');
+        }
+      } catch (e) {
+        console.warn('[Nominas] No se pudieron leer los repartos:', e?.message);
+        if (!cancelado) {
+          setRepartosPeriodo([]);
+          setPropinasStatus('offline');
+        }
+      }
+    };
+    cargar();
+    return () => {
+      cancelado = true;
+    };
+  }, [fechaInicio, fechaFin, turnos]);
 
   const empleadosActivos = useMemo(() => {
     return (staff || [])
@@ -36,13 +97,36 @@ export default function NominaScreen() {
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
   }, [staff]);
 
+  // Pre-cálculo automático por empleado según su tipo_sueldo. Las UNIDADES
+  // quedan editables (última palabra humana en nómina); las PROPINAS son de
+  // SOLO LECTURA: vienen del Propinero (fuente de verdad), no se capturan.
   useEffect(() => {
+    const desdeDt = parseUTC(fechaInicio + 'T00:00:00.000');
+    const hastaDt = parseUTC(fechaFin + 'T23:59:59.999');
     const nuevoDraft = {};
     empleadosActivos.forEach((emp) => {
-      nuevoDraft[emp.id] = { dias: 7, propinas: '' };
+      const u = unidadesDeSueldo(emp, {
+        asistencias,
+        turnos,
+        desdeDt,
+        hastaDt,
+      });
+      nuevoDraft[emp.id] = {
+        dias: u.unidades,
+        tipo: u.tipo,
+        etiqueta: u.etiqueta,
+        propinas: propinasPorEmpleado(repartosPeriodo, emp),
+      };
     });
     setDraft(nuevoDraft);
-  }, [empleadosActivos]);
+  }, [
+    empleadosActivos,
+    fechaInicio,
+    fechaFin,
+    asistencias,
+    turnos,
+    repartosPeriodo,
+  ]);
 
   const handleUpdateDraft = (id, campo, valor) => {
     setDraft((prev) => ({
@@ -57,12 +141,12 @@ export default function NominaScreen() {
 
     const detalles = empleadosActivos.map((emp) => {
       const datos = draft[emp.id] || { dias: 0, propinas: 0 };
-      const dias = Number(datos.dias) || 0;
+      const unidades = Number(datos.dias) || 0;
       const propinas = Number(datos.propinas) || 0;
       const sueldoBase = Number(emp.salario_base) || 0;
 
-      const totalSueldo = dias * sueldoBase;
-      const totalPagar = totalSueldo + propinas;
+      const totalSueldo = Number((unidades * sueldoBase).toFixed(2));
+      const totalPagar = Number((totalSueldo + propinas).toFixed(2));
 
       totalSueldos += totalSueldo;
       totalPropinas += propinas;
@@ -71,10 +155,13 @@ export default function NominaScreen() {
         id_empleado: emp.id,
         nombre: emp.nombre,
         puesto: emp.puesto || emp.rol,
-        sueldo_diario: sueldoBase,
-        dias: dias,
+        tipo_sueldo: datos.tipo || emp.tipo_sueldo || 'dia',
+        unidad: datos.etiqueta || 'días',
+        sueldo_diario: sueldoBase, // nombre legado: tarifa por unidad
+        dias: unidades, // nombre legado: unidades (hrs/días/turnos)
         total_sueldo: totalSueldo,
         propinas: propinas,
+        propinas_fuente: 'propinero',
         total_pagar: totalPagar,
       };
     });
@@ -196,6 +283,21 @@ export default function NominaScreen() {
             </div>
           </div>
 
+          {/* ESTADO DE PROPINAS (fuente: Propinero) */}
+          <div
+            className={`mb-4 px-5 py-3 rounded-2xl border-2 text-xs font-bold flex items-center gap-2 ${
+              propinasStatus === 'offline'
+                ? 'bg-amber-50 dark:bg-brand-ambar/10 border-amber-200 dark:border-brand-ambar/30 text-amber-700 dark:text-brand-ambar'
+                : 'bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-100 dark:border-brand-cesped/30 text-emerald-700 dark:text-brand-cesped'
+            }`}
+          >
+            {propinasStatus === 'offline'
+              ? '⚠️ Sin conexión: no se pudieron leer los repartos del Propinero. Las propinas se muestran en $0 — genera la nómina con red.'
+              : propinasStatus === 'cargando'
+                ? 'Cargando repartos del Propinero...'
+                : `Propinas de solo lectura, tomadas de ${repartosPeriodo.length} reparto${repartosPeriodo.length === 1 ? '' : 's'} del Propinero en el periodo. Para ajustarlas, reparte en el Propinero.`}
+          </div>
+
           {/* TABLA EDITABLE */}
           <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-50 dark:border-ui-border shadow-sm overflow-hidden flex-1 transition-colors">
             <div className="overflow-x-auto">
@@ -206,10 +308,10 @@ export default function NominaScreen() {
                       Colaborador
                     </th>
                     <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em] text-center w-32">
-                      Días Trabajados
+                      Unidades
                     </th>
                     <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em] text-right w-40">
-                      Salario Diario
+                      Tarifa
                     </th>
                     <th className="p-5 text-[10px] font-black text-emerald-500 dark:text-brand-cesped uppercase tracking-[0.15em] text-center w-40">
                       + Propinas
@@ -248,7 +350,6 @@ export default function NominaScreen() {
                             <input
                               type="number"
                               min="0"
-                              max="31"
                               step="0.5"
                               value={draft[linea.id_empleado]?.dias ?? ''}
                               onChange={(e) =>
@@ -260,6 +361,22 @@ export default function NominaScreen() {
                               }
                               className="w-16 bg-white dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border text-center font-black text-slate-900 dark:text-brand-nacar py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
                             />
+                            <span
+                              className={`ml-2 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border ${
+                                draft[linea.id_empleado]?.tipo === 'hora'
+                                  ? 'bg-sky-50 text-sky-600 border-sky-200 dark:bg-brand-amatista/10 dark:text-brand-amatista dark:border-brand-amatista/30'
+                                  : draft[linea.id_empleado]?.tipo === 'turno'
+                                    ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-brand-ambar/10 dark:text-brand-ambar dark:border-brand-ambar/30'
+                                    : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-ui-obsidiana dark:text-ui-muted dark:border-ui-border'
+                              }`}
+                              title="Definido en Staff (tipo de sueldo)"
+                            >
+                              {draft[linea.id_empleado]?.tipo === 'hora'
+                                ? 'Por hora'
+                                : draft[linea.id_empleado]?.tipo === 'turno'
+                                  ? 'Por turno'
+                                  : 'Por día'}
+                            </span>
                           </div>
                         </td>
                         <td className="p-5 text-right">
@@ -270,6 +387,14 @@ export default function NominaScreen() {
                               maximumFractionDigits: 2,
                             })}
                           </p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 dark:text-brand-amatista">
+                            por{' '}
+                            {linea.tipo_sueldo === 'hora'
+                              ? 'hora'
+                              : linea.tipo_sueldo === 'turno'
+                                ? 'turno'
+                                : 'día'}
+                          </p>
                           <p className="text-[9px] font-bold text-slate-400 dark:text-ui-muted">
                             Total: $
                             {linea.total_sueldo.toLocaleString('es-MX', {
@@ -278,25 +403,21 @@ export default function NominaScreen() {
                           </p>
                         </td>
                         <td className="p-5">
-                          <div className="flex items-center relative">
-                            <span className="absolute left-3 font-black text-emerald-400 dark:text-brand-cesped">
+                          <div
+                            className="text-right"
+                            title="Suma de los repartos del Propinero en el periodo"
+                          >
+                            <p className="font-black text-emerald-600 dark:text-brand-cesped text-lg leading-none">
                               $
+                              {Number(
+                                draft[linea.id_empleado]?.propinas || 0,
+                              ).toLocaleString('es-MX', {
+                                minimumFractionDigits: 2,
+                              })}
+                            </p>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 dark:text-brand-cesped/60">
+                              Propinero
                             </span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.5"
-                              placeholder="0.00"
-                              value={draft[linea.id_empleado]?.propinas ?? ''}
-                              onChange={(e) =>
-                                handleUpdateDraft(
-                                  linea.id_empleado,
-                                  'propinas',
-                                  e.target.value,
-                                )
-                              }
-                              className="w-full bg-emerald-50/50 dark:bg-brand-cesped/10 border-2 border-emerald-100 dark:border-brand-cesped/30 text-right pl-8 pr-4 py-2 font-black text-emerald-700 dark:text-brand-cesped rounded-xl focus:border-emerald-500 dark:focus:border-brand-cesped focus:bg-white dark:focus:bg-ui-obsidiana outline-none transition-all placeholder:text-emerald-200 dark:placeholder:text-brand-cesped/50"
-                            />
                           </div>
                         </td>
                         <td className="p-5 text-right">
