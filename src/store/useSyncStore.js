@@ -206,6 +206,49 @@ export const useSyncStore = create((set, get) => ({
     });
   },
 
+  // ✅ CRM: acumula visita/gasto/puntos del cliente al cobrar (offline-first).
+  // 1) Aplica optimista en RAM + Dexie (los puntos se estiman con la regla
+  //    local pesos_por_punto; el servidor es la fuente de verdad y el eco
+  //    realtime de 'clientes' corrige cualquier deriva).
+  // 2) Encola la RPC 'registrar_visita_cliente' — atómica (FOR UPDATE) e
+  //    idempotente vía ledger crm_visitas con PK (restaurante_id, venta_id):
+  //    un reintento de la cola tras timeout post-commit NO recuenta.
+  registrarVisitaCliente: async (ventaId, clienteId, total) => {
+    if (!ventaId || !clienteId) return;
+    const restauranteId = useAuthStore.getState().restauranteId;
+    const monto = Number(total) || 0;
+
+    try {
+      const { useAppStore } = await import('./useAppStore');
+      const conf = useAppStore.getState().configuracion || {};
+      const ppp = Number(conf.pesos_por_punto) || 0;
+      const puntos = ppp > 0 ? Math.floor(Math.max(monto, 0) / ppp) : 0;
+
+      const actual = (useAppStore.getState().clientes || []).find(
+        (c) => String(c.id) === String(clienteId),
+      );
+      if (actual) {
+        const actualizado = {
+          ...actual,
+          visitas: (Number(actual.visitas) || 0) + 1,
+          total_gastado: (Number(actual.total_gastado) || 0) + monto,
+          puntos_lealtad: (Number(actual.puntos_lealtad) || 0) + puntos,
+        };
+        useAppStore.getState().upsertCliente(actualizado);
+        await localDB.clientes.put(actualizado);
+      }
+    } catch (e) {
+      console.error('Error en acumulación local de cliente:', e);
+    }
+
+    await get().enqueueRpc('registrar_visita_cliente', {
+      p_venta_id: ventaId,
+      p_cliente_id: clienteId,
+      p_restaurante_id: restauranteId,
+      p_total: monto,
+    });
+  },
+
   processQueue: async () => {
     const state = get();
     // Solo evitamos correr en paralelo. NO bloqueamos por isOffline: ese flag es

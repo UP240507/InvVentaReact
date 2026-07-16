@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   X,
   CreditCard,
@@ -10,9 +10,13 @@ import {
   Landmark,
   Percent,
   ShieldCheck,
+  UserRound,
+  UserPlus,
+  Search,
 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useAuthStore } from '../../auth/useAuthStore';
+import { useSyncStore } from '../../../store/useSyncStore';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -76,7 +80,8 @@ export default function ModalCobro({
   //  - Cualquier otra sesión → pinpad de autorización: un Gerente/Admin teclea
   //    SU PIN (staff, 4-6 dígitos) y queda registrado como autorizador.
   const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Administrador', 'Gerente'];
-  const { staff } = useAppStore();
+  const { staff, clientes, upsertCliente } = useAppStore();
+  const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
   const sesionAutoriza = ROLES_AUTORIZAN_DESCUENTO.includes(
     user?.rol || user?.puesto,
@@ -144,6 +149,66 @@ export default function ModalCobro({
   const quitarDescuento = () => {
     setDescuentoAplicado(null);
     setDescValor('');
+  };
+
+  // ─── CLIENTE (CRM, opt-in) ─────────────────────────────────────────────────
+  // La venta de mostrador NO exige cliente: la sección nace colapsada y todo
+  // el flujo de cobro funciona igual sin tocarla. Asociar un cliente manda
+  // cliente_id en la venta y dispara la acumulación (visitas/gasto/puntos)
+  // vía RPC atómica por la cola de sync.
+  const [mostrarCliente, setMostrarCliente] = useState(false);
+  const [clienteBusqueda, setClienteBusqueda] = useState('');
+  const [clienteSel, setClienteSel] = useState(null);
+  const [altaExpres, setAltaExpres] = useState(false);
+  const [nuevoCliente, setNuevoCliente] = useState({ nombre: '', telefono: '' });
+
+  const clientesMatch = useMemo(() => {
+    const term = clienteBusqueda.trim().toLowerCase();
+    if (term.length < 2) return [];
+    return (clientes || [])
+      .filter((c) => c.activo !== false)
+      .filter(
+        (c) =>
+          (c.nombre || '').toLowerCase().includes(term) ||
+          (c.telefono || '').toLowerCase().includes(term),
+      )
+      .slice(0, 5);
+  }, [clientes, clienteBusqueda]);
+
+  const seleccionarCliente = (c) => {
+    setClienteSel(c);
+    setClienteBusqueda('');
+    setAltaExpres(false);
+  };
+
+  const quitarCliente = () => {
+    setClienteSel(null);
+    setClienteBusqueda('');
+    setAltaExpres(false);
+  };
+
+  // Alta exprés: nombre + teléfono mínimos, mismo shape que ClientesScreen
+  // (id estilo Date.now(), contadores en 0). enqueueAction persiste en Dexie
+  // y encola el upsert remoto; upsertCliente lo mete al estado en RAM.
+  const registrarClienteExpres = () => {
+    const nombre = nuevoCliente.nombre.trim();
+    if (!nombre) return;
+    const payload = {
+      id: Date.now(),
+      nombre,
+      telefono: nuevoCliente.telefono.trim(),
+      email: '',
+      cumpleanos: '',
+      preferencias: '',
+      visitas: 0,
+      total_gastado: 0,
+      puntos_lealtad: 0,
+      activo: true,
+    };
+    enqueueAction('clientes', 'upsert', payload);
+    upsertCliente(payload);
+    seleccionarCliente(payload);
+    setNuevoCliente({ nombre: '', telefono: '' });
   };
 
   const [tipoDivision, setTipoDivision] = useState('monto');
@@ -372,6 +437,148 @@ export default function ModalCobro({
                       ? 'Aplicar descuento'
                       : 'Solicitar autorización'}
                   </button>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* SECCIÓN DE CLIENTE (CRM, opcional — un tap para ignorarla) */}
+          <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
+            <div className="flex justify-between items-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted flex items-center gap-2">
+                <UserRound className="w-4 h-4 text-pink-500 dark:text-pink-400" />{' '}
+                Cliente (opcional)
+              </p>
+              {!clienteSel && (
+                <button
+                  onClick={() => setMostrarCliente((v) => !v)}
+                  className="text-[10px] font-black uppercase tracking-widest text-pink-500 dark:text-pink-400 hover:underline"
+                >
+                  {mostrarCliente ? 'Cancelar' : 'Asociar'}
+                </button>
+              )}
+            </div>
+
+            {clienteSel ? (
+              <div className="flex items-center justify-between bg-pink-50 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/30 rounded-xl px-4 py-3 mt-2">
+                <div className="min-w-0">
+                  <p className="font-black text-pink-600 dark:text-pink-400 truncate">
+                    {clienteSel.nombre}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
+                    {clienteSel.telefono || 'Sin teléfono'} ·{' '}
+                    {Number(clienteSel.visitas) || 0} visitas ·{' '}
+                    {Number(clienteSel.puntos_lealtad) || 0} pts
+                  </p>
+                </div>
+                <button
+                  onClick={quitarCliente}
+                  className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg shrink-0"
+                  title="Quitar cliente"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              mostrarCliente && (
+                <div className="mt-3 space-y-3">
+                  {!altaExpres ? (
+                    <>
+                      <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
+                        <Search className="w-4 h-4 text-slate-400 dark:text-ui-muted mx-2 shrink-0" />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Nombre o teléfono..."
+                          value={clienteBusqueda}
+                          onChange={(e) => setClienteBusqueda(e.target.value)}
+                          className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none"
+                        />
+                      </div>
+                      {clientesMatch.length > 0 && (
+                        <div className="space-y-1.5">
+                          {clientesMatch.map((c) => (
+                            <button
+                              key={c.id}
+                              onClick={() => seleccionarCliente(c)}
+                              className="w-full flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana hover:bg-pink-50 dark:hover:bg-pink-500/10 border border-slate-100 dark:border-ui-border rounded-xl px-4 py-2.5 transition-colors text-left"
+                            >
+                              <span className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                                {c.nombre}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-ui-muted shrink-0 ml-2">
+                                {c.telefono || `${Number(c.visitas) || 0} visitas`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {clienteBusqueda.trim().length >= 2 &&
+                        clientesMatch.length === 0 && (
+                          <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted text-center">
+                            Sin coincidencias.
+                          </p>
+                        )}
+                      <button
+                        onClick={() => {
+                          setAltaExpres(true);
+                          setNuevoCliente({
+                            nombre: clienteBusqueda.trim(),
+                            telefono: '',
+                          });
+                        }}
+                        className="w-full py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest text-pink-500 dark:text-pink-400 border-2 border-dashed border-pink-200 dark:border-pink-500/30 hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <UserPlus className="w-4 h-4" /> Cliente nuevo
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Nombre *"
+                        value={nuevoCliente.nombre}
+                        onChange={(e) =>
+                          setNuevoCliente((p) => ({
+                            ...p,
+                            nombre: e.target.value,
+                          }))
+                        }
+                        className="w-full bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border font-black text-slate-900 dark:text-brand-nacar outline-none focus:border-pink-400"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="Teléfono"
+                        value={nuevoCliente.telefono}
+                        onChange={(e) =>
+                          setNuevoCliente((p) => ({
+                            ...p,
+                            telefono: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') registrarClienteExpres();
+                        }}
+                        className="w-full bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-pink-400"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAltaExpres(false)}
+                          className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-slate-100 dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted"
+                        >
+                          Volver
+                        </button>
+                        <button
+                          onClick={registrarClienteExpres}
+                          disabled={!nuevoCliente.nombre.trim()}
+                          className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-pink-500 text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                          <UserPlus className="w-4 h-4" /> Registrar y asociar
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )
             )}
@@ -818,6 +1025,9 @@ export default function ModalCobro({
                   descuentoMonto: montoDescuento,
                   descuentoAutorizadoPor:
                     descuentoAplicado?.autorizadoPor || null,
+                  // CRM: null = venta de mostrador sin cliente (default).
+                  clienteId: clienteSel?.id ?? null,
+                  clienteNombre: clienteSel?.nombre ?? null,
                 })
               }
               disabled={!estaPagado}

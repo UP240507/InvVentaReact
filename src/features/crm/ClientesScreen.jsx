@@ -1,14 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
-import { 
-  Users, Plus, Search, Edit3, Trash2, X, Phone, 
-  Mail, Cake, Star, Trophy, Heart, MessageSquare, 
-  ArchiveRestore, Ban, Save
+import {
+  Users, Plus, Search, Edit3, Trash2, X, Phone,
+  Mail, Cake, Star, Trophy, Heart, MessageSquare,
+  ArchiveRestore, Ban, Save, Receipt, History
 } from 'lucide-react';
 
+// ¿El cliente cumple años este mes? (cumpleanos = 'YYYY-MM-DD' del input date)
+const cumpleEsteMes = (cumpleanos) => {
+  if (!cumpleanos || typeof cumpleanos !== 'string') return false;
+  const mes = cumpleanos.slice(5, 7);
+  const mesActual = String(new Date().getMonth() + 1).padStart(2, '0');
+  return mes === mesActual;
+};
+
 export default function CrmScreen() {
-  const { clientes, showToast } = useAppStore();
+  const { clientes, ventas, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [busqueda, setBusqueda] = useState('');
@@ -16,10 +24,34 @@ export default function CrmScreen() {
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [itemAEliminar, setItemAEliminar] = useState(null);
+  // Panel de detalle: historial de consumo + stats del cliente.
+  const [detalleCliente, setDetalleCliente] = useState(null);
 
   const [form, setForm] = useState({
-    nombre: '', telefono: '', email: '', cumpleanos: '', preferencias: ''
+    nombre: '', telefono: '', email: '', cumpleanos: '', preferencias: '',
+    rfc: '', razon_social: ''
   });
+
+  // Historial del cliente en detalle: ventas de RAM/Dexie con su cliente_id
+  // (la asociación nace en ModalCobro y viaja en nuevaVentaBD).
+  const historialDetalle = useMemo(() => {
+    if (!detalleCliente) return [];
+    return (ventas || [])
+      .filter((v) => String(v.cliente_id) === String(detalleCliente.id))
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .slice(0, 30);
+  }, [ventas, detalleCliente]);
+
+  // El detalle debe reflejar la acumulación EN VIVO (eco realtime de clientes):
+  // leemos la versión fresca del store, no el snapshot del click.
+  const clienteVivo = useMemo(() => {
+    if (!detalleCliente) return null;
+    return (
+      (clientes || []).find(
+        (c) => String(c.id) === String(detalleCliente.id),
+      ) || detalleCliente
+    );
+  }, [clientes, detalleCliente]);
 
   // 🌟 FIX: FUNCIÓN DESTRUCTORA DE DUPLICADOS (Asegura unicidad por ID)
   const upsertClienteLocal = (payload) => {
@@ -42,13 +74,13 @@ export default function CrmScreen() {
   }, [clientes, busqueda, filtroEstado]);
 
   const abrirNuevo = () => {
-    setForm({ nombre: '', telefono: '', email: '', cumpleanos: '', preferencias: '' });
+    setForm({ nombre: '', telefono: '', email: '', cumpleanos: '', preferencias: '', rfc: '', razon_social: '' });
     setEditId(null);
     setShowModal(true);
   };
 
   const abrirEditar = (c) => {
-    setForm({ ...c, email: c.email || '', cumpleanos: c.cumpleanos || '', preferencias: c.preferencias || '' });
+    setForm({ ...c, email: c.email || '', cumpleanos: c.cumpleanos || '', preferencias: c.preferencias || '', rfc: c.rfc || '', razon_social: c.razon_social || '' });
     setEditId(c.id);
     setShowModal(true);
   };
@@ -156,7 +188,7 @@ export default function CrmScreen() {
                   
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${c.activo === false ? 'bg-rose-500 dark:bg-brand-arrecife' : esVIP ? 'bg-amber-400 dark:bg-brand-ambar' : 'bg-pink-500'}`} />
 
-                  <div className="p-6">
+                  <div className="p-6 cursor-pointer" onClick={() => setDetalleCliente(c)}>
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center gap-4">
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner ${c.activo === false ? 'bg-rose-50 text-rose-500 dark:bg-brand-arrecife/10 dark:text-brand-arrecife' : esVIP ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-500/30' : 'bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400'}`}>
@@ -164,16 +196,19 @@ export default function CrmScreen() {
                         </div>
                         <div className="min-w-0 pr-2">
                           <h3 className="font-black font-syne text-slate-900 dark:text-brand-nacar text-lg leading-tight truncate">{c.nombre || 'Sin Nombre'}</h3>
-                          {esVIP && <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-amber-50 dark:bg-brand-ambar/10 text-amber-600 dark:text-brand-ambar font-black text-[9px] uppercase tracking-widest rounded-md border border-amber-200 dark:border-brand-ambar/30"><Trophy className="w-3 h-3"/> VIP</span>}
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {esVIP && <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 dark:bg-brand-ambar/10 text-amber-600 dark:text-brand-ambar font-black text-[9px] uppercase tracking-widest rounded-md border border-amber-200 dark:border-brand-ambar/30"><Trophy className="w-3 h-3"/> VIP</span>}
+                            {cumpleEsteMes(c.cumpleanos) && <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 font-black text-[9px] uppercase tracking-widest rounded-md border border-pink-200 dark:border-pink-500/30"><Cake className="w-3 h-3"/> Cumple este mes</span>}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {c.activo === false ? (
-                          <button onClick={() => toggleEstado(c)} className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-brand-cesped/10 rounded-xl transition-all" title="Desbloquear"><ArchiveRestore className="w-4 h-4"/></button>
+                          <button onClick={(e) => { e.stopPropagation(); toggleEstado(c); }} className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-brand-cesped/10 rounded-xl transition-all" title="Desbloquear"><ArchiveRestore className="w-4 h-4"/></button>
                         ) : (
                           <>
-                            <button onClick={() => toggleEstado(c)} className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife bg-slate-50 dark:bg-ui-obsidiana rounded-xl transition-all" title="Bloquear"><Ban className="w-4 h-4"/></button>
-                            <button onClick={() => abrirEditar(c)} className="p-2 text-slate-400 hover:text-pink-500 dark:hover:text-brand-amatista bg-slate-50 dark:bg-ui-obsidiana rounded-xl transition-all" title="Editar"><Edit3 className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); toggleEstado(c); }} className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife bg-slate-50 dark:bg-ui-obsidiana rounded-xl transition-all" title="Bloquear"><Ban className="w-4 h-4"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); abrirEditar(c); }} className="p-2 text-slate-400 hover:text-pink-500 dark:hover:text-brand-amatista bg-slate-50 dark:bg-ui-obsidiana rounded-xl transition-all" title="Editar"><Edit3 className="w-4 h-4"/></button>
                           </>
                         )}
                       </div>
@@ -270,8 +305,21 @@ export default function CrmScreen() {
                       className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-3xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-pink-500 dark:focus:border-brand-amatista transition-all" />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">RFC (facturación)</label>
+                    <input type="text" value={form.rfc} onChange={e => setForm({...form, rfc: e.target.value.toUpperCase()})} placeholder="XAXX010101000" maxLength={13}
+                      className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-3xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-pink-500 dark:focus:border-brand-amatista transition-all uppercase" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">Razón Social</label>
+                    <input type="text" value={form.razon_social} onChange={e => setForm({...form, razon_social: e.target.value})} placeholder="Como aparece en su CSF"
+                      className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-3xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-pink-500 dark:focus:border-brand-amatista transition-all" />
+                  </div>
+
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2 flex justify-between">
+                    <label className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase t
+acking-widest px-2 flex justify-between">
                       <span>Preferencias y Notas</span>
                       <span className="text-pink-400 dark:text-pink-500">Alergias, mesa favorita, etc.</span>
                     </label>
@@ -287,6 +335,96 @@ export default function CrmScreen() {
                <button type="submit" form="formCrm" className="flex-1 py-4 bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana font-black rounded-2xl shadow-xl shadow-slate-900/20 dark:shadow-brand-arrecife/30 hover:scale-105 active:scale-95 transition-all">
                  <Save className="w-5 h-5 inline mr-2"/> {editId ? 'Guardar Cambios' : 'Registrar Cliente'}
                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PANEL DE DETALLE: stats en vivo + historial de consumo */}
+      {clienteVivo && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md animate-in fade-in" onClick={() => setDetalleCliente(null)}>
+          <div className="bg-white dark:bg-ui-humo rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95 duration-300 transition-colors" onClick={(e) => e.stopPropagation()}>
+            <div className="p-8 border-b border-slate-100 dark:border-ui-border flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana transition-colors">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 shadow-inner">
+                  {(clienteVivo.nombre || '?')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar leading-tight truncate">{clienteVivo.nombre}</h3>
+                  <p className="text-sm font-bold text-slate-400 dark:text-ui-muted flex items-center gap-2 flex-wrap">
+                    {clienteVivo.telefono && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5"/> {clienteVivo.telefono}</span>}
+                    {clienteVivo.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5"/> {clienteVivo.email}</span>}
+                    {cumpleEsteMes(clienteVivo.cumpleanos) && <span className="flex items-center gap-1 text-pink-500 dark:text-pink-400"><Cake className="w-3.5 h-3.5"/> ¡Cumple este mes!</span>}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDetalleCliente(null)} className="text-slate-400 hover:text-brand-arrecife p-2 transition-colors shrink-0"><X className="w-6 h-6"/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+              {/* Stats reales (alimentadas por la RPC, eco realtime en vivo) */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border text-center">
+                  <p className="text-[9px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-wider mb-1">Visitas</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">{Number(clienteVivo.visitas) || 0}</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border text-center">
+                  <p className="text-[9px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-wider mb-1">Total Gastado</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">${Number(clienteVivo.total_gastado || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                </div>
+                <div className="bg-amber-50 dark:bg-brand-ambar/10 p-4 rounded-2xl border border-amber-100 dark:border-brand-ambar/30 text-center">
+                  <p className="text-[9px] font-black text-amber-500 uppercase tracking-wider mb-1 flex items-center justify-center gap-1"><Star className="w-3 h-3"/> Puntos</p>
+                  <p className="text-2xl font-black text-amber-500">{Number(clienteVivo.puntos_lealtad) || 0}</p>
+                </div>
+              </div>
+
+              {(clienteVivo.rfc || clienteVivo.razon_social) && (
+                <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border">
+                  <p className="text-[9px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-wider mb-1 flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5"/> Datos de facturación</p>
+                  <p className="font-black text-slate-800 dark:text-brand-nacar text-sm">{clienteVivo.razon_social || '—'}</p>
+                  <p className="font-bold text-slate-500 dark:text-ui-muted text-xs uppercase">{clienteVivo.rfc || 'Sin RFC'}</p>
+                </div>
+              )}
+
+              {clienteVivo.preferencias && (
+                <div className="flex items-start gap-3 text-xs font-bold text-pink-600 dark:text-pink-400 bg-pink-50/50 dark:bg-pink-500/5 border border-pink-100 dark:border-pink-500/20 px-4 py-3 rounded-2xl">
+                  <MessageSquare className="w-4 h-4 text-pink-300 dark:text-pink-500 shrink-0 mt-0.5"/>
+                  <span>{clienteVivo.preferencias}</span>
+                </div>
+              )}
+
+              {/* Historial de consumo (ventas locales con cliente_id) */}
+              <div>
+                <p className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-3 flex items-center gap-2"><History className="w-4 h-4"/> Historial de consumo</p>
+                {historialDetalle.length === 0 ? (
+                  <p className="text-sm font-bold text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana rounded-2xl border border-dashed border-slate-200 dark:border-ui-border p-6 text-center">
+                    Sin ventas asociadas en este dispositivo todavía. Asocia al
+                    cliente desde el cobro en el POS.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {historialDetalle.map((v) => (
+                      <div key={v.id} className="flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana rounded-xl border border-slate-100 dark:border-ui-border px-4 py-3">
+                        <div>
+                          <p className="font-black text-slate-800 dark:text-brand-nacar text-sm">{v.folio}</p>
+                          <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted">
+                            {v.fecha ? new Date(v.fecha).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                            {v.metodo_pago ? ` · ${v.metodo_pago}` : ''}
+                          </p>
+                        </div>
+                        <p className="font-black text-slate-900 dark:text-brand-nacar">${Number(v.total || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana flex gap-4 transition-colors">
+              <button onClick={() => setDetalleCliente(null)} className="flex-1 py-4 bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border text-slate-600 dark:text-brand-nacar font-black rounded-2xl transition-all active:scale-95">Cerrar</button>
+              <button onClick={() => { const c = clienteVivo; setDetalleCliente(null); abrirEditar(c); }} className="flex-1 py-4 bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana font-black rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                <Edit3 className="w-5 h-5"/> Editar perfil
+              </button>
             </div>
           </div>
         </div>

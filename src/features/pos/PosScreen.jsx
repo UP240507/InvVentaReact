@@ -61,7 +61,8 @@ export default function PosScreen() {
     turnos,
   } = useAppStore();
 
-  const { enqueueAction, descontarStockVenta } = useSyncStore();
+  const { enqueueAction, descontarStockVenta, registrarVisitaCliente } =
+    useSyncStore();
   const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -442,6 +443,8 @@ export default function PosScreen() {
       fecha: new Date().toISOString(),
       propina: fiscalTicket.propina,
       mesa: isMesa ? mesaActual.id : null,
+      // CRM: asociación opcional hecha en ModalCobro (null = mostrador).
+      cliente_id: datosPago?.clienteId ?? null,
     };
 
     const ventaVisual = {
@@ -456,6 +459,15 @@ export default function PosScreen() {
     useAppStore.setState((prev) => ({
       ventas: [...(prev.ventas || []), nuevaVentaBD],
     }));
+    // CRM: acumular visita/gasto/puntos DESPUÉS de encolar la venta (la cola
+    // es FIFO: la fila de ventas ya existirá cuando la RPC corra en el server).
+    if (nuevaVentaBD.cliente_id) {
+      registrarVisitaCliente(
+        nuevaVentaBD.id,
+        nuevaVentaBD.cliente_id,
+        granTotalTicket,
+      );
+    }
     // Inventario: en MESA ya se descontó al mandar a producción. Solo la VENTA
     // DIRECTA descuenta aquí (se vende, se corrobora y luego se prepara).
     if (!isMesa) {

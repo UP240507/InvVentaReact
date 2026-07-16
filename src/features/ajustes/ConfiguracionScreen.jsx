@@ -117,6 +117,14 @@ export default function ConfiguracionScreen() {
     Number(conf.horas_jornada) || 0,
   );
 
+  // Programa de puntos del CRM: cuántos pesos gastados otorgan 1 punto
+  // (ej. 10 = 1 pto por cada $10). 0 = programa apagado. La regla la define
+  // el DUEÑO (misma restricción que horas_jornada: solo Admin edita); los
+  // puntos los calcula el SERVIDOR en la RPC registrar_visita_cliente.
+  const [pesosPorPunto, setPesosPorPunto] = useState(
+    Number(conf.pesos_por_punto) || 0,
+  );
+
   // Parsear cfdi_config jsonb (donde guardamos los campos extra)
   const cfdiConf = (() => {
     try {
@@ -204,6 +212,9 @@ export default function ConfiguracionScreen() {
       horas_jornada: esAdminSesion
         ? Number(horasJornada) || 0
         : Number(conf.horas_jornada) || 0,
+      pesos_por_punto: esAdminSesion
+        ? Math.max(0, Number(pesosPorPunto) || 0)
+        : Number(conf.pesos_por_punto) || 0,
       restaurante_id: user?.restaurante_id || conf.restaurante_id,
       id: conf.id,
     };
@@ -601,6 +612,40 @@ export default function ConfiguracionScreen() {
                         />
                         <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
                           horas
+                        </span>
+                        {!esAdminSesion && (
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-brand-ambar">
+                            Solo el Admin puede modificarla
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Programa de puntos del CRM (solo Admin) */}
+                    <div className="pt-4 mt-2 border-t border-slate-100 dark:border-ui-border">
+                      <p className="text-sm font-black text-slate-800 dark:text-brand-nacar">
+                        Puntos de lealtad
+                      </p>
+                      <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-3">
+                        Pesos gastados que otorgan 1 punto al cliente asociado a
+                        la venta (ej. 10 = 1 punto por cada $10). 0 = programa
+                        apagado.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          disabled={!esAdminSesion}
+                          value={pesosPorPunto}
+                          onChange={(e) => setPesosPorPunto(e.target.value)}
+                          className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        />
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+                          = 1 punto
                         </span>
                         {!esAdminSesion && (
                           <span className="text-[10px] font-bold text-amber-600 dark:text-brand-ambar">

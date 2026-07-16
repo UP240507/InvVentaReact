@@ -556,6 +556,42 @@ export const useAppStore = create((set, get) => ({
           });
         },
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clientes' },
+        (payload) => {
+          const cliente = payload.new;
+          const tipo = payload.eventType;
+
+          if (tipo === 'DELETE') {
+            set((state) => ({
+              clientes: (state.clientes || []).filter(
+                (c) => String(c.id) !== String(payload.old?.id),
+              ),
+            }));
+            return;
+          }
+
+          // INSERT/UPDATE: upsert por id (mismo patrón que mesas/turnos).
+          // Propaga la acumulación del CRM (visitas/gasto/puntos que escribe
+          // la RPC registrar_visita_cliente) y las altas exprés del ModalCobro
+          // a TODAS las terminales en vivo. El eco corrige la estimación
+          // optimista local de puntos si la regla cambió a media sesión.
+          set((state) => {
+            const existe = (state.clientes || []).some(
+              (c) => String(c.id) === String(cliente?.id),
+            );
+            if (existe) {
+              return {
+                clientes: state.clientes.map((c) =>
+                  String(c.id) === String(cliente.id) ? cliente : c,
+                ),
+              };
+            }
+            return { clientes: [cliente, ...(state.clientes || [])] };
+          });
+        },
+      )
       .subscribe();
 
     set({ _kdsChannel: suscripcion, _kdsIniciando: false });
