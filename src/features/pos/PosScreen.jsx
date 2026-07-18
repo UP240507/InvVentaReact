@@ -30,6 +30,7 @@ import {
   tieneElecciones,
   gruposDeEleccion,
   resolverComponentesPaquete,
+  construirItemsComanda,
 } from '../../lib/inventario';
 import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 
@@ -361,14 +362,13 @@ export default function PosScreen() {
   // Envía el delta a producción: crea comanda KDS, DESCUENTA stock (al cocinar),
   // marca el carrito como enviado y deja la mesa ocupada.
   const ejecutarProduccion = (deltaCarrito, subs) => {
-    const itemsParaCocina = deltaCarrito.map((item) => ({
-      id: item.id ? `${item.id}` : `${item.nombre}-${Date.now()}`,
-      nombre: item.nombre,
-      cantidad: item.cantidad,
-      destino: configuracion?.enrutamiento?.[item.categoria] || 'Cocina',
-      estado: 'pendiente',
-      nota: item.nota || '',
-    }));
+    // PAQUETES: se expanden en un item por componente, cada uno enrutado a la
+    // estación de SU receta (café → Barra, chilaquiles → Cocina).
+    const itemsParaCocina = construirItemsComanda(
+      deltaCarrito,
+      recetas,
+      configuracion?.enrutamiento,
+    );
 
     const nuevaComanda = {
       id: `CMD-${Date.now()}`,
@@ -531,6 +531,29 @@ export default function PosScreen() {
     useAppStore.setState((prev) => ({
       ventas: [...(prev.ventas || []), nuevaVentaBD],
     }));
+
+    // VENTA DIRECTA → KDS: en mostrador no hubo "mandar a producción", así que
+    // la comanda nace AQUÍ al cobrar (cocina/barra preparan lo ya pagado).
+    // Con paquetes expandidos por componente y enrutados a su estación.
+    if (!isMesa && itemsTicket.length > 0) {
+      const comandaDirecta = {
+        id: `CMD-${Date.now()}`,
+        restaurante_id: useAuthStore.getState().restauranteId, // RLS
+        folio: nuevaVentaBD.folio,
+        mesa: 'Mostrador',
+        mesa_id: null,
+        mesero: user?.nombre ?? 'Sistema',
+        fecha_hora: new Date().toISOString(),
+        items: construirItemsComanda(
+          itemsTicket,
+          recetas,
+          configuracion?.enrutamiento,
+        ),
+        estado: 'preparando',
+      };
+      enqueueAction('comandas', 'insert', comandaDirecta);
+      registrarComandaKDS(comandaDirecta);
+    }
     // CRM: acumular visita/gasto/puntos DESPUÉS de encolar la venta (la cola
     // es FIFO: la fila de ventas ya existirá cuando la RPC corra en el server).
     if (nuevaVentaBD.cliente_id) {
@@ -555,7 +578,11 @@ export default function PosScreen() {
           accion: 'CANJE_RECOMPENSA',
           modulo: 'POS',
           nivel: 'info',
-          detalles: `Folio ${nuevaVentaBD.folio}: canje "${datosPago.canje.nombre}" (−${datosPago.canje.puntos} pts) del cliente ${datosPago?.clienteNombre || nuevaVentaBD.cliente_id}.`,
+          detalles: `Folio ${nuevaVentaBD.folio}: canje "${datosPago.canje.nombre}" (−${datosPago.canje.puntos} pts${
+            Number(datosPago.canje.monto) > 0
+              ? `, descuento $${datosPago.canje.monto}`
+              : ''
+          }) del cliente ${datosPago?.clienteNombre || nuevaVentaBD.cliente_id}.`,
         });
       }
     }

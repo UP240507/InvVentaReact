@@ -263,16 +263,40 @@ export default function ModalCobro({
   const montoDescuento = round2(totalBase * (pctDescuento / 100));
   const totalConDescuento = round2(totalBase - montoDescuento);
 
+  // ─── CANJE CON LÓGICA ──────────────────────────────────────────────────────
+  // La recompensa canjeada SÍ toca el total cuando es de tipo descuento:
+  //  - descuento_pct: % sobre el total ya descontado (lo que se iba a pagar).
+  //  - descuento_monto: $ fijo, acotado a no dejar el total en negativo.
+  //  - cortesia: no descuenta (el mesero entrega el premio físico).
+  // El canje ES la autorización: no pasa por pinpad. Los puntos se restan al
+  // confirmar el cobro (RPC atómica encolada por PosScreen).
+  const canjeDescuento = !canjeSel
+    ? 0
+    : canjeSel.tipo === 'descuento_pct'
+      ? round2(
+          totalConDescuento *
+            (Math.min(100, Math.max(0, safeNumber(canjeSel.valor, 0))) / 100),
+        )
+      : canjeSel.tipo === 'descuento_monto'
+        ? round2(
+            Math.min(
+              Math.max(0, safeNumber(canjeSel.valor, 0)),
+              totalConDescuento,
+            ),
+          )
+        : 0;
+  const totalCobrable = round2(totalConDescuento - canjeDescuento);
+
   const propinaCalculada = round2(
     propinaSeleccionada !== 'manual'
-      ? totalConDescuento * (safeNumber(propinaSeleccionada, 0) / 100)
+      ? totalCobrable * (safeNumber(propinaSeleccionada, 0) / 100)
       : safeNumber(propinaManual, 0),
   );
 
   // Propina total = la elegida (botones/manual) + la que entró por sobrepago.
   const propinaTotal = round2(propinaCalculada + safeNumber(propinaExtra, 0));
 
-  const granTotal = round2(totalConDescuento + propinaTotal);
+  const granTotal = round2(totalCobrable + propinaTotal);
   const totalPagado = round2(
     pagos.reduce((acc, p) => acc + safeNumber(p?.monto, 0), 0),
   );
@@ -511,9 +535,20 @@ export default function ModalCobro({
                     <div>
                       <p className="font-black text-amber-600 dark:text-brand-ambar">
                         {canjeSel.nombre}
+                        {canjeDescuento > 0 && (
+                          <span className="ml-2 text-emerald-600 dark:text-brand-cesped">
+                            −$
+                            {canjeDescuento.toLocaleString('es-MX', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                        )}
                       </p>
                       <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
                         −{canjeSel.puntos} pts al confirmar el cobro
+                        {canjeSel.tipo === 'cortesia'
+                          ? ' · cortesía: se entrega, no descuenta'
+                          : ''}
                       </p>
                     </div>
                     <button
@@ -534,7 +569,12 @@ export default function ModalCobro({
                           key={r.id}
                           disabled={!alcanza}
                           onClick={() =>
-                            setCanjeSel({ nombre: r.nombre, puntos: costo })
+                            setCanjeSel({
+                              nombre: r.nombre,
+                              puntos: costo,
+                              tipo: r.tipo || 'cortesia',
+                              valor: Number(r.valor) || 0,
+                            })
                           }
                           className={`w-full flex justify-between items-center rounded-xl px-4 py-2.5 border transition-colors text-left ${
                             alcanza
@@ -546,6 +586,16 @@ export default function ModalCobro({
                             {r.nombre}
                           </span>
                           <span className="text-[10px] font-black text-amber-500 shrink-0 ml-2 flex items-center gap-1">
+                            {r.tipo === 'descuento_pct' && (
+                              <span className="text-emerald-600 dark:text-brand-cesped">
+                                −{Number(r.valor) || 0}%
+                              </span>
+                            )}
+                            {r.tipo === 'descuento_monto' && (
+                              <span className="text-emerald-600 dark:text-brand-cesped">
+                                −${Number(r.valor) || 0}
+                              </span>
+                            )}
                             <Star className="w-3 h-3" /> {costo} pts
                           </span>
                         </button>
@@ -1097,15 +1147,23 @@ export default function ModalCobro({
                   totalConPropina: granTotal,
                   isCobroParcial,
                   seleccion: seleccionPlatillos,
-                  descuentoPct: pctDescuento,
-                  descuentoMonto: montoDescuento,
+                  // % EFECTIVO total (descuento autorizado + canje): el motor
+                  // fiscal escala base e IVA con este único porcentaje.
+                  descuentoPct:
+                    totalBase > 0
+                      ? ((montoDescuento + canjeDescuento) / totalBase) * 100
+                      : 0,
+                  descuentoMonto: round2(montoDescuento + canjeDescuento),
                   descuentoAutorizadoPor:
                     descuentoAplicado?.autorizadoPor || null,
                   // CRM: null = venta de mostrador sin cliente (default).
                   clienteId: clienteSel?.id ?? null,
                   clienteNombre: clienteSel?.nombre ?? null,
-                  // Lealtad: canje elegido (PosScreen encola canjear_puntos).
-                  canje: canjeSel,
+                  // Lealtad: canje elegido con su monto aplicado (PosScreen
+                  // encola canjear_puntos y audita).
+                  canje: canjeSel
+                    ? { ...canjeSel, monto: canjeDescuento }
+                    : null,
                 })
               }
               disabled={!estaPagado}

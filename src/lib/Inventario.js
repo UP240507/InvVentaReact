@@ -141,6 +141,57 @@ export function expandirInsumosPaquete(paquete, recetas = []) {
 }
 
 /**
+ * Construye los items de una COMANDA (KDS) desde items del carrito.
+ * - Platillo normal → 1 item con destino por enrutamiento de SU categoría.
+ * - PAQUETE → SE EXPANDE: un item por componente (fijo o elegido), cada uno
+ *   enrutado por la categoría de SU receta (café → Barra, chilaquiles →
+ *   Cocina). La cantidad del componente se multiplica por la del combo y la
+ *   nota conserva el nombre del paquete para dar contexto a cocina.
+ * enrutamiento = configuracion.enrutamiento { [categoria]: zona }.
+ */
+export function construirItemsComanda(items = [], recetas = [], enrutamiento = {}) {
+  const mapaRecetas = new Map((recetas || []).map((r) => [String(r.id), r]));
+  const destinoDe = (categoria) => enrutamiento?.[categoria] || 'Cocina';
+  const out = [];
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const qty = Number(item?.cantidad) || 0;
+    if (qty <= 0) continue;
+
+    const componentes = (item?.componentes || []).filter(
+      (c) => c?.recetaId != null,
+    );
+
+    if (esPaquete(item) && componentes.length > 0) {
+      for (const comp of componentes) {
+        const recetaComp = mapaRecetas.get(String(comp.recetaId));
+        out.push({
+          id: `${item.id}::${comp.recetaId}`,
+          nombre: comp.nombre || recetaComp?.nombre || `#${comp.recetaId}`,
+          cantidad: (Number(comp.cantidad) || 1) * qty,
+          destino: destinoDe(recetaComp?.categoria),
+          estado: 'pendiente',
+          nota: [item.nota, `Paquete: ${item.nombre}`]
+            .filter(Boolean)
+            .join(' · '),
+        });
+      }
+      continue;
+    }
+
+    out.push({
+      id: item.id ? `${item.id}` : `${item.nombre}-${Date.now()}`,
+      nombre: item.nombre,
+      cantidad: qty,
+      destino: destinoDe(item.categoria),
+      estado: 'pendiente',
+      nota: item.nota || '',
+    });
+  }
+  return out;
+}
+
+/**
  * Verifica el stock disponible contra lo que la venta consumiría.
  * Devuelve la lista de problemas (vacía si todo OK).
  * severidad: 'agotado' (quedaría en negativo) | 'bajo_minimo' (cae bajo el mínimo).

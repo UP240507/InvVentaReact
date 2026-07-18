@@ -131,21 +131,48 @@ export default function ConfiguracionScreen() {
   const [recompensas, setRecompensas] = useState(
     Array.isArray(conf.recompensas) ? conf.recompensas : [],
   );
+  // tipo: 'cortesia' (informativa: el mesero entrega el premio) |
+  //       'descuento_pct' (valor = % de descuento sobre el total a pagar) |
+  //       'descuento_monto' (valor = $ de descuento).
+  // Los descuentos SÍ se aplican al total en el cobro; el canje es la
+  // autorización (no pasa por pinpad).
   const [nuevaRecompensa, setNuevaRecompensa] = useState({
     nombre: '',
     costo: '',
+    tipo: 'cortesia',
+    valor: '',
   });
 
   const agregarRecompensa = () => {
     const nombre = nuevaRecompensa.nombre.trim();
     const costo = Number(nuevaRecompensa.costo) || 0;
+    const tipo = nuevaRecompensa.tipo || 'cortesia';
+    const valor = Number(nuevaRecompensa.valor) || 0;
     if (!nombre || costo <= 0) return;
+    if (tipo !== 'cortesia' && valor <= 0)
+      return showToast('Un descuento necesita valor mayor a 0.', 'error');
+    if (tipo === 'descuento_pct' && valor > 100)
+      return showToast('El porcentaje no puede exceder 100.', 'error');
     setRecompensas((prev) => [
       ...prev,
-      { id: Date.now(), nombre, costo_puntos: costo, activo: true },
+      {
+        id: Date.now(),
+        nombre,
+        costo_puntos: costo,
+        tipo,
+        valor: tipo === 'cortesia' ? null : valor,
+        activo: true,
+      },
     ]);
-    setNuevaRecompensa({ nombre: '', costo: '' });
+    setNuevaRecompensa({ nombre: '', costo: '', tipo: 'cortesia', valor: '' });
   };
+
+  const etiquetaRecompensa = (r) =>
+    r.tipo === 'descuento_pct'
+      ? `${Number(r.valor) || 0}% de descuento`
+      : r.tipo === 'descuento_monto'
+        ? `$${Number(r.valor) || 0} de descuento`
+        : 'Cortesía';
 
   const toggleRecompensa = (id) =>
     setRecompensas((prev) =>
@@ -721,7 +748,10 @@ export default function ConfiguracionScreen() {
                                   {r.nombre}
                                 </p>
                                 <p className="text-[10px] font-black text-amber-500">
-                                  {Number(r.costo_puntos) || 0} pts
+                                  {Number(r.costo_puntos) || 0} pts ·{' '}
+                                  <span className="text-slate-400 dark:text-ui-muted">
+                                    {etiquetaRecompensa(r)}
+                                  </span>
                                 </p>
                               </div>
                               {esAdminSesion && (
@@ -746,43 +776,88 @@ export default function ConfiguracionScreen() {
                           ))}
                         </div>
                         {esAdminSesion && (
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Ej. Postre gratis"
-                              value={nuevaRecompensa.nombre}
-                              onChange={(e) =>
-                                setNuevaRecompensa((p) => ({
-                                  ...p,
-                                  nombre: e.target.value,
-                                }))
-                              }
-                              className="flex-1 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
-                            />
-                            <input
-                              type="number"
-                              min="1"
-                              placeholder="Pts"
-                              value={nuevaRecompensa.costo}
-                              onChange={(e) =>
-                                setNuevaRecompensa((p) => ({
-                                  ...p,
-                                  costo: e.target.value,
-                                }))
-                              }
-                              className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-3 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
-                            />
-                            <button
-                              type="button"
-                              onClick={agregarRecompensa}
-                              disabled={
-                                !nuevaRecompensa.nombre.trim() ||
-                                (Number(nuevaRecompensa.costo) || 0) <= 0
-                              }
-                              className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all"
-                            >
-                              Agregar
-                            </button>
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Ej. Postre gratis"
+                                value={nuevaRecompensa.nombre}
+                                onChange={(e) =>
+                                  setNuevaRecompensa((p) => ({
+                                    ...p,
+                                    nombre: e.target.value,
+                                  }))
+                                }
+                                className="flex-1 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                              />
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Pts"
+                                value={nuevaRecompensa.costo}
+                                onChange={(e) =>
+                                  setNuevaRecompensa((p) => ({
+                                    ...p,
+                                    costo: e.target.value,
+                                  }))
+                                }
+                                className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-3 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <select
+                                value={nuevaRecompensa.tipo}
+                                onChange={(e) =>
+                                  setNuevaRecompensa((p) => ({
+                                    ...p,
+                                    tipo: e.target.value,
+                                  }))
+                                }
+                                className="flex-1 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                              >
+                                <option value="cortesia">
+                                  Cortesía (se entrega, no descuenta)
+                                </option>
+                                <option value="descuento_pct">
+                                  Descuento % sobre el total
+                                </option>
+                                <option value="descuento_monto">
+                                  Descuento $ fijo
+                                </option>
+                              </select>
+                              {nuevaRecompensa.tipo !== 'cortesia' && (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder={
+                                    nuevaRecompensa.tipo === 'descuento_pct'
+                                      ? '%'
+                                      : '$'
+                                  }
+                                  value={nuevaRecompensa.valor}
+                                  onChange={(e) =>
+                                    setNuevaRecompensa((p) => ({
+                                      ...p,
+                                      valor: e.target.value,
+                                    }))
+                                  }
+                                  className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-3 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                                />
+                              )}
+                              <button
+                                type="button"
+                                onClick={agregarRecompensa}
+                                disabled={
+                                  !nuevaRecompensa.nombre.trim() ||
+                                  (Number(nuevaRecompensa.costo) || 0) <= 0 ||
+                                  (nuevaRecompensa.tipo !== 'cortesia' &&
+                                    (Number(nuevaRecompensa.valor) || 0) <= 0)
+                                }
+                                className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all"
+                              >
+                                Agregar
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
