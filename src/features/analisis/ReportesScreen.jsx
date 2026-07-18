@@ -235,6 +235,19 @@ export default function ReportesScreen() {
       });
     const totalPerdidaMermas = mermas.reduce((s, m) => s + m.perdida, 0);
 
+    // Kardex completo del periodo: TODOS los movimientos (Entrada, Salida POS,
+    // Merma, Ajuste) con producto resuelto, más reciente primero. Tope 200
+    // filas para no ahogar el render (el periodo acota el resto).
+    const kardex = mPeriodo
+      .map((m) => {
+        const p = (productos || []).find(
+          (x) => String(x.id) === String(m.producto_id),
+        );
+        return { ...m, producto: p?.nombre || '—', unidad: p?.unidad || '' };
+      })
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .slice(0, 200);
+
     return {
       vPeriodo,
       tIngresos,
@@ -251,6 +264,7 @@ export default function ReportesScreen() {
       valorizacionTotal,
       mermas,
       totalPerdidaMermas,
+      kardex,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1044,6 +1058,95 @@ export default function ReportesScreen() {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* KARDEX COMPLETO: trazabilidad total del periodo */}
+              <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-100 dark:border-ui-border shadow-sm overflow-hidden transition-colors">
+                <div className="p-5 border-b-2 border-slate-100 dark:border-ui-border">
+                  <h4 className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest flex items-center gap-2">
+                    <Package className="w-4 h-4" /> Kardex del Periodo
+                    (Entradas · Salidas POS · Mermas · Ajustes)
+                  </h4>
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 dark:bg-ui-obsidiana border-b-2 border-slate-100 dark:border-ui-border sticky top-0">
+                      <tr className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                        <th className="p-4">Fecha</th>
+                        <th className="p-4">Tipo</th>
+                        <th className="p-4">Insumo</th>
+                        <th className="p-4 text-center">Cant</th>
+                        <th className="p-4 text-center">Stock</th>
+                        <th className="p-4">Usuario</th>
+                        <th className="p-4">Referencia</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-ui-border">
+                      {data.kardex.map((m, i) => {
+                        const esEntrada = m.tipo === 'Entrada';
+                        const esAjuste = m.tipo === 'Ajuste';
+                        return (
+                          <tr
+                            key={m.id ?? i}
+                            className="hover:bg-slate-50 dark:hover:bg-ui-obsidiana/50 transition-colors"
+                          >
+                            <td className="p-4 font-mono text-xs text-slate-500 dark:text-ui-muted whitespace-nowrap">
+                              {new Date(m.fecha).toLocaleString('es-MX', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })}
+                            </td>
+                            <td className="p-4">
+                              <span
+                                className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${
+                                  esEntrada
+                                    ? 'text-emerald-600 dark:text-brand-cesped bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-200 dark:border-brand-cesped/30'
+                                    : esAjuste
+                                      ? 'text-indigo-600 dark:text-brand-amatista bg-indigo-50 dark:bg-brand-amatista/10 border-indigo-200 dark:border-brand-amatista/30'
+                                      : m.tipo === 'Merma'
+                                        ? 'text-rose-600 dark:text-brand-arrecife bg-rose-50 dark:bg-brand-arrecife/10 border-rose-200 dark:border-brand-arrecife/30'
+                                        : 'text-amber-600 dark:text-brand-ambar bg-amber-50 dark:bg-brand-ambar/10 border-amber-200 dark:border-brand-ambar/30'
+                                }`}
+                              >
+                                {m.tipo}
+                              </span>
+                            </td>
+                            <td className="p-4 font-bold text-slate-800 dark:text-brand-nacar">
+                              {m.producto}
+                            </td>
+                            <td
+                              className={`p-4 text-center font-black ${esEntrada ? 'text-emerald-600 dark:text-brand-cesped' : 'text-slate-800 dark:text-brand-nacar'}`}
+                            >
+                              {esEntrada ? '+' : '−'}
+                              {Math.abs(Number(m.cantidad) || 0)} {m.unidad}
+                            </td>
+                            <td className="p-4 text-center font-mono text-xs text-slate-500 dark:text-ui-muted whitespace-nowrap">
+                              {m.stock_anterior != null
+                                ? `${m.stock_anterior} → ${m.stock_nuevo}`
+                                : '—'}
+                            </td>
+                            <td className="p-4 text-xs font-bold text-slate-500 dark:text-ui-muted">
+                              {m.usuario || '—'}
+                            </td>
+                            <td className="p-4 text-xs italic text-slate-400 dark:text-ui-muted max-w-[16rem] truncate">
+                              {m.referencia || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {data.kardex.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan="7"
+                            className="py-10 text-center text-slate-400 dark:text-ui-muted font-bold"
+                          >
+                            Sin movimientos en este periodo.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

@@ -62,7 +62,25 @@ function Badge({ estado }) {
 }
 
 export default function FacturasScreen() {
-  const { ventas, facturas, showToast, configuracion } = useAppStore();
+  const { ventas, facturas, clientes, showToast, configuracion } =
+    useAppStore();
+
+  // CRM → CFDI: si la venta trae cliente_id y el cliente tiene RFC/razón
+  // social capturados (siembra hecha en ClientesScreen), el receptor se
+  // precarga solo. El cajero puede sobreescribir lo que haga falta.
+  const precargarReceptorDesdeCRM = (venta, setFormFn) => {
+    if (!venta?.cliente_id) return;
+    const cli = (clientes || []).find(
+      (c) => String(c.id) === String(venta.cliente_id),
+    );
+    if (!cli) return;
+    setFormFn((prev) => ({
+      ...prev,
+      rfc: (cli.rfc || prev.rfc || '').toUpperCase(),
+      nombre: cli.razon_social || prev.nombre || cli.nombre || '',
+      email: cli.email || prev.email || '',
+    }));
+  };
   const { user } = useAuthStore();
 
   const [busqueda, setBusqueda] = useState('');
@@ -403,7 +421,10 @@ export default function FacturasScreen() {
                     ventasFacturables.map((v) => (
                       <button
                         key={v.id}
-                        onClick={() => setVentaRef(v)}
+                        onClick={() => {
+                          setVentaRef(v);
+                          precargarReceptorDesdeCRM(v, setForm);
+                        }}
                         className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex justify-between items-center ${
                           ventaRef?.id === v.id
                             ? 'border-indigo-400 dark:border-brand-amatista bg-indigo-50 dark:bg-brand-amatista/10'
