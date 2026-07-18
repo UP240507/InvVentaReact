@@ -396,10 +396,13 @@ export default function KdsScreen() {
                               {item.nombre}
                             </p>
                             {Array.isArray(item.componentes) &&
-                              item.componentes.length > 0 && (
+                              item.componentes.filter(
+                                (comp) => comp?.recetaId != null,
+                              ).length > 0 && (
                                 <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-1">
                                   Incluye:{' '}
                                   {item.componentes
+                                    .filter((comp) => comp?.recetaId != null)
                                     .map(
                                       (comp) =>
                                         `${Number(comp.cantidad) || 1}x ${comp.nombre || `#${comp.recetaId}`}`,

@@ -57,6 +57,55 @@ export function esPaquete(receta) {
 }
 
 /**
+ * Grupos de elección del paquete ("elige 1 de N"):
+ * { grupo: text, cantidad: number, opciones: [{recetaId, nombre}] }.
+ * Conviven con componentes fijos en el mismo arreglo 'componentes'.
+ */
+export function gruposDeEleccion(receta) {
+  return (receta?.componentes || []).filter(
+    (c) => Array.isArray(c?.opciones) && c.opciones.length > 0,
+  );
+}
+
+export function tieneElecciones(receta) {
+  return gruposDeEleccion(receta).length > 0;
+}
+
+/**
+ * Resuelve los componentes de un paquete con las elecciones del cliente:
+ * fijos pasan directo; de cada grupo entra SOLO la opción elegida.
+ * elecciones = { [nombreGrupo]: recetaId }.
+ * Devuelve [{recetaId, cantidad, nombre}] — el shape fijo que ya entienden
+ * expandirInsumosPaquete y el render del KDS. Grupos sin elección se omiten
+ * (el POS no debe permitir confirmar sin elegir todo).
+ */
+export function resolverComponentesPaquete(paquete, elecciones = {}) {
+  const out = [];
+  for (const comp of paquete?.componentes || []) {
+    if (Array.isArray(comp?.opciones) && comp.opciones.length > 0) {
+      const elegidaId = elecciones?.[comp.grupo];
+      const opcion = comp.opciones.find(
+        (o) => String(o?.recetaId) === String(elegidaId),
+      );
+      if (opcion) {
+        out.push({
+          recetaId: opcion.recetaId,
+          cantidad: Number(comp.cantidad) || 1,
+          nombre: opcion.nombre || '',
+        });
+      }
+    } else if (comp?.recetaId != null) {
+      out.push({
+        recetaId: comp.recetaId,
+        cantidad: Number(comp.cantidad) || 1,
+        nombre: comp.nombre || '',
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Expande los insumos de un PAQUETE desde sus recetas componentes VIVAS.
  * Se llama al agregar al carrito (no al guardar el paquete): así los insumos
  * nunca quedan desnormalizados/obsoletos si una receta componente cambia.

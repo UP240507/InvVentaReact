@@ -55,6 +55,11 @@ export default function RecetasScreen() {
   // PAQUETES: selector de recetas componentes (combo fijo a precio de paquete).
   const [componenteSel, setComponenteSel] = useState('');
   const [cantidadComponente, setCantidadComponente] = useState('1');
+  // PAQUETES fase 2: grupos de elección ("elige 1 de N"), ej. "Bebida caliente:
+  // café de olla o americano". Se arma el grupo y se agrega al paquete.
+  const [grupoNombre, setGrupoNombre] = useState('');
+  const [grupoOpciones, setGrupoOpciones] = useState([]); // [{recetaId, nombre}]
+  const [grupoOpcionSel, setGrupoOpcionSel] = useState('');
 
   const categoriasExistentes = useMemo(() => {
     const cats = (recetas || [])
@@ -106,8 +111,18 @@ export default function RecetasScreen() {
     }, 0);
   };
 
-  // Costo del paquete = suma de costos de sus recetas componentes (vivas).
+  // Costo del paquete = fijos al costo de su receta + grupos de elección al
+  // costo de su opción MÁS CARA (peor caso: nunca subestima la rentabilidad).
   const costoPaquete = (form.componentes || []).reduce((acc, comp) => {
+    if (Array.isArray(comp?.opciones) && comp.opciones.length > 0) {
+      const maxCosto = comp.opciones.reduce((mx, op) => {
+        const r = (recetas || []).find(
+          (x) => String(x.id) === String(op.recetaId),
+        );
+        return Math.max(mx, Number(r?.costo) || 0);
+      }, 0);
+      return acc + maxCosto * (Number(comp.cantidad) || 1);
+    }
     const r = (recetas || []).find(
       (x) => String(x.id) === String(comp.recetaId),
     );
@@ -131,6 +146,9 @@ export default function RecetasScreen() {
     setInputNuevaCat('');
     setComponenteSel('');
     setCantidadComponente('1');
+    setGrupoNombre('');
+    setGrupoOpciones([]);
+    setGrupoOpcionSel('');
   };
 
   const abrirEditar = (item) => {
@@ -139,11 +157,24 @@ export default function RecetasScreen() {
       cantidad: Number(i.cantidad) || 0,
       merma: Number(i.merma) || 0,
     }));
-    const componentesNorm = (item.componentes || []).map((c) => ({
-      recetaId: Number(c.recetaId),
-      cantidad: Number(c.cantidad) || 1,
-      nombre: c.nombre || '',
-    }));
+    // Componentes: fijos {recetaId, cantidad, nombre} y grupos de elección
+    // {grupo, cantidad, opciones:[{recetaId, nombre}]} conviven en el arreglo.
+    const componentesNorm = (item.componentes || []).map((c) =>
+      Array.isArray(c?.opciones) && c.opciones.length > 0
+        ? {
+            grupo: c.grupo || 'Elección',
+            cantidad: Number(c.cantidad) || 1,
+            opciones: c.opciones.map((o) => ({
+              recetaId: Number(o.recetaId),
+              nombre: o.nombre || '',
+            })),
+          }
+        : {
+            recetaId: Number(c.recetaId),
+            cantidad: Number(c.cantidad) || 1,
+            nombre: c.nombre || '',
+          },
+    );
     setForm({
       ...item,
       precio_venta: item.precio_venta || '',
@@ -189,7 +220,53 @@ export default function RecetasScreen() {
     setForm((prev) => ({
       ...prev,
       componentes: (prev.componentes || []).filter(
-        (c) => String(c.recetaId) !== String(recetaId),
+        (c) => Array.isArray(c?.opciones) || String(c.recetaId) !== String(recetaId),
+      ),
+    }));
+
+  // ── Grupos de elección ("elige 1 de N") ────────────────────────────────────
+  const agregarOpcionAlGrupo = () => {
+    const receta = (recetas || []).find(
+      (r) => String(r.id) === String(grupoOpcionSel),
+    );
+    if (!receta) return;
+    setGrupoOpciones((prev) =>
+      prev.some((o) => String(o.recetaId) === String(receta.id))
+        ? prev
+        : [...prev, { recetaId: Number(receta.id), nombre: receta.nombre }],
+    );
+    setGrupoOpcionSel('');
+  };
+
+  const agregarGrupoEleccion = () => {
+    const nombre = grupoNombre.trim();
+    if (!nombre)
+      return showToast('Ponle nombre al grupo (ej. Bebida caliente).', 'error');
+    if (grupoOpciones.length < 2)
+      return showToast('Un grupo de elección necesita al menos 2 opciones.', 'error');
+    if (
+      (form.componentes || []).some(
+        (c) => Array.isArray(c?.opciones) && c.grupo === nombre,
+      )
+    )
+      return showToast('Ya existe un grupo con ese nombre.', 'error');
+    setForm((prev) => ({
+      ...prev,
+      componentes: [
+        ...(prev.componentes || []),
+        { grupo: nombre, cantidad: 1, opciones: grupoOpciones },
+      ],
+    }));
+    setGrupoNombre('');
+    setGrupoOpciones([]);
+    setGrupoOpcionSel('');
+  };
+
+  const quitarGrupoEleccion = (nombre) =>
+    setForm((prev) => ({
+      ...prev,
+      componentes: (prev.componentes || []).filter(
+        (c) => !(Array.isArray(c?.opciones) && c.grupo === nombre),
       ),
     }));
 
@@ -233,11 +310,22 @@ export default function RecetasScreen() {
             merma: Number(i.merma) || 0,
           })),
       componentes: form.es_paquete
-        ? (form.componentes || []).map((c) => ({
-            recetaId: Number(c.recetaId),
-            cantidad: Number(c.cantidad) || 1,
-            nombre: c.nombre || '',
-          }))
+        ? (form.componentes || []).map((c) =>
+            Array.isArray(c?.opciones) && c.opciones.length > 0
+              ? {
+                  grupo: c.grupo || 'Elección',
+                  cantidad: Number(c.cantidad) || 1,
+                  opciones: c.opciones.map((o) => ({
+                    recetaId: Number(o.recetaId),
+                    nombre: o.nombre || '',
+                  })),
+                }
+              : {
+                  recetaId: Number(c.recetaId),
+                  cantidad: Number(c.cantidad) || 1,
+                  nombre: c.nombre || '',
+                },
+          )
         : null,
       grupos_modificadores: form.grupos_modificadores || [],
       activo: true,
@@ -756,6 +844,97 @@ export default function RecetasScreen() {
                       </p>
                     </div>
 
+                    {/* GRUPO DE ELECCIÓN: "elige 1 de N" (ej. café de olla o
+                        americano). El POS pregunta la elección al vender. */}
+                    <div className="p-6 bg-violet-50 dark:bg-brand-amatista/10 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-3xl">
+                      <label className="text-xs font-black text-violet-600 dark:text-brand-amatista uppercase mb-4 flex items-center gap-2">
+                        <PlusCircle className="w-4 h-4" /> Añadir Grupo de
+                        Elección (elige 1 de N)
+                      </label>
+                      <div className="flex flex-col gap-3">
+                        <input
+                          type="text"
+                          value={grupoNombre}
+                          onChange={(e) => setGrupoNombre(e.target.value)}
+                          placeholder='Nombre del grupo, ej. "Bebida caliente"'
+                          className="w-full bg-white dark:bg-ui-obsidiana border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5 font-black text-slate-800 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                        />
+                        <div className="flex flex-col lg:flex-row gap-3">
+                          <select
+                            value={grupoOpcionSel}
+                            onChange={(e) => setGrupoOpcionSel(e.target.value)}
+                            className="flex-1 bg-white dark:bg-ui-obsidiana border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5 font-black text-slate-800 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                          >
+                            <option value="">Agregar opción al grupo...</option>
+                            {(recetas || [])
+                              .filter(
+                                (r) =>
+                                  r.activo !== false &&
+                                  String(r.id) !== String(editId) &&
+                                  !(
+                                    Array.isArray(r.componentes) &&
+                                    r.componentes.length > 0
+                                  ) &&
+                                  !grupoOpciones.some(
+                                    (o) =>
+                                      String(o.recetaId) === String(r.id),
+                                  ),
+                              )
+                              .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.nombre}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={agregarOpcionAlGrupo}
+                            disabled={!grupoOpcionSel}
+                            className="bg-white dark:bg-ui-obsidiana border-2 border-violet-300 dark:border-brand-amatista/40 text-violet-600 dark:text-brand-amatista font-black px-6 py-3.5 rounded-2xl active:scale-95 transition-all disabled:opacity-40"
+                          >
+                            + Opción
+                          </button>
+                        </div>
+                        {grupoOpciones.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {grupoOpciones.map((o) => (
+                              <span
+                                key={o.recetaId}
+                                className="inline-flex items-center gap-2 bg-white dark:bg-ui-obsidiana border border-violet-200 dark:border-brand-amatista/30 text-slate-700 dark:text-brand-nacar font-black text-xs px-3 py-1.5 rounded-xl"
+                              >
+                                {o.nombre}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setGrupoOpciones((prev) =>
+                                      prev.filter(
+                                        (x) =>
+                                          String(x.recetaId) !==
+                                          String(o.recetaId),
+                                      ),
+                                    )
+                                  }
+                                  className="text-slate-400 hover:text-rose-500"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={agregarGrupoEleccion}
+                          disabled={
+                            !grupoNombre.trim() || grupoOpciones.length < 2
+                          }
+                          className="bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana font-black px-6 py-3.5 rounded-2xl active:scale-95 transition-all disabled:opacity-40"
+                        >
+                          Agregar grupo al paquete
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       {(form.componentes || []).length === 0 ? (
                         <p className="text-sm font-bold text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana border border-dashed border-slate-200 dark:border-ui-border rounded-2xl p-8 text-center">
@@ -764,6 +943,46 @@ export default function RecetasScreen() {
                         </p>
                       ) : (
                         (form.componentes || []).map((comp) => {
+                          // GRUPO DE ELECCIÓN: "elige 1 de N"
+                          if (
+                            Array.isArray(comp?.opciones) &&
+                            comp.opciones.length > 0
+                          ) {
+                            return (
+                              <div
+                                key={`grupo-${comp.grupo}`}
+                                className="flex items-center justify-between bg-violet-50/60 dark:bg-brand-amatista/5 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5"
+                              >
+                                <div className="min-w-0">
+                                  <p className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                                    <span className="text-brand-amatista mr-2">
+                                      {comp.cantidad}x
+                                    </span>
+                                    {comp.grupo}
+                                    <span className="ml-2 text-[9px] font-black uppercase tracking-widest text-violet-500 dark:text-brand-amatista bg-white dark:bg-ui-obsidiana border border-violet-200 dark:border-brand-amatista/30 px-2 py-0.5 rounded-md">
+                                      Elige 1
+                                    </span>
+                                  </p>
+                                  <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted truncate">
+                                    {comp.opciones
+                                      .map((o) => o.nombre)
+                                      .join(' · ')}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    quitarGrupoEleccion(comp.grupo)
+                                  }
+                                  className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife shrink-0"
+                                  title="Quitar grupo"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          }
+                          // COMPONENTE FIJO
                           const rComp = (recetas || []).find(
                             (x) => String(x.id) === String(comp.recetaId),
                           );

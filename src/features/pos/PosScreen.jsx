@@ -16,6 +16,8 @@ import {
   ReceiptText,
   BellRing,
   Users,
+  X,
+  Package,
 } from 'lucide-react';
 import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
@@ -25,6 +27,9 @@ import {
   verificarStock,
   esPaquete,
   expandirInsumosPaquete,
+  tieneElecciones,
+  gruposDeEleccion,
+  resolverComponentesPaquete,
 } from '../../lib/inventario';
 import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 
@@ -211,7 +216,16 @@ export default function PosScreen() {
     }));
   };
 
+  // PAQUETE CON ELECCIONES: el mesero elige 1 opción por grupo antes de que
+  // el combo entre al carrito. { paquete, seleccion: {grupo: recetaId} } | null
+  const [modalElecciones, setModalElecciones] = useState(null);
+
   const agregarAlCarrito = (producto) => {
+    // Paquete con grupos "elige 1 de N" → primero se resuelven las elecciones.
+    if (esPaquete(producto) && tieneElecciones(producto)) {
+      setModalElecciones({ paquete: producto, seleccion: {} });
+      return;
+    }
     const productoSanitizado = {
       ...producto,
       precio: getPrecio(producto),
@@ -234,6 +248,50 @@ export default function PosScreen() {
       }
       return [...prev, { ...productoSanitizado, cantidad: 1 }];
     });
+  };
+
+  const confirmarElecciones = () => {
+    if (!modalElecciones) return;
+    const { paquete, seleccion } = modalElecciones;
+    const grupos = gruposDeEleccion(paquete);
+    if (grupos.some((g) => seleccion[g.grupo] == null)) return;
+
+    // Componentes RESUELTOS (fijos + elegidos): con ellos se expande el
+    // inventario y el KDS pinta el desglose real de ESTE combo.
+    const resueltos = resolverComponentesPaquete(paquete, seleccion);
+    const insumos = expandirInsumosPaquete(
+      { ...paquete, componentes: resueltos },
+      recetas,
+    );
+    // Línea de carrito por COMBINACIÓN: dos combos con elecciones distintas
+    // son líneas distintas (id compuesto estable = paqueteId + elecciones).
+    const firma = grupos
+      .map((g) => `${g.grupo}=${seleccion[g.grupo]}`)
+      .join('|');
+    const lineId = `${paquete.id}:${firma}`;
+
+    const item = {
+      ...paquete,
+      id: lineId,
+      receta_id: paquete.id,
+      componentes: resueltos,
+      elecciones: seleccion,
+      insumos,
+      precio: getPrecio(paquete),
+      cantidad_enviada: 0,
+    };
+    setCarrito((prev) => {
+      const existe = prev.find((i) => i.id === lineId);
+      if (existe) {
+        return prev.map((i) =>
+          i.id === lineId
+            ? { ...i, cantidad: safeNumber(i.cantidad, 0) + 1 }
+            : i,
+        );
+      }
+      return [...prev, { ...item, cantidad: 1 }];
+    });
+    setModalElecciones(null);
   };
 
   const modificarCantidad = (id, delta) => {
@@ -879,6 +937,97 @@ export default function PosScreen() {
           </div>
         </div>
       </div>
+
+      {/* MODAL: elecciones del paquete ("elige 1 de N" por grupo) */}
+      {modalElecciones && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] w-full max-w-md shadow-2xl border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-ui-border flex justify-between items-center">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-violet-100 dark:bg-brand-amatista/20 p-2.5 rounded-xl shrink-0">
+                  <Package className="w-6 h-6 text-violet-600 dark:text-brand-amatista" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-black font-syne text-lg text-slate-900 dark:text-brand-nacar leading-tight truncate">
+                    {modalElecciones.paquete.nombre}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                    Arma el paquete
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setModalElecciones(null)}
+                className="p-2 text-slate-400 hover:text-brand-arrecife shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+              {(modalElecciones.paquete.componentes || [])
+                .filter((c) => !Array.isArray(c?.opciones))
+                .map((c) => (
+                  <p
+                    key={c.recetaId}
+                    className="text-xs font-black text-slate-500 dark:text-ui-muted"
+                  >
+                    ✓ Incluye {Number(c.cantidad) || 1}x {c.nombre}
+                  </p>
+                ))}
+              {gruposDeEleccion(modalElecciones.paquete).map((g) => (
+                <div key={g.grupo}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-brand-amatista mb-2">
+                    {g.grupo} · elige 1
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {g.opciones.map((op) => {
+                      const activa =
+                        String(
+                          modalElecciones.seleccion[g.grupo] ?? '',
+                        ) === String(op.recetaId);
+                      return (
+                        <button
+                          key={op.recetaId}
+                          onClick={() =>
+                            setModalElecciones((prev) => ({
+                              ...prev,
+                              seleccion: {
+                                ...prev.seleccion,
+                                [g.grupo]: op.recetaId,
+                              },
+                            }))
+                          }
+                          className={`px-4 py-3 rounded-xl font-black text-sm border-2 text-left transition-all active:scale-95 ${
+                            activa
+                              ? 'border-violet-500 dark:border-brand-amatista bg-violet-50 dark:bg-brand-amatista/10 text-violet-700 dark:text-brand-amatista shadow-sm'
+                              : 'border-slate-100 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana text-slate-600 dark:text-ui-muted hover:border-slate-300'
+                          }`}
+                        >
+                          {op.nombre}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 dark:border-ui-border">
+              <button
+                onClick={confirmarElecciones}
+                disabled={gruposDeEleccion(modalElecciones.paquete).some(
+                  (g) => modalElecciones.seleccion[g.grupo] == null,
+                )}
+                className="w-full bg-violet-500 dark:bg-brand-amatista hover:bg-violet-600 text-white dark:text-ui-obsidiana py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg disabled:bg-slate-200 disabled:dark:bg-ui-border disabled:text-slate-400 disabled:shadow-none active:scale-95 transition-all"
+              >
+                Agregar al pedido · $
+                {(Number(modalElecciones.paquete.precio_venta) || 0).toFixed(0)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mostrarGateStock && (
         <ConfirmacionStockModal
