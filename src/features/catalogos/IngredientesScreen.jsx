@@ -136,6 +136,25 @@ export default function IngredientesScreen() {
           p.id === itemEditando.id ? { ...p, ...registro } : p,
         ),
       }));
+      // KARDEX: editar el stock a mano es un AJUSTE y debe dejar rastro
+      // (mismo shape que Recepción/Mermas). Sin esto, el inventario cambia
+      // sin trazabilidad y los reportes de kardex no cuadran.
+      const stockAnterior = Number(itemEditando.stock) || 0;
+      const stockNuevo = Number(payload.stock) || 0;
+      if (stockNuevo !== stockAnterior) {
+        enqueueAction('movimientos', 'upsert', {
+          id: Date.now(),
+          tipo: 'Ajuste',
+          producto_id: itemEditando.id,
+          cantidad: Math.abs(stockNuevo - stockAnterior),
+          referencia: 'Edición manual del insumo',
+          fecha: new Date().toISOString(),
+          usuario: useAuthStore.getState().user?.nombre || 'Sistema',
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          restaurante_id: restauranteId,
+        });
+      }
       showToast('Insumo actualizado.', 'success');
     } else {
       // upsert (no insert): idempotente si la cola reintenta offline.

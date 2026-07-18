@@ -124,20 +124,11 @@ export default function PosScreen() {
   const [gateContext, setGateContext] = useState('cobro');
   const [gateItems, setGateItems] = useState([]); // delta a producir (modo producción)
 
-  const intentarCobrar = () => {
-    // Aviso si hay rondas en producción/listas que aún no se entregan a la mesa.
-    if (
-      isMesa &&
-      hayRondasSinEntregar(
-        useAppStore.getState().comandas_activas,
-        mesaActual.id,
-      )
-    ) {
-      const seguir = window.confirm(
-        'Hay comida que aún no se entrega a la mesa. ¿Cobrar de todas formas?',
-      );
-      if (!seguir) return;
-    }
+  // Aviso de rondas sin entregar: modal PROPIO (window.confirm está vetado).
+  const [modalRondasPendientes, setModalRondasPendientes] = useState(false);
+
+  const continuarCobro = () => {
+    setModalRondasPendientes(false);
     // MESA: el inventario ya se corroboró y descontó al mandar A PRODUCCIÓN.
     // El cobro no vuelve a tocar stock → va directo al modal de cobro.
     if (isMesa) {
@@ -149,6 +140,21 @@ export default function PosScreen() {
     setGateContext('cobro');
     if (problemas.length > 0) setMostrarGateStock(true);
     else setShowModalCobro(true);
+  };
+
+  const intentarCobrar = () => {
+    // Aviso si hay rondas en producción/listas que aún no se entregan a la mesa.
+    if (
+      isMesa &&
+      hayRondasSinEntregar(
+        useAppStore.getState().comandas_activas,
+        mesaActual.id,
+      )
+    ) {
+      setModalRondasPendientes(true);
+      return;
+    }
+    continuarCobro();
   };
   const onConfirmarGateStock = (subs) => {
     setSubsVenta(subs);
@@ -964,6 +970,38 @@ export default function PosScreen() {
           </div>
         </div>
       </div>
+
+      {/* MODAL: rondas sin entregar (aviso antes de cobrar) */}
+      {modalRondasPendientes && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-brand-ambar/20 rounded-full flex items-center justify-center mx-auto mb-5">
+              <BellRing className="w-8 h-8 text-amber-500 dark:text-brand-ambar" />
+            </div>
+            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
+              Hay comida sin entregar
+            </h2>
+            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
+              Esta mesa tiene rondas en producción o listas que aún no se
+              entregan. ¿Cobrar de todas formas?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={continuarCobro}
+                className="w-full bg-amber-500 dark:bg-brand-ambar hover:bg-amber-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
+              >
+                Sí, cobrar de todas formas
+              </button>
+              <button
+                onClick={() => setModalRondasPendientes(false)}
+                className="w-full bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+              >
+                Esperar la entrega
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: elecciones del paquete ("elige 1 de N" por grupo) */}
       {modalElecciones && (

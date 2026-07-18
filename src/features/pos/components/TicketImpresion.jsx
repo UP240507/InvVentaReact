@@ -58,7 +58,22 @@ export default function TicketImpresion({ venta, onClose }) {
                 {(venta.items || []).map((item, index) => (
                   <tr key={index}>
                     <td className="py-1 align-top">{item.cantidad}</td>
-                    <td className="py-1 align-top px-1">{item.nombre}</td>
+                    <td className="py-1 align-top px-1">
+                      {item.nombre}
+                      {Array.isArray(item.componentes) &&
+                        item.componentes.filter((c) => c?.recetaId != null)
+                          .length > 0 && (
+                          <div className="text-[9px] leading-tight text-gray-600">
+                            {item.componentes
+                              .filter((c) => c?.recetaId != null)
+                              .map(
+                                (c) =>
+                                  `${Number(c.cantidad) || 1}x ${c.nombre || ''}`,
+                              )
+                              .join(', ')}
+                          </div>
+                        )}
+                    </td>
                     <td className="py-1 align-top text-right">${((item.precio || 0) * (item.cantidad || 1)).toLocaleString('es-MX', {minimumFractionDigits:2})}</td>
                   </tr>
                 ))}

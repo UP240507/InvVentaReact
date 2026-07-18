@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
+import { localDB } from '../../store/localDB';
 import {
   Users, Plus, Search, Edit3, Trash2, X, Phone,
   Mail, Cake, Star, Trophy, Heart, MessageSquare,
@@ -88,19 +89,36 @@ export default function CrmScreen() {
   const guardar = (e) => {
     e.preventDefault();
     if (!form.nombre.trim()) return showToast('El nombre es obligatorio', 'error');
-    
-    const { estado, ...formLimpio } = form; // Limpiamos propiedades basura por si acaso
 
-    const payload = { 
-        ...formLimpio, 
-        id: editId || Date.now(), 
+    // ANTI-CLOBBER de contadores: el form trae visitas/total_gastado/puntos
+    // congelados de cuando se abrió el modal — si otra terminal (o la RPC)
+    // acumuló mientras tanto, mandarlos PISARÍA los valores frescos. En
+    // EDICIÓN el payload remoto NO lleva contadores (el upsert de PostgREST
+    // solo escribe las columnas presentes → los contadores del server quedan
+    // intactos); en ALTA arrancan en 0.
+    const formLimpio = { ...form };
+    delete formLimpio.estado; // propiedad basura legada
+    delete formLimpio.visitas;
+    delete formLimpio.total_gastado;
+    delete formLimpio.puntos_lealtad;
+
+    const payload = {
+        ...formLimpio,
+        id: editId || Date.now(),
         activo: true,
-        ...(editId ? {} : { visitas: 0, total_gastado: 0, puntos_lealtad: 0 }) 
+        ...(editId ? {} : { visitas: 0, total_gastado: 0, puntos_lealtad: 0 })
     };
 
     enqueueAction('clientes', 'upsert', payload);
-    upsertClienteLocal(payload); // 🌟 Usamos nuestra función local blindada
-    
+    // Local (RAM + Dexie): fusionar con el registro VIVO para conservar los
+    // contadores actuales (el eco realtime después trae la verdad del server).
+    const vivo = (clientes || []).find(
+      (c) => String(c.id) === String(payload.id),
+    );
+    const fusionado = { ...(vivo || {}), ...payload };
+    upsertClienteLocal(fusionado);
+    localDB.clientes.put(fusionado).catch(() => {});
+
     setShowModal(false);
     showToast(editId ? 'Perfil actualizado' : 'Cliente registrado', 'success');
   };
