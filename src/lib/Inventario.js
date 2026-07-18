@@ -50,6 +50,48 @@ export function construirDeltasStock(items = [], sustituciones = {}) {
 }
 
 /**
+ * ¿La receta es un paquete? (combo a precio fijo con componentes).
+ */
+export function esPaquete(receta) {
+  return Array.isArray(receta?.componentes) && receta.componentes.length > 0;
+}
+
+/**
+ * Expande los insumos de un PAQUETE desde sus recetas componentes VIVAS.
+ * Se llama al agregar al carrito (no al guardar el paquete): así los insumos
+ * nunca quedan desnormalizados/obsoletos si una receta componente cambia.
+ * Devuelve [{ productoId, cantidad }] acumulado por producto, para que el
+ * item del carrito viaje con el shape que construirDeltasStock ya entiende.
+ * Los componentes cuya receta ya no exista o esté inactiva se omiten (el
+ * paquete sigue vendible; el faltante es un problema de catálogo, no de POS).
+ */
+export function expandirInsumosPaquete(paquete, recetas = []) {
+  if (!esPaquete(paquete)) return paquete?.insumos || [];
+  const mapaRecetas = new Map((recetas || []).map((r) => [String(r.id), r]));
+  const mapa = new Map(); // productoId → cantidad
+
+  for (const comp of paquete.componentes) {
+    const recetaComp = mapaRecetas.get(String(comp?.recetaId));
+    if (!recetaComp || recetaComp.activo === false) continue;
+    const veces = Number(comp?.cantidad) || 0;
+    if (veces <= 0) continue;
+    for (const ins of recetaComp.insumos || []) {
+      const pid = ins?.productoId ?? ins?.id_producto;
+      if (pid == null) continue;
+      const consumo = (Number(ins?.cantidad) || 0) * veces;
+      if (consumo <= 0) continue;
+      const k = String(pid);
+      mapa.set(k, (mapa.get(k) || 0) + consumo);
+    }
+  }
+
+  return [...mapa.entries()].map(([pid, cantidad]) => ({
+    productoId: /^\d+$/.test(pid) ? Number(pid) : pid,
+    cantidad: Math.round(cantidad * 1000) / 1000,
+  }));
+}
+
+/**
  * Verifica el stock disponible contra lo que la venta consumiría.
  * Devuelve la lista de problemas (vacía si todo OK).
  * severidad: 'agotado' (quedaría en negativo) | 'bajo_minimo' (cae bajo el mínimo).

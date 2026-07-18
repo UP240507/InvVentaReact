@@ -44,12 +44,17 @@ export default function RecetasScreen() {
     precio_venta: '',
     insumos: [],
     grupos_modificadores: [],
+    es_paquete: false,
+    componentes: [],
   });
 
   const [inputNuevaCat, setInputNuevaCat] = useState('');
   const [insumoSeleccionado, setInsumoSeleccionado] = useState('');
   const [cantidadInsumo, setCantidadInsumo] = useState('');
   const [mermaInsumo, setMermaInsumo] = useState(0);
+  // PAQUETES: selector de recetas componentes (combo fijo a precio de paquete).
+  const [componenteSel, setComponenteSel] = useState('');
+  const [cantidadComponente, setCantidadComponente] = useState('1');
 
   const categoriasExistentes = useMemo(() => {
     const cats = (recetas || [])
@@ -101,7 +106,17 @@ export default function RecetasScreen() {
     }, 0);
   };
 
-  const costoActual = calcularCostoReceta(form.insumos || []);
+  // Costo del paquete = suma de costos de sus recetas componentes (vivas).
+  const costoPaquete = (form.componentes || []).reduce((acc, comp) => {
+    const r = (recetas || []).find(
+      (x) => String(x.id) === String(comp.recetaId),
+    );
+    return acc + (Number(r?.costo) || 0) * (Number(comp.cantidad) || 0);
+  }, 0);
+
+  const costoActual = form.es_paquete
+    ? Math.round(costoPaquete * 100) / 100
+    : calcularCostoReceta(form.insumos || []);
   const precioVenta = Number(form.precio_venta || 0);
   const utilidadBruta = precioVenta - costoActual;
   const margenPorcentaje =
@@ -114,6 +129,8 @@ export default function RecetasScreen() {
     setCantidadInsumo('');
     setMermaInsumo(0);
     setInputNuevaCat('');
+    setComponenteSel('');
+    setCantidadComponente('1');
   };
 
   const abrirEditar = (item) => {
@@ -122,16 +139,59 @@ export default function RecetasScreen() {
       cantidad: Number(i.cantidad) || 0,
       merma: Number(i.merma) || 0,
     }));
+    const componentesNorm = (item.componentes || []).map((c) => ({
+      recetaId: Number(c.recetaId),
+      cantidad: Number(c.cantidad) || 1,
+      nombre: c.nombre || '',
+    }));
     setForm({
       ...item,
       precio_venta: item.precio_venta || '',
       insumos: insumosNorm,
       grupos_modificadores: item.grupos_modificadores || [],
+      es_paquete: componentesNorm.length > 0,
+      componentes: componentesNorm,
     });
     setEditId(item.id);
     setModalTab('general');
     setShowModal(true);
   };
+
+  // ── PAQUETES: manejo de componentes ────────────────────────────────────────
+  const agregarComponente = () => {
+    const receta = (recetas || []).find(
+      (r) => String(r.id) === String(componenteSel),
+    );
+    const veces = Number(cantidadComponente) || 0;
+    if (!receta || veces <= 0)
+      return showToast('Elige una receta y cantidad válida.', 'error');
+    setForm((prev) => {
+      const clone = [...(prev.componentes || [])];
+      const idx = clone.findIndex(
+        (c) => String(c.recetaId) === String(receta.id),
+      );
+      if (idx !== -1) {
+        clone[idx] = { ...clone[idx], cantidad: clone[idx].cantidad + veces };
+      } else {
+        clone.push({
+          recetaId: Number(receta.id),
+          cantidad: veces,
+          nombre: receta.nombre,
+        });
+      }
+      return { ...prev, componentes: clone };
+    });
+    setComponenteSel('');
+    setCantidadComponente('1');
+  };
+
+  const quitarComponente = (recetaId) =>
+    setForm((prev) => ({
+      ...prev,
+      componentes: (prev.componentes || []).filter(
+        (c) => String(c.recetaId) !== String(recetaId),
+      ),
+    }));
 
   const toggleModificador = (grupoId) => {
     const existe = (form.grupos_modificadores || []).includes(grupoId);
@@ -147,11 +207,17 @@ export default function RecetasScreen() {
     e.preventDefault();
     if (!form.nombre.trim())
       return showToast('El nombre es obligatorio.', 'error');
-    if ((form.insumos || []).length === 0)
+    if (form.es_paquete) {
+      if ((form.componentes || []).length === 0)
+        return showToast('Agrega al menos 1 receta al paquete.', 'error');
+    } else if ((form.insumos || []).length === 0) {
       return showToast('Agrega al menos 1 ingrediente.', 'error');
+    }
     const categoriaFinal =
       form.categoria === '__nueva__' ? inputNuevaCat.trim() : form.categoria;
-    // Payload CANÓNICO: solo columnas vivas de 'recetas' (precio_venta, costo, insumos).
+    // Payload CANÓNICO: solo columnas vivas de 'recetas' (precio_venta, costo,
+    // insumos, componentes). PAQUETE: insumos vacíos — se expanden AL VUELO en
+    // el POS desde las recetas componentes vivas (nunca desnormalizados).
     const payload = {
       id: editId || Date.now(),
       nombre: form.nombre.trim(),
@@ -159,11 +225,20 @@ export default function RecetasScreen() {
       categoria: categoriaFinal,
       precio_venta: Number(form.precio_venta) || 0,
       costo: Number(costoActual.toFixed(2)),
-      insumos: (form.insumos || []).map((i) => ({
-        productoId: Number(i.productoId ?? i.id_producto),
-        cantidad: Number(i.cantidad) || 0,
-        merma: Number(i.merma) || 0,
-      })),
+      insumos: form.es_paquete
+        ? []
+        : (form.insumos || []).map((i) => ({
+            productoId: Number(i.productoId ?? i.id_producto),
+            cantidad: Number(i.cantidad) || 0,
+            merma: Number(i.merma) || 0,
+          })),
+      componentes: form.es_paquete
+        ? (form.componentes || []).map((c) => ({
+            recetaId: Number(c.recetaId),
+            cantidad: Number(c.cantidad) || 1,
+            nombre: c.nombre || '',
+          }))
+        : null,
       grupos_modificadores: form.grupos_modificadores || [],
       activo: true,
     };
@@ -253,6 +328,8 @@ export default function RecetasScreen() {
               precio_venta: '',
               insumos: [],
               grupos_modificadores: [],
+              es_paquete: false,
+              componentes: [],
             });
             setEditId(null);
             setModalTab('general');
@@ -341,6 +418,12 @@ export default function RecetasScreen() {
                             <span className="text-[10px] font-mono font-black text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana px-2 py-0.5 rounded-md mt-1.5 inline-block border border-slate-200 dark:border-ui-border">
                               {r.codigo_pos || 'NO-POS'}
                             </span>
+                            {Array.isArray(r.componentes) &&
+                              r.componentes.length > 0 && (
+                                <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-brand-amatista bg-violet-50 dark:bg-brand-amatista/10 border border-violet-200 dark:border-brand-amatista/30 px-2 py-0.5 rounded-md mt-1.5 ml-1.5 inline-block">
+                                  Paquete · {r.componentes.length}
+                                </span>
+                              )}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -494,7 +577,9 @@ export default function RecetasScreen() {
                   {tab === 'general'
                     ? 'Información Base'
                     : tab === 'ingredientes'
-                      ? 'Explosión de Insumos'
+                      ? form.es_paquete
+                        ? 'Recetas del Paquete'
+                        : 'Explosión de Insumos'
                       : 'Extras y Modificadores'}
                 </button>
               ))}
@@ -577,11 +662,178 @@ export default function RecetasScreen() {
                         autoFocus
                       />
                     )}
+
+                    {/* PAQUETE: combo fijo a precio de paquete */}
+                    <div
+                      className={`p-5 rounded-2xl border-2 transition-colors ${form.es_paquete ? 'bg-violet-50 dark:bg-brand-amatista/10 border-violet-300 dark:border-brand-amatista/40' : 'bg-slate-50 dark:bg-ui-obsidiana border-slate-100 dark:border-ui-border'}`}
+                    >
+                      <label className="flex items-center justify-between cursor-pointer select-none">
+                        <div>
+                          <p className="font-black text-slate-800 dark:text-brand-nacar text-sm">
+                            Este platillo es un PAQUETE
+                          </p>
+                          <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mt-0.5">
+                            Combo de recetas existentes a precio fijo. El
+                            inventario se descuenta por cada componente y
+                            cocina ve el desglose en el KDS.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((p) => ({
+                              ...p,
+                              es_paquete: !p.es_paquete,
+                            }))
+                          }
+                          className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ml-4 ${form.es_paquete ? 'bg-violet-500 dark:bg-brand-amatista' : 'bg-slate-300 dark:bg-ui-border'}`}
+                        >
+                          <span
+                            className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${form.es_paquete ? 'left-7' : 'left-1'}`}
+                          />
+                        </button>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB: RECETAS DEL PAQUETE (solo paquetes) */}
+                {modalTab === 'ingredientes' && form.es_paquete && (
+                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                    <div className="p-6 bg-slate-900 dark:bg-ui-obsidiana border-2 border-slate-800 dark:border-ui-border rounded-3xl shadow-xl">
+                      <label className="text-xs font-black text-brand-amatista uppercase mb-4 flex items-center gap-2">
+                        <PlusCircle className="w-4 h-4" /> Añadir Receta al
+                        Paquete
+                      </label>
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <select
+                          value={componenteSel}
+                          onChange={(e) => setComponenteSel(e.target.value)}
+                          className="flex-1 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border text-white dark:text-brand-nacar font-black px-6 py-4 rounded-2xl outline-none focus:border-brand-amatista transition-colors"
+                        >
+                          <option value="">Buscar platillo del menú...</option>
+                          {(recetas || [])
+                            .filter(
+                              (r) =>
+                                r.activo !== false &&
+                                String(r.id) !== String(editId) &&
+                                !(
+                                  Array.isArray(r.componentes) &&
+                                  r.componentes.length > 0
+                                ),
+                            )
+                            .map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.nombre} (${Number(r.precio_venta) || 0})
+                              </option>
+                            ))}
+                        </select>
+                        <div className="flex gap-4">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={cantidadComponente}
+                            onChange={(e) =>
+                              setCantidadComponente(e.target.value)
+                            }
+                            placeholder="Cant."
+                            className="w-24 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border text-white dark:text-brand-nacar font-black px-4 py-4 rounded-2xl outline-none text-center focus:border-brand-amatista transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={agregarComponente}
+                            className="bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana font-black px-6 py-4 rounded-2xl active:scale-95 transition-all"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 mt-3">
+                        Los paquetes no pueden contener otros paquetes. El
+                        inventario se descuenta expandiendo cada receta al
+                        momento de la venta.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(form.componentes || []).length === 0 ? (
+                        <p className="text-sm font-bold text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana border border-dashed border-slate-200 dark:border-ui-border rounded-2xl p-8 text-center">
+                          Sin recetas todavía. Un paquete necesita al menos
+                          una.
+                        </p>
+                      ) : (
+                        (form.componentes || []).map((comp) => {
+                          const rComp = (recetas || []).find(
+                            (x) => String(x.id) === String(comp.recetaId),
+                          );
+                          return (
+                            <div
+                              key={comp.recetaId}
+                              className="flex items-center justify-between bg-white dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl px-5 py-3.5"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                                  <span className="text-brand-amatista mr-2">
+                                    {comp.cantidad}x
+                                  </span>
+                                  {rComp?.nombre || comp.nombre || `#${comp.recetaId}`}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted">
+                                  Costo: $
+                                  {(
+                                    (Number(rComp?.costo) || 0) *
+                                    (Number(comp.cantidad) || 0)
+                                  ).toFixed(2)}
+                                  {!rComp || rComp.activo === false
+                                    ? ' · ⚠️ receta inactiva o inexistente'
+                                    : ''}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => quitarComponente(comp.recetaId)}
+                                className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife shrink-0"
+                                title="Quitar del paquete"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="p-5 bg-violet-50 dark:bg-brand-amatista/10 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl flex justify-between items-center">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted">
+                          Costo del paquete
+                        </p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+                          ${costoActual.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted">
+                          Precio del paquete
+                        </p>
+                        <input
+                          type="number"
+                          min="0"
+                          value={form.precio_venta}
+                          onChange={(e) =>
+                            setForm({ ...form, precio_venta: e.target.value })
+                          }
+                          placeholder="0.00"
+                          className="w-32 bg-white dark:bg-ui-obsidiana border-2 border-violet-300 dark:border-brand-amatista/40 rounded-xl px-3 py-2 font-black text-right text-slate-900 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* TAB: INGREDIENTES */}
-                {modalTab === 'ingredientes' && (
+                {modalTab === 'ingredientes' && !form.es_paquete && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     <div className="p-6 bg-slate-900 dark:bg-ui-obsidiana border-2 border-slate-800 dark:border-ui-border rounded-3xl shadow-xl">
                       <label className="text-xs font-black text-brand-ambar uppercase mb-4 flex items-center gap-2">

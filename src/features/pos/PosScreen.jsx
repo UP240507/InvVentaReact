@@ -21,7 +21,11 @@ import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
 import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
 import { calcularVenta } from '../../lib/fiscal';
-import { verificarStock } from '../../lib/inventario';
+import {
+  verificarStock,
+  esPaquete,
+  expandirInsumosPaquete,
+} from '../../lib/inventario';
 import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 
 // ─── HELPERS DE SANITIZACIÓN Y MATEMÁTICA ──────────────────────────────────
@@ -61,8 +65,12 @@ export default function PosScreen() {
     turnos,
   } = useAppStore();
 
-  const { enqueueAction, descontarStockVenta, registrarVisitaCliente } =
-    useSyncStore();
+  const {
+    enqueueAction,
+    descontarStockVenta,
+    registrarVisitaCliente,
+    canjearPuntosCliente,
+  } = useSyncStore();
   const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -208,6 +216,12 @@ export default function PosScreen() {
       ...producto,
       precio: getPrecio(producto),
       cantidad_enviada: 0,
+      // PAQUETE: insumos expandidos AL VUELO desde las recetas componentes
+      // vivas (nunca desnormalizados). El item viaja con el shape que el
+      // motor de stock y el gate de sustituciones ya entienden.
+      ...(esPaquete(producto)
+        ? { insumos: expandirInsumosPaquete(producto, recetas) }
+        : {}),
     };
     setCarrito((prev) => {
       const existe = prev.find((item) => item.id === productoSanitizado.id);
@@ -467,6 +481,25 @@ export default function PosScreen() {
         nuevaVentaBD.cliente_id,
         granTotalTicket,
       );
+      // Lealtad: canje elegido en ModalCobro. canje_id derivado del id de la
+      // venta → idempotente por diseño (ledger crm_canjes) y rastreable.
+      if (datosPago?.canje?.puntos > 0) {
+        canjearPuntosCliente(
+          nuevaVentaBD.id,
+          nuevaVentaBD.cliente_id,
+          datosPago.canje.puntos,
+          datosPago.canje.nombre,
+        );
+        registrarAuditoria({
+          id: Date.now() + 1,
+          fecha: new Date().toISOString(),
+          usuario: user?.nombre || 'Sistema',
+          accion: 'CANJE_RECOMPENSA',
+          modulo: 'POS',
+          nivel: 'info',
+          detalles: `Folio ${nuevaVentaBD.folio}: canje "${datosPago.canje.nombre}" (−${datosPago.canje.puntos} pts) del cliente ${datosPago?.clienteNombre || nuevaVentaBD.cliente_id}.`,
+        });
+      }
     }
     // Inventario: en MESA ya se descontó al mandar a producción. Solo la VENTA
     // DIRECTA descuenta aquí (se vende, se corrobora y luego se prepara).

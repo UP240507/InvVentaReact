@@ -23,6 +23,8 @@ import {
   Link2Off,
   BellRing,
   BookMarked,
+  Clock,
+  Search,
 } from 'lucide-react';
 
 // id de cliente: estable online/offline, sin colisión de secuencia (mesas.id es uuid).
@@ -49,6 +51,7 @@ export default function MesasScreen() {
   const {
     mesas,
     staff,
+    clientes,
     configuracion,
     comandas_activas,
     showToast,
@@ -429,15 +432,65 @@ export default function MesasScreen() {
 
   // ── RESERVA DE MESA ────────────────────────────────────────────────────────
   // Solo tiene sentido reservar mesas LIBRES; liberar regresa a 'libre'.
+  // Reservar abre un modal con el nombre (cliente del CRM o texto libre) y
+  // hora estimada opcional — informativo, sin bloqueos de agenda. La reserva
+  // viaja en mesas.reserva (jsonb) y se propaga por realtime.
+  const [modalReservar, setModalReservar] = useState(null); // mesa | null
+  const [reservaForm, setReservaForm] = useState({
+    nombre: '',
+    clienteId: null,
+    hora: '',
+  });
+  const [reservaBusqueda, setReservaBusqueda] = useState('');
+
+  const clientesReservaMatch = useMemo(() => {
+    const term = reservaBusqueda.trim().toLowerCase();
+    if (term.length < 2) return [];
+    return (clientes || [])
+      .filter((c) => c.activo !== false)
+      .filter(
+        (c) =>
+          (c.nombre || '').toLowerCase().includes(term) ||
+          (c.telefono || '').toLowerCase().includes(term),
+      )
+      .slice(0, 5);
+  }, [clientes, reservaBusqueda]);
+
   const toggleReserva = (mesa) => {
     const esReservada = mesa.estado === 'reservada';
-    if (!esReservada && mesa.estado !== 'libre') {
+    if (esReservada) {
+      // Liberar: directo, sin modal, limpiando la reserva.
+      const mesaActualizada = { ...mesa, estado: 'libre', reserva: null };
+      enqueueAction('mesas', 'upsert', mesaActualizada);
+      useAppStore.setState((prev) => ({
+        mesas: prev.mesas.map((m) =>
+          String(m.id) === String(mesa.id) ? mesaActualizada : m,
+        ),
+      }));
+      showToast(`${mesa.nombre} liberada`, 'info');
+      return;
+    }
+    if (mesa.estado !== 'libre') {
       showToast('Solo se pueden reservar mesas libres.', 'error');
       return;
     }
+    setReservaForm({ nombre: '', clienteId: null, hora: '' });
+    setReservaBusqueda('');
+    setModalReservar(mesa);
+  };
+
+  const confirmarReserva = () => {
+    const mesa = modalReservar;
+    if (!mesa) return;
+    const nombre = reservaForm.nombre.trim();
     const mesaActualizada = {
       ...mesa,
-      estado: esReservada ? 'libre' : 'reservada',
+      estado: 'reservada',
+      reserva: {
+        nombre: nombre || null,
+        cliente_id: reservaForm.clienteId ?? null,
+        hora: reservaForm.hora || null,
+      },
     };
     enqueueAction('mesas', 'upsert', mesaActualizada);
     useAppStore.setState((prev) => ({
@@ -445,8 +498,9 @@ export default function MesasScreen() {
         String(m.id) === String(mesa.id) ? mesaActualizada : m,
       ),
     }));
+    setModalReservar(null);
     showToast(
-      esReservada ? `${mesa.nombre} liberada` : `${mesa.nombre} reservada`,
+      `${mesa.nombre} reservada${nombre ? ` para ${nombre}` : ''}`,
       'info',
     );
   };
@@ -466,7 +520,7 @@ export default function MesasScreen() {
   const confirmarOcuparReservada = () => {
     const mesa = modalReserva;
     if (!mesa) return;
-    const mesaLiberada = { ...mesa, estado: 'libre' };
+    const mesaLiberada = { ...mesa, estado: 'libre', reserva: null };
     enqueueAction('mesas', 'upsert', mesaLiberada);
     useAppStore.setState((prev) => ({
       mesas: prev.mesas.map((m) =>
@@ -680,6 +734,13 @@ export default function MesasScreen() {
                       {mesero && (
                         <span className="text-[9px] font-bold text-slate-400 dark:text-ui-muted flex items-center gap-1 mt-0.5">
                           <UserCheck className="w-3 h-3" /> {mesero.nombre}
+                        </span>
+                      )}
+                      {mesa.estado === 'reservada' && mesa.reserva?.nombre && (
+                        <span className="text-[9px] font-black text-indigo-600 dark:text-brand-amatista flex items-center gap-1 mt-0.5">
+                          <BookMarked className="w-3 h-3" />{' '}
+                          {mesa.reserva.nombre}
+                          {mesa.reserva.hora ? ` · ${mesa.reserva.hora}` : ''}
                         </span>
                       )}
                     </div>
@@ -1120,6 +1181,111 @@ export default function MesasScreen() {
         </div>
       )}
 
+      {/* MODAL: reservar mesa (nombre CRM/texto libre + hora opcional) */}
+      {modalReservar && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-indigo-100 dark:bg-brand-amatista/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BookMarked className="w-8 h-8 text-indigo-500 dark:text-brand-amatista" />
+            </div>
+            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-1 text-center">
+              Reservar {modalReservar.nombre}
+            </h2>
+            <p className="text-slate-500 dark:text-ui-muted font-bold text-xs mb-5 text-center">
+              ¿A nombre de quién? Busca en el CRM o escribe libre. Todo es
+              opcional.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
+                <Search className="w-4 h-4 text-slate-400 dark:text-ui-muted mx-2 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Nombre o teléfono..."
+                  value={reservaForm.clienteId ? reservaForm.nombre : reservaBusqueda}
+                  onChange={(e) => {
+                    setReservaBusqueda(e.target.value);
+                    setReservaForm((p) => ({
+                      ...p,
+                      nombre: e.target.value,
+                      clienteId: null,
+                    }));
+                  }}
+                  className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none"
+                />
+                {reservaForm.clienteId && (
+                  <button
+                    onClick={() =>
+                      setReservaForm((p) => ({
+                        ...p,
+                        nombre: '',
+                        clienteId: null,
+                      }))
+                    }
+                    className="p-1 text-slate-400 hover:text-rose-500"
+                    title="Quitar cliente"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {!reservaForm.clienteId && clientesReservaMatch.length > 0 && (
+                <div className="space-y-1.5">
+                  {clientesReservaMatch.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setReservaForm((p) => ({
+                          ...p,
+                          nombre: c.nombre,
+                          clienteId: c.id,
+                        }));
+                        setReservaBusqueda('');
+                      }}
+                      className="w-full flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana hover:bg-indigo-50 dark:hover:bg-brand-amatista/10 border border-slate-100 dark:border-ui-border rounded-xl px-4 py-2.5 transition-colors text-left"
+                    >
+                      <span className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                        {c.nombre}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-ui-muted shrink-0 ml-2">
+                        {c.telefono || 'CRM'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
+                <Clock className="w-4 h-4 text-slate-400 dark:text-ui-muted mx-2 shrink-0" />
+                <input
+                  type="time"
+                  value={reservaForm.hora}
+                  onChange={(e) =>
+                    setReservaForm((p) => ({ ...p, hora: e.target.value }))
+                  }
+                  className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 mt-6">
+              <button
+                onClick={confirmarReserva}
+                className="w-full bg-indigo-500 dark:bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 dark:shadow-brand-amatista/20 transition-transform active:scale-95"
+              >
+                Reservar
+              </button>
+              <button
+                onClick={() => setModalReservar(null)}
+                className="w-full bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: ¿ocupar mesa reservada? */}
       {modalReserva && (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in">
@@ -1130,6 +1296,15 @@ export default function MesasScreen() {
             <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
               {modalReserva.nombre} está reservada
             </h2>
+            {modalReserva.reserva?.nombre && (
+              <p className="text-indigo-600 dark:text-brand-amatista font-black text-sm mb-2 flex items-center justify-center gap-2">
+                <BookMarked className="w-4 h-4" />
+                {modalReserva.reserva.nombre}
+                {modalReserva.reserva.hora
+                  ? ` · ${modalReserva.reserva.hora}`
+                  : ''}
+              </p>
+            )}
             <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
               ¿Llegó el cliente? Al confirmar, la mesa se ocupa y podrás
               comandar.

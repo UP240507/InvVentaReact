@@ -13,6 +13,7 @@ import {
   UserRound,
   UserPlus,
   Search,
+  Star,
 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useAuthStore } from '../../auth/useAuthStore';
@@ -80,7 +81,7 @@ export default function ModalCobro({
   //  - Cualquier otra sesión → pinpad de autorización: un Gerente/Admin teclea
   //    SU PIN (staff, 4-6 dígitos) y queda registrado como autorizador.
   const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Administrador', 'Gerente'];
-  const { staff, clientes, upsertCliente } = useAppStore();
+  const { staff, clientes, upsertCliente, configuracion } = useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
   const sesionAutoriza = ROLES_AUTORIZAN_DESCUENTO.includes(
@@ -185,7 +186,24 @@ export default function ModalCobro({
     setClienteSel(null);
     setClienteBusqueda('');
     setAltaExpres(false);
+    setCanjeSel(null);
   };
+
+  // ─── LEALTAD: canje de recompensa del catálogo del dueño ──────────────────
+  // configuracion.recompensas = [{ id, nombre, costo_puntos, activo }].
+  // Solo se ofrecen las activas; el cliente vivo del store dicta el saldo
+  // (el eco realtime lo mantiene fresco). El canje se confirma al cobrar:
+  // PosScreen encola canjear_puntos (atómica + idempotente).
+  const [canjeSel, setCanjeSel] = useState(null); // { nombre, puntos } | null
+
+  const clienteVivo = clienteSel
+    ? (clientes || []).find((c) => String(c.id) === String(clienteSel.id)) ||
+      clienteSel
+    : null;
+  const puntosCliente = Number(clienteVivo?.puntos_lealtad) || 0;
+  const recompensasActivas = (
+    Array.isArray(configuracion?.recompensas) ? configuracion.recompensas : []
+  ).filter((r) => r?.activo !== false && Number(r?.costo_puntos) > 0);
 
   // Alta exprés: nombre + teléfono mínimos, mismo shape que ClientesScreen
   // (id estilo Date.now(), contadores en 0). enqueueAction persiste en Dexie
@@ -480,6 +498,64 @@ export default function ModalCobro({
                 </button>
               </div>
             ) : (
+              mostrarCliente && null
+            )}
+            {clienteSel && recompensasActivas.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-2 flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5" /> Recompensas ·{' '}
+                  {puntosCliente} pts disponibles
+                </p>
+                {canjeSel ? (
+                  <div className="flex items-center justify-between bg-amber-50 dark:bg-brand-ambar/10 border border-amber-200 dark:border-brand-ambar/30 rounded-xl px-4 py-3">
+                    <div>
+                      <p className="font-black text-amber-600 dark:text-brand-ambar">
+                        {canjeSel.nombre}
+                      </p>
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
+                        −{canjeSel.puntos} pts al confirmar el cobro
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setCanjeSel(null)}
+                      className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg"
+                      title="Cancelar canje"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {recompensasActivas.map((r) => {
+                      const costo = Number(r.costo_puntos) || 0;
+                      const alcanza = puntosCliente >= costo;
+                      return (
+                        <button
+                          key={r.id}
+                          disabled={!alcanza}
+                          onClick={() =>
+                            setCanjeSel({ nombre: r.nombre, puntos: costo })
+                          }
+                          className={`w-full flex justify-between items-center rounded-xl px-4 py-2.5 border transition-colors text-left ${
+                            alcanza
+                              ? 'bg-slate-50 dark:bg-ui-obsidiana hover:bg-amber-50 dark:hover:bg-brand-ambar/10 border-slate-100 dark:border-ui-border'
+                              : 'bg-slate-50/50 dark:bg-ui-obsidiana/50 border-slate-100 dark:border-ui-border opacity-45 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                            {r.nombre}
+                          </span>
+                          <span className="text-[10px] font-black text-amber-500 shrink-0 ml-2 flex items-center gap-1">
+                            <Star className="w-3 h-3" /> {costo} pts
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {!clienteSel && (
               mostrarCliente && (
                 <div className="mt-3 space-y-3">
                   {!altaExpres ? (
@@ -1028,6 +1104,8 @@ export default function ModalCobro({
                   // CRM: null = venta de mostrador sin cliente (default).
                   clienteId: clienteSel?.id ?? null,
                   clienteNombre: clienteSel?.nombre ?? null,
+                  // Lealtad: canje elegido (PosScreen encola canjear_puntos).
+                  canje: canjeSel,
                 })
               }
               disabled={!estaPagado}

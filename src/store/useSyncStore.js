@@ -249,6 +249,45 @@ export const useSyncStore = create((set, get) => ({
     });
   },
 
+  // ✅ Lealtad: canjea puntos por una recompensa del catálogo del dueño.
+  // Optimista en RAM+Dexie; la RPC canjear_puntos es atómica (FOR UPDATE) e
+  // idempotente (ledger crm_canjes). Si los puntos locales estaban inflados
+  // (offline con datos viejos), el server rechaza con error PERMANENTE →
+  // dead-letter sin reintentos, y el eco realtime de clientes corrige el saldo.
+  canjearPuntosCliente: async (canjeId, clienteId, puntos, descripcion) => {
+    const pts = Number(puntos) || 0;
+    if (!canjeId || !clienteId || pts <= 0) return;
+    const restauranteId = useAuthStore.getState().restauranteId;
+
+    try {
+      const { useAppStore } = await import('./useAppStore');
+      const actual = (useAppStore.getState().clientes || []).find(
+        (c) => String(c.id) === String(clienteId),
+      );
+      if (actual) {
+        const actualizado = {
+          ...actual,
+          puntos_lealtad: Math.max(
+            0,
+            (Number(actual.puntos_lealtad) || 0) - pts,
+          ),
+        };
+        useAppStore.getState().upsertCliente(actualizado);
+        await localDB.clientes.put(actualizado);
+      }
+    } catch (e) {
+      console.error('Error en canje local de puntos:', e);
+    }
+
+    await get().enqueueRpc('canjear_puntos', {
+      p_canje_id: canjeId,
+      p_cliente_id: clienteId,
+      p_restaurante_id: restauranteId,
+      p_puntos: pts,
+      p_descripcion: descripcion || null,
+    });
+  },
+
   processQueue: async () => {
     const state = get();
     // Solo evitamos correr en paralelo. NO bloqueamos por isOffline: ese flag es

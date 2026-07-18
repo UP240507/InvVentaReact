@@ -125,6 +125,38 @@ export default function ConfiguracionScreen() {
     Number(conf.pesos_por_punto) || 0,
   );
 
+  // Catálogo de recompensas del programa de lealtad (lealtad LIBRE: el dueño
+  // define lo que quiera — postre gratis, 2x1, merch...). Se canjean en el
+  // cobro vía RPC atómica; aquí solo se administra el catálogo (solo Admin).
+  const [recompensas, setRecompensas] = useState(
+    Array.isArray(conf.recompensas) ? conf.recompensas : [],
+  );
+  const [nuevaRecompensa, setNuevaRecompensa] = useState({
+    nombre: '',
+    costo: '',
+  });
+
+  const agregarRecompensa = () => {
+    const nombre = nuevaRecompensa.nombre.trim();
+    const costo = Number(nuevaRecompensa.costo) || 0;
+    if (!nombre || costo <= 0) return;
+    setRecompensas((prev) => [
+      ...prev,
+      { id: Date.now(), nombre, costo_puntos: costo, activo: true },
+    ]);
+    setNuevaRecompensa({ nombre: '', costo: '' });
+  };
+
+  const toggleRecompensa = (id) =>
+    setRecompensas((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, activo: r.activo === false } : r,
+      ),
+    );
+
+  const quitarRecompensa = (id) =>
+    setRecompensas((prev) => prev.filter((r) => r.id !== id));
+
   // Parsear cfdi_config jsonb (donde guardamos los campos extra)
   const cfdiConf = (() => {
     try {
@@ -215,6 +247,11 @@ export default function ConfiguracionScreen() {
       pesos_por_punto: esAdminSesion
         ? Math.max(0, Number(pesosPorPunto) || 0)
         : Number(conf.pesos_por_punto) || 0,
+      recompensas: esAdminSesion
+        ? recompensas
+        : Array.isArray(conf.recompensas)
+          ? conf.recompensas
+          : [],
       restaurante_id: user?.restaurante_id || conf.restaurante_id,
       id: conf.id,
     };
@@ -651,6 +688,102 @@ export default function ConfiguracionScreen() {
                           <span className="text-[10px] font-bold text-amber-600 dark:text-brand-ambar">
                             Solo el Admin puede modificarla
                           </span>
+                        )}
+                      </div>
+
+                      {/* Catálogo de recompensas (lealtad libre) */}
+                      <div className="mt-5">
+                        <p className="text-sm font-black text-slate-800 dark:text-brand-nacar">
+                          Recompensas canjeables
+                        </p>
+                        <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-3">
+                          Define lo que tus clientes pueden canjear con sus
+                          puntos (postre gratis, 2x1, lo que decidas). El canje
+                          se hace al cobrar en el POS.
+                        </p>
+                        <div className="space-y-2 mb-3">
+                          {recompensas.length === 0 && (
+                            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana border border-dashed border-slate-200 dark:border-ui-border rounded-xl p-4 text-center">
+                              Sin recompensas todavía.
+                            </p>
+                          )}
+                          {recompensas.map((r) => (
+                            <div
+                              key={r.id}
+                              className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 transition-colors ${
+                                r.activo === false
+                                  ? 'bg-slate-50/60 dark:bg-ui-obsidiana/50 border-slate-100 dark:border-ui-border opacity-60'
+                                  : 'bg-amber-50/60 dark:bg-brand-ambar/5 border-amber-100 dark:border-brand-ambar/20'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-800 dark:text-brand-nacar text-sm truncate">
+                                  {r.nombre}
+                                </p>
+                                <p className="text-[10px] font-black text-amber-500">
+                                  {Number(r.costo_puntos) || 0} pts
+                                </p>
+                              </div>
+                              {esAdminSesion && (
+                                <div className="flex gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRecompensa(r.id)}
+                                    className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white dark:bg-ui-humo border border-slate-200 dark:border-ui-border text-slate-500 dark:text-ui-muted hover:text-indigo-500"
+                                  >
+                                    {r.activo === false ? 'Activar' : 'Pausar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => quitarRecompensa(r.id)}
+                                    className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white dark:bg-ui-humo border border-slate-200 dark:border-ui-border text-slate-400 hover:text-rose-500"
+                                  >
+                                    Quitar
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {esAdminSesion && (
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Ej. Postre gratis"
+                              value={nuevaRecompensa.nombre}
+                              onChange={(e) =>
+                                setNuevaRecompensa((p) => ({
+                                  ...p,
+                                  nombre: e.target.value,
+                                }))
+                              }
+                              className="flex-1 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-4 py-2.5 font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Pts"
+                              value={nuevaRecompensa.costo}
+                              onChange={(e) =>
+                                setNuevaRecompensa((p) => ({
+                                  ...p,
+                                  costo: e.target.value,
+                                }))
+                              }
+                              className="w-24 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl px-3 py-2.5 font-black text-center text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                            />
+                            <button
+                              type="button"
+                              onClick={agregarRecompensa}
+                              disabled={
+                                !nuevaRecompensa.nombre.trim() ||
+                                (Number(nuevaRecompensa.costo) || 0) <= 0
+                              }
+                              className="px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all"
+                            >
+                              Agregar
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

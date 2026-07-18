@@ -395,6 +395,18 @@ export default function KdsScreen() {
                               </span>
                               {item.nombre}
                             </p>
+                            {Array.isArray(item.componentes) &&
+                              item.componentes.length > 0 && (
+                                <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-1">
+                                  Incluye:{' '}
+                                  {item.componentes
+                                    .map(
+                                      (comp) =>
+                                        `${Number(comp.cantidad) || 1}x ${comp.nombre || `#${comp.recetaId}`}`,
+                                    )
+                                    .join(' · ')}
+                                </p>
+                              )}
                             {nota && (
                               <p className="text-xs font-black text-amber-700 dark:text-brand-ambar mt-2 bg-amber-100 dark:bg-brand-ambar/10 border border-amber-200 dark:border-brand-ambar/20 px-3 py-1.5 rounded-xl inline-block">
                                 📝 {nota}
