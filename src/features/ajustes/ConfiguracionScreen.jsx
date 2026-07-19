@@ -90,7 +90,6 @@ export default function ConfiguracionScreen() {
   // Roles excluidos del reparto de propinas (columna real roles_sin_propina).
   const ROLES_STAFF = [
     'Admin',
-    'Administrador',
     'Gerente',
     'Cajero',
     'Mesero',
@@ -100,7 +99,7 @@ export default function ConfiguracionScreen() {
   const [rolesSinPropina, setRolesSinPropina] = useState(
     Array.isArray(conf.roles_sin_propina)
       ? conf.roles_sin_propina
-      : ['Admin', 'Administrador', 'Gerente'],
+      : ['Admin', 'Gerente'],
   );
   const toggleRolSinPropina = (rol) =>
     setRolesSinPropina((prev) =>
@@ -110,7 +109,7 @@ export default function ConfiguracionScreen() {
   // Jornada mínima antes de poder checar salida (0 = sin restricción).
   // SOLO la cuenta del dueño (Admin) puede modificarla; Gerente la ve
   // deshabilitada. El candado vive en el checador y en el logout.
-  const esAdminSesion = ['Admin', 'Administrador'].includes(
+  const esAdminSesion = ['Admin'].includes(
     user?.rol || user?.puesto,
   );
   const [horasJornada, setHorasJornada] = useState(

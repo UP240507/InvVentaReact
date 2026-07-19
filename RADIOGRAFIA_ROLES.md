@@ -57,12 +57,14 @@ Patrón de resolución repetido 6+ veces: `empleadoActivo.rol || empleadoActivo.
 2. **`crear-empleado-auth:159` espeja `puesto: rol`**: si `puesto` muere, tocar EF + check constraint + payload de EmpleadosScreen (`:175-177`) juntos.
 3. **`roles_permisos` no tiene vocabulario compatible**: migrar datos vivos C→A (`Cocinero`→`Chef`, `Administrador`→`Admin`, sembrar `Barista`, decidir destino de `Hostess`/`Limpieza`) antes de que cualquier guard la lea. `Corte_Caja` legacy en datos: mapear o purgar.
 4. **Offline-first**: los guards corren sin red; `roles_permisos` ya se hidrata a Dexie (PK migrada a `id` en v13), así que leerla localmente es viable, pero el fallback quemado debe quedarse para primera sesión sin fetch.
-5. **"Capitán de meseros"** (pendiente de Chris): entrar al CHECK de staff + `RUTAS_POR_ROL` + `roles_sin_propina` + decisión propinas, en la misma tanda que se toque el constraint.
+5. **Roles LIBRES (decisión de Chris 18-jul)**: no habrá roles quemados — el tenant crea los suyos. "Capitán de meseros" deja de ser feature: es duplicar Mesero y apagar propinas. Consecuencias: muere el CHECK de `staff.rol` (lo reemplaza FK compuesta `(restaurante_id, rol)` → `roles_permisos` con `ON UPDATE CASCADE`; `rol` sigue siendo texto para no tocar payloads); los guards NO pueden comparar nombres — todo migra a flags de capacidad en `permisos` jsonb; se requiere rol `es_sistema` no-borrable (Admin) por tenant + seed de roles base al crear restaurante.
 6. **`restaurante_id` nullable en `roles_permisos`**: endurecer a NOT NULL al formalizar (multi-tenant).
 
-## 5. Plan propuesto (tandas)
+## 5. Plan propuesto (tandas) — actualizado a roles LIBRES
 
-1. **Normalizar vocabulario a A** (migración de datos en `roles_permisos` C→A + PermisosScreen usa el select canónico de EmpleadosScreen; sin tocar guards). Purgar `'Administrador'` de las listas quemadas del front y de las EFs (redeploy ×3) — hoy es letra muerta, riesgo mínimo.
-2. **Helper `getRolEfectivo()` + `usePermisos()`**: lectura de `roles_permisos` (Dexie) con fallback a `RUTAS_POR_ROL`. Migrar guards uno por uno (sidebar → rutas → candados) con prueba en caliente por guard.
-3. **Elevados/descuentos/caja como permisos** (`ELEVADOS`, `ROLES_AUTORIZAN_DESCUENTO`, `ROLES_ABRIR_CAJA` → flags en `permisos` jsonb) + redeploy EFs.
-4. **Capitán de meseros + destino de `staff.puesto`** (constraint + EF + screen en una tanda).
+Esquema destino de `permisos` jsonb por rol: `{ rutas: [], ruta_inicial, elevado, autoriza_descuentos, abre_caja, exento_jornada, exento_turno, sin_propina, admin_config, es_sistema }`. Los guards leen FLAGS, jamás nombres de rol.
+
+1. **Normalizar datos + purgar letra muerta**: migrar `roles_permisos` vivos C→A (`Cocinero`→`Chef`, `Administrador`→`Admin`, sembrar `Chef`/`Barista` reales, purgar `Hostess`/`Limpieza`/`Corte_Caja`), sembrar el jsonb de flags equivalente al comportamiento quemado actual, marcar Admin `es_sistema`. Purgar `'Administrador'` de listas quemadas del front y EFs (redeploy ×3) — letra muerta, riesgo mínimo. `restaurante_id` NOT NULL.
+2. **Helper `getRolEfectivo()` + hook `usePermisos()`**: lectura de `roles_permisos` (Dexie) con fallback quemado solo para sesión virgen. Migrar guards uno por uno (sidebar → rutas → candados de jornada/turno) con prueba en caliente por guard.
+3. **Flags de capacidad en EFs y modales**: `ELEVADOS`, `ROLES_AUTORIZAN_DESCUENTO`, `ROLES_ABRIR_CAJA`, `esAdminSesion` → flags; `login-pin` decide password/PIN por `elevado` (join a roles_permisos). Redeploy ×3 en la misma tanda.
+4. **Roles libres**: drop CHECK de `staff.rol`/`puesto` → FK compuesta `(restaurante_id, rol)` con `ON UPDATE CASCADE`; PermisosScreen gana crear/renombrar/duplicar/borrar rol (borrar bloqueado si hay staff con ese rol o `es_sistema`); el select de EmpleadosScreen se vuelve dinámico desde `roles_permisos`. Decidir destino de `staff.puesto` aquí (candidato a morir: EF `crear-empleado-auth:159` + payload EmpleadosScreen juntos).

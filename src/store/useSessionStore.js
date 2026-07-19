@@ -5,7 +5,6 @@ import { useAppStore } from './useAppStore';
 // ─── RUTAS PERMITIDAS POR ROL ─────────────────────────────────────────────────
 export const RUTAS_POR_ROL = {
   Admin: '*',
-  Administrador: '*',
   Gerente: [
     'dashboard',
     'mesas',
@@ -38,7 +37,6 @@ export const RUTAS_POR_ROL = {
 
 export const RUTA_INICIAL_POR_ROL = {
   Admin: '/dashboard',
-  Administrador: '/dashboard',
   Gerente: '/dashboard',
   // Cajero aterriza en /mesas (con sidebar), NO en /pos: /pos es full-screen y
   // oculta el sidebar (isFullScreenRoute en App.jsx), dejándolo sin navegación y
@@ -75,7 +73,7 @@ export const useSessionStore = create(
 
         const rol = empleadoActivo.rol || empleadoActivo.puesto || 'Mesero';
 
-        if (['Admin', 'Administrador'].includes(rol)) return true;
+        if (['Admin'].includes(rol)) return true;
 
         const rutaLimpia = ruta.replace(/^\//, '').split('/')[0] || 'dashboard';
         const permitidas = RUTAS_POR_ROL[rol] || RUTAS_POR_ROL['Mesero'];
@@ -92,7 +90,7 @@ export const useSessionStore = create(
         if (!empleadoActivo) return false;
 
         const rol = empleadoActivo.rol || empleadoActivo.puesto || 'Mesero';
-        if (['Admin', 'Administrador', 'Gerente'].includes(rol)) return true;
+        if (['Admin', 'Gerente'].includes(rol)) return true;
 
         const turnos = useAppStore.getState().turnos || [];
         return turnos.some((t) => t.estado === 'abierto');

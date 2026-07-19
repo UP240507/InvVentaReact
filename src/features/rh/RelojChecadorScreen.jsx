@@ -29,8 +29,8 @@ export default function RelojChecadorScreen() {
 
   // Candado de jornada: configuracion.horas_jornada (0 = desactivado).
   // La SALIDA se bloquea hasta cumplir las horas; el dueño (Admin) puede
-  // autorizar una salida anticipada con su PIN. Exentos: Admin/Administrador.
-  const ROLES_EXENTOS_JORNADA = ['Admin', 'Administrador'];
+  // autorizar una salida anticipada con su PIN. Exentos: Admin.
+  const ROLES_EXENTOS_JORNADA = ['Admin'];
   const [salidaPendiente, setSalidaPendiente] = useState(null); // {empleado, horas, faltan}
   const [pinAdminSalida, setPinAdminSalida] = useState('');
   const [pinAdminError, setPinAdminError] = useState('');
@@ -147,7 +147,7 @@ export default function RelojChecadorScreen() {
     //  - Sesión de empleado → logout REAL y al login de empleados. Su sesión
     //    sin identidad activa no sirve para nada más que rebotar.
     const rolSesion = user?.rol || user?.puesto || '';
-    const esGestion = ['Admin', 'Administrador', 'Gerente'].includes(rolSesion);
+    const esGestion = ['Admin', 'Gerente'].includes(rolSesion);
     if (esGestion && !user?.esEmpleado) {
       navigate('/dashboard');
       return;
@@ -254,7 +254,6 @@ export default function RelojChecadorScreen() {
 
         const rolSistema = empleado.rol || empleado.puesto || 'Mesero';
         const rolNecesitaTurno = ![
-          'Administrador',
           'Admin',
           'Gerente',
         ].includes(rolSistema);

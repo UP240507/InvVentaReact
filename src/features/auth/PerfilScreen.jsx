@@ -28,7 +28,7 @@ import {
   BookMarked,
 } from 'lucide-react';
 
-const ROLES_ELEVADOS = ['Admin', 'Administrador', 'Gerente'];
+const ROLES_ELEVADOS = ['Admin', 'Gerente'];
 
 export default function PerfilScreen() {
   const { showToast, temaGlobal, toggleTemaGlobal, ventas, asistencias, staff } =
@@ -147,7 +147,7 @@ export default function PerfilScreen() {
 
   const intentarLogout = () => {
     const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;
-    const exento = ['Admin', 'Administrador'].includes(rolEmp);
+    const exento = ['Admin'].includes(rolEmp);
     if (empleadoActivo && !exento) {
       const regs = (asistencias || [])
         .filter((a) => a.empleado_nombre === empleadoActivo.nombre)

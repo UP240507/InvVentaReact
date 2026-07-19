@@ -19,13 +19,12 @@ import {
 } from 'lucide-react';
 
 const ROLES_DISPONIBLES = [
-  'Administrador',
+  'Admin',
   'Gerente',
   'Cajero',
   'Mesero',
-  'Cocinero',
-  'Hostess',
-  'Limpieza',
+  'Chef',
+  'Barista',
 ];
 
 const MODULOS_SISTEMA = [
@@ -92,7 +91,7 @@ export default function PermisosScreen() {
   const [rolActivo, setRolActivo] = useState('Mesero');
 
   const permisosActuales = useMemo(() => {
-    if (rolActivo === 'Administrador') return ['TODO'];
+    if (rolActivo === 'Admin') return ['TODO'];
 
     const rolData = (roles_permisos || []).find((r) => r.rol === rolActivo);
     try {
@@ -106,7 +105,7 @@ export default function PermisosScreen() {
   }, [roles_permisos, rolActivo]);
 
   const togglePermiso = (moduloId) => {
-    if (rolActivo === 'Administrador') return;
+    if (rolActivo === 'Admin') return;
 
     let nuevosPermisos = [...permisosActuales];
 
@@ -176,7 +175,7 @@ export default function PermisosScreen() {
           <div className="space-y-3">
             {ROLES_DISPONIBLES.map((rol) => {
               const isActivo = rolActivo === rol;
-              const esAdmin = rol === 'Administrador';
+              const esAdmin = rol === 'Admin';
               return (
                 <button
                   key={rol}
@@ -215,7 +214,7 @@ export default function PermisosScreen() {
                 Activa o desactiva los módulos permitidos.
               </p>
             </div>
-            {rolActivo === 'Administrador' && (
+            {rolActivo === 'Admin' && (
               <div className="bg-rose-50 dark:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 border border-rose-100 dark:border-brand-arrecife/30">
                 <AlertTriangle className="w-4 h-4" /> Root Access
               </div>
@@ -228,7 +227,7 @@ export default function PermisosScreen() {
               const tieneAcceso =
                 permisosActuales.includes('TODO') ||
                 permisosActuales.includes(modulo.id);
-              const isBloqueado = rolActivo === 'Administrador';
+              const isBloqueado = rolActivo === 'Admin';
 
               return (
                 <div

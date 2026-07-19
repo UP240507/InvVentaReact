@@ -194,7 +194,7 @@ export default function SidebarLayout() {
 
   // Rol e identidad — fuente única para gatear notificaciones y menú.
   const rolActual = user?.rol || user?.puesto || 'Mesero';
-  const esGestion = ['Admin', 'Administrador', 'Gerente'].includes(rolActual);
+  const esGestion = ['Admin', 'Gerente'].includes(rolActual);
   // Visibilidad de notificaciones por rol: gestión ve cobros/stock/compras; los
   // operativos NO (no les sirven). El mesero solo ve "pedidos listos".
   const verCobros = esGestion || rolActual === 'Cajero';
@@ -240,8 +240,8 @@ export default function SidebarLayout() {
   // Filtrado del menú por rol: MISMO criterio que puedeAcceder() en
   // useSessionStore (fuente única de verdad), para que el sidebar muestre solo
   // lo que el usuario realmente puede abrir y no queden links que rebotan.
-  // Admin/Administrador ven todo; el resto, su lista de RUTAS_POR_ROL.
-  const rutasPermitidas = ['Admin', 'Administrador'].includes(rolActual)
+  // Admin ve todo; el resto, su lista de RUTAS_POR_ROL.
+  const rutasPermitidas = ['Admin'].includes(rolActual)
     ? '*'
     : RUTAS_POR_ROL[rolActual] || RUTAS_POR_ROL['Mesero'];
   const puedeVerRuta = (path) => {
@@ -263,7 +263,6 @@ export default function SidebarLayout() {
     'Cajero',
     'Gerente',
     'Admin',
-    'Administrador',
   ].includes(rolActual);
 
   const toastStyle = toast
@@ -575,7 +574,7 @@ export default function SidebarLayout() {
                 // checador (con autorización del Admin). Exentos: gestión.
                 const { empleadoActivo } = useSessionStore.getState();
                 const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;
-                const exento = ['Admin', 'Administrador'].includes(rolEmp);
+                const exento = ['Admin'].includes(rolEmp);
                 if (empleadoActivo && !exento) {
                   const regs = (asistencias || [])
                     .filter((a) => a.empleado_nombre === empleadoActivo.nombre)

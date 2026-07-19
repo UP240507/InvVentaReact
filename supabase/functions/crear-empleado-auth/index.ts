@@ -13,7 +13,7 @@ const json = (obj: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-const ELEVADOS = ['Admin', 'Administrador', 'Gerente'];
+const ELEVADOS = ['Admin', 'Gerente'];
 // Validación pragmática de correo (suficiente para bloquear vacíos y basura).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 

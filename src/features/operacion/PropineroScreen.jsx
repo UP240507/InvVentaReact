@@ -213,7 +213,7 @@ export default function PropineroScreen() {
     () =>
       Array.isArray(configuracion?.roles_sin_propina)
         ? configuracion.roles_sin_propina
-        : ['Admin', 'Administrador', 'Gerente'],
+        : ['Admin', 'Gerente'],
     [configuracion],
   );
 

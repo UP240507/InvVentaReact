@@ -79,7 +79,7 @@ function EmpleadoRoute() {
   const { user } = useAuthStore();
   const location = useLocation();
 
-  const rolAdmin = ['Admin', 'Administrador', 'Gerente'].includes(user?.rol);
+  const rolAdmin = ['Admin', 'Gerente'].includes(user?.rol);
   if (rolAdmin) return <Outlet />;
 
   if (!empleadoActivo) return <Navigate to="/checador" replace />;
@@ -99,7 +99,7 @@ function TurnoRoute() {
   // Reactividad para expulsar meseros en tiempo real si cierran la caja
   useAppStore((s) => s.turnos);
 
-  if (['Admin', 'Administrador', 'Gerente'].includes(user?.rol))
+  if (['Admin', 'Gerente'].includes(user?.rol))
     return <Outlet />;
   return hayTurnoActivo() ? <Outlet /> : <Navigate to="/espera" replace />;
 }
@@ -109,7 +109,7 @@ function RootRedirect() {
   const { user } = useAuthStore();
   const { getRutaInicial } = useSessionStore();
 
-  if (['Admin', 'Administrador', 'Gerente'].includes(user?.rol)) {
+  if (['Admin', 'Gerente'].includes(user?.rol)) {
     return <Navigate to="/dashboard" replace />;
   }
   return <Navigate to={getRutaInicial()} replace />;

@@ -14,7 +14,7 @@ import { useAppStore } from '../../store/useAppStore';
 // Roles que pueden ABRIR la caja desde /espera. Admin/Gerente hacen bypass de
 // TurnoRoute (no llegan aquí), pero se incluyen por defensa. El resto del staff
 // (Mesero/Chef/Barista) espera a que el cajero/gerente abra el turno.
-const ROLES_ABRIR_CAJA = ['Cajero', 'Gerente', 'Admin', 'Administrador'];
+const ROLES_ABRIR_CAJA = ['Cajero', 'Gerente', 'Admin'];
 
 export default function EsperaScreen() {
   const { empleadoActivo, cerrarSesionEmpleado, getRutaInicial } =

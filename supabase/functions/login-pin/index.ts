@@ -12,7 +12,7 @@ const json = (obj: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-const ELEVADOS = ['Admin', 'Administrador', 'Gerente'];
+const ELEVADOS = ['Admin', 'Gerente'];
 
 // ── Rate-limit / lockout ───────────────────────────────────────────────────────
 // login-pin es PÚBLICA: no hay identidad para limitar, así que limitamos por IP.

@@ -84,7 +84,7 @@ export default function DashboardScreen() {
 
   // 🌟 FIX: Lógica de Jerarquía de Operador
   // Si eres el dueño (Admin), mostramos tu nombre base. Si eres un empleado con PIN, mostramos el del empleado.
-  const esAdminPrincipal = ['Admin', 'Administrador'].includes(user?.rol);
+  const esAdminPrincipal = ['Admin'].includes(user?.rol);
   const nombreUsuario = esAdminPrincipal
     ? user?.nombre
     : empleadoActivo?.nombre || user?.nombre || 'Usuario';

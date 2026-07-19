@@ -77,10 +77,10 @@ export default function ModalCobro({
 
   // ─── DESCUENTO (autorizado) ────────────────────────────────────────────────
   // Cualquiera puede ABRIR la opción, pero aplicarla exige rol alto:
-  //  - Sesión Admin/Administrador/Gerente → aplica directo, sin fricción.
+  //  - Sesión Admin/Gerente → aplica directo, sin fricción.
   //  - Cualquier otra sesión → pinpad de autorización: un Gerente/Admin teclea
   //    SU PIN (staff, 4-6 dígitos) y queda registrado como autorizador.
-  const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Administrador', 'Gerente'];
+  const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Gerente'];
   const { staff, clientes, upsertCliente, configuracion } = useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
