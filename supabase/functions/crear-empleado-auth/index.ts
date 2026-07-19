@@ -13,7 +13,10 @@ const json = (obj: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-const ELEVADOS = ['Admin', 'Gerente'];
+// (Proyecto L, tanda 3) Los flags 'gestion' (quién administra staff) y
+// 'elevado' (contraseña vs PIN) viven en roles_permisos.capacidades; esta
+// lista queda como FALLBACK para roles base sin fila todavía.
+const ELEVADOS_BASE = ['Admin', 'Gerente'];
 // Validación pragmática de correo (suficiente para bloquear vacíos y basura).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -26,7 +29,7 @@ Deno.serve(async (req) => {
     const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     // 1. Validar que QUIEN llama está autenticado (su propio JWT). Esta función
-    //    conserva verify-jwt POR DEFECTO (no es pública): solo Admin/Gerente.
+    //    conserva verify-jwt POR DEFECTO (no es pública): solo gestión.
     const authHeader = req.headers.get('Authorization') ?? '';
     const caller = createClient(URL, ANON, {
       global: { headers: { Authorization: authHeader } },
@@ -42,7 +45,7 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // 3. Confirmar que el caller es Admin/Gerente y de qué tenant.
+    // 3. Confirmar rol y tenant del caller.
     let rolCaller: string | undefined;
     let tenantCaller: string | undefined;
     const { data: u } = await admin
@@ -62,13 +65,34 @@ Deno.serve(async (req) => {
       rolCaller = s?.rol;
       tenantCaller = s?.restaurante_id;
     }
-    if (!ELEVADOS.includes(rolCaller ?? ''))
-      return json(
-        { error: 'Solo Admin o Gerente pueden dar de alta empleados.' },
-        403,
-      );
     if (!tenantCaller)
       return json({ error: 'No se pudo resolver tu restaurante.' }, 403);
+
+    // Flags data-driven del tenant con fallback a la base histórica.
+    const capacidadesDe = async (rol: string) => {
+      const { data } = await admin
+        .from('roles_permisos')
+        .select('capacidades')
+        .eq('restaurante_id', tenantCaller)
+        .eq('rol', rol)
+        .maybeSingle();
+      return (data?.capacidades ?? null) as Record<string, unknown> | null;
+    };
+    const flagConFallback = (
+      cap: Record<string, unknown> | null,
+      flag: string,
+      rol: string,
+    ) => {
+      const v = cap?.[flag];
+      return typeof v === 'boolean' ? v : ELEVADOS_BASE.includes(rol);
+    };
+
+    const capCaller = await capacidadesDe(rolCaller ?? '');
+    if (!flagConFallback(capCaller, 'gestion', rolCaller ?? ''))
+      return json(
+        { error: 'Tu rol no puede dar de alta empleados.' },
+        403,
+      );
 
     // 4. Payload: objeto staff COMPLETO + password aparte (nunca dentro de staff).
     const body = await req.json();
@@ -91,18 +115,18 @@ Deno.serve(async (req) => {
         403,
       );
 
-    // 5. Credencial de la cuenta según rol.
-    //    ELEVADOS (Admin/Gerente): entran por CORREO REAL + contraseña en /login.
+    // 5. Credencial de la cuenta según el FLAG 'elevado' del rol.
+    //    ELEVADOS: entran por CORREO REAL + contraseña en /login.
     //    v3: su cuenta de Auth se crea con staff.email (obligatorio y válido);
     //    antes se creaba con el correo sintético → nadie podía iniciar sesión.
     //    OPERATIVOS: correo sintético estable + password derivado del PIN.
-    const esElevado = ELEVADOS.includes(rol);
+    const esElevado = flagConFallback(await capacidadesDe(rol), 'elevado', rol);
     let authPassword: string;
     let email: string;
     if (esElevado) {
       if (!password || String(password).length < 8)
         return json(
-          { error: 'Admin/Gerente requieren contraseña de al menos 8 caracteres.' },
+          { error: 'Los roles elevados requieren contraseña de al menos 8 caracteres.' },
           400,
         );
       authPassword = String(password);
@@ -111,7 +135,7 @@ Deno.serve(async (req) => {
         return json(
           {
             error:
-              'Admin/Gerente requieren un correo válido: con él iniciarán sesión.',
+              'Los roles elevados requieren un correo válido: con él iniciarán sesión.',
           },
           400,
         );

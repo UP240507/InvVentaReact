@@ -13,7 +13,9 @@ const json = (obj: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-const ELEVADOS = ['Admin', 'Gerente'];
+// (Proyecto L, tanda 3) Los flags 'gestion' y 'elevado' viven en
+// roles_permisos.capacidades; esta lista queda como FALLBACK para roles base.
+const ELEVADOS_BASE = ['Admin', 'Gerente'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 Deno.serve(async (req) => {
@@ -24,7 +26,7 @@ Deno.serve(async (req) => {
     const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // 1. Caller autenticado (verify-jwt por defecto: solo Admin/Gerente).
+    // 1. Caller autenticado (verify-jwt por defecto: solo gestión).
     const authHeader = req.headers.get('Authorization') ?? '';
     const caller = createClient(URL, ANON, {
       global: { headers: { Authorization: authHeader } },
@@ -60,13 +62,34 @@ Deno.serve(async (req) => {
       rolCaller = s?.rol;
       tenantCaller = s?.restaurante_id;
     }
-    if (!ELEVADOS.includes(rolCaller ?? ''))
-      return json(
-        { error: 'Solo Admin o Gerente pueden actualizar credenciales.' },
-        403,
-      );
     if (!tenantCaller)
       return json({ error: 'No se pudo resolver tu restaurante.' }, 403);
+
+    // Flags data-driven del tenant con fallback a la base histórica.
+    const capacidadesDe = async (rol: string) => {
+      const { data } = await admin
+        .from('roles_permisos')
+        .select('capacidades')
+        .eq('restaurante_id', tenantCaller)
+        .eq('rol', rol)
+        .maybeSingle();
+      return (data?.capacidades ?? null) as Record<string, unknown> | null;
+    };
+    const flagConFallback = (
+      cap: Record<string, unknown> | null,
+      flag: string,
+      rol: string,
+    ) => {
+      const v = cap?.[flag];
+      return typeof v === 'boolean' ? v : ELEVADOS_BASE.includes(rol);
+    };
+
+    const capCaller = await capacidadesDe(rolCaller ?? '');
+    if (!flagConFallback(capCaller, 'gestion', rolCaller ?? ''))
+      return json(
+        { error: 'Tu rol no puede actualizar credenciales.' },
+        403,
+      );
 
     // 4. Datos. rol opcional (si no llega, se usa el de la fila staff).
     //    v2: email opcional — SOLO aplica a elevados (los operativos conservan
@@ -92,9 +115,13 @@ Deno.serve(async (req) => {
         409,
       );
 
-    // 6. Construir la actualizacion segun el rol efectivo.
+    // 6. Construir la actualizacion segun el FLAG 'elevado' del rol efectivo.
     const rolEfectivo = (rol ?? emp.rol) as string;
-    const esElevado = ELEVADOS.includes(rolEfectivo);
+    const esElevado = flagConFallback(
+      await capacidadesDe(rolEfectivo),
+      'elevado',
+      rolEfectivo,
+    );
 
     const cambios: Record<string, unknown> = {
       user_metadata: { rol: rolEfectivo, staff_id: emp.id },
@@ -117,7 +144,7 @@ Deno.serve(async (req) => {
           return json(
             {
               error:
-                'Admin/Gerente requieren contrasena de al menos 8 caracteres.',
+                'Los roles elevados requieren contrasena de al menos 8 caracteres.',
             },
             400,
           );

@@ -12,7 +12,9 @@ const json = (obj: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 
-const ELEVADOS = ['Admin', 'Gerente'];
+// (Proyecto L, tanda 3) El flag 'elevado' vive en roles_permisos.capacidades;
+// esta lista queda como FALLBACK para roles base sin fila todavía.
+const ELEVADOS_BASE = ['Admin', 'Gerente'];
 
 // ── Rate-limit / lockout ───────────────────────────────────────────────────────
 // login-pin es PÚBLICA: no hay identidad para limitar, así que limitamos por IP.
@@ -102,10 +104,23 @@ Deno.serve(async (req) => {
       return json({ error: 'Empleado inactivo.' }, 403);
     }
 
-    // 3. Admin/Gerente entran con contraseña, no por PIN.
-    if (ELEVADOS.includes(staff.rol)) {
+    // 3. Roles ELEVADOS entran con contraseña, no por PIN. El flag es
+    //    data-driven (roles_permisos.capacidades.elevado) con fallback a la
+    //    base histórica — así los roles libres del tenant también aplican.
+    const { data: filaRol } = await admin
+      .from('roles_permisos')
+      .select('capacidades')
+      .eq('restaurante_id', rest.id)
+      .eq('rol', staff.rol)
+      .maybeSingle();
+    const flagElevado = filaRol?.capacidades?.elevado;
+    const esElevado =
+      typeof flagElevado === 'boolean'
+        ? flagElevado
+        : ELEVADOS_BASE.includes(staff.rol);
+    if (esElevado) {
       await registrarIntento(rest.id, false);
-      return json({ error: 'Admin y Gerente inician sesión con su contraseña, no con PIN.' }, 403);
+      return json({ error: 'Tu rol inicia sesión con contraseña, no con PIN.' }, 403);
     }
 
     // 4. La cuenta debe estar activada (el alta ya corrió).

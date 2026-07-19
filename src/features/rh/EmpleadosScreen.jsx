@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
+import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
 import { supabase } from '../../api/supabase';
 import {
@@ -21,7 +22,8 @@ import {
 } from 'lucide-react';
 
 export default function EmpleadosScreen() {
-  const { staff, upsertStaff, showToast, registrarAuditoria } = useAppStore();
+  const { staff, upsertStaff, showToast, registrarAuditoria, roles_permisos } =
+    useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,8 +57,13 @@ export default function EmpleadosScreen() {
 
   const [formData, setFormData] = useState(initialState);
 
-  // Admin/Gerente = "elevados": entran por contraseña real, no por PIN.
-  const esElevado = formData.rol === 'Admin' || formData.rol === 'Gerente';
+  // "Elevados" por FLAG (Proyecto L): entran por contraseña real, no por PIN.
+  // Mismo criterio que las EFs (capacidades.elevado con fallback base) — así
+  // el form pide contraseña/correo también a roles custom marcados elevados.
+  const esElevado = tieneFlag(
+    getCapacidades(formData.rol, roles_permisos),
+    'elevado',
+  );
 
   // ─── FILTRO DE BÚSQUEDA ──────────────────────────────────────────────────
   const empleadosFiltrados = useMemo(() => {
@@ -533,12 +540,23 @@ export default function EmpleadosScreen() {
                     }
                     className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors cursor-pointer"
                   >
-                    <option value="Admin">Administrador</option>
-                    <option value="Gerente">Gerente</option>
-                    <option value="Cajero">Cajero</option>
-                    <option value="Chef">Cocinero</option>
-                    <option value="Barista">Barista</option>
-                    <option value="Mesero">Mesero</option>
+                    {(roles_permisos?.length
+                      ? [...roles_permisos].sort((a, b) =>
+                          String(a.rol).localeCompare(String(b.rol)),
+                        )
+                      : [
+                          { id: 'Admin', rol: 'Admin' },
+                          { id: 'Gerente', rol: 'Gerente' },
+                          { id: 'Cajero', rol: 'Cajero' },
+                          { id: 'Chef', rol: 'Chef' },
+                          { id: 'Barista', rol: 'Barista' },
+                          { id: 'Mesero', rol: 'Mesero' },
+                        ]
+                    ).map((r) => (
+                      <option key={r.id} value={r.rol}>
+                        {r.rol}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
