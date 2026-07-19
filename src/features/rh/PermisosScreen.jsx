@@ -249,7 +249,10 @@ export default function PermisosScreen() {
 
   const toggleRuta = (slug) => {
     if (esSistema) return;
-    const rutas = Array.isArray(cap.rutas) ? [...cap.rutas] : [];
+    // Comodín '*' (rol copiado de Admin): expandir a la lista completa antes
+    // de tocar — si no, el asterisco seguiría forzando acceso total.
+    let rutas = Array.isArray(cap.rutas) ? [...cap.rutas] : [];
+    if (rutas.includes('*')) rutas = RUTAS_SISTEMA.map((r) => r.slug);
     const idx = rutas.indexOf(slug);
     if (idx >= 0) rutas.splice(idx, 1);
     else rutas.push(slug);
@@ -269,9 +272,15 @@ export default function PermisosScreen() {
 
   const togglePermiso = (moduloId) => {
     if (esSistema) return;
-    const nuevos = permisosActuales.includes(moduloId)
-      ? permisosActuales.filter((id) => id !== moduloId)
-      : [...permisosActuales, moduloId];
+    // Comodín 'TODO' (rol copiado de Admin): expandir a módulos concretos
+    // antes de tocar — el bug era que 'TODO' forzaba todo ON aunque el click
+    // sí encolara cambios (toast sin movimiento visual).
+    const base = permisosActuales.includes('TODO')
+      ? MODULOS_SISTEMA.map((m) => m.id)
+      : permisosActuales;
+    const nuevos = base.includes(moduloId)
+      ? base.filter((id) => id !== moduloId)
+      : [...base, moduloId];
     actualizarActivo({ permisos: nuevos });
   };
 
@@ -288,11 +297,21 @@ export default function PermisosScreen() {
       base?.capacidades && typeof base.capacidades === 'object'
         ? base.capacidades
         : CAPACIDADES_BASE.Mesero;
+    // Expandir comodines al copiar (p.ej. de Admin): un rol nuevo NUNCA nace
+    // con '*'/'TODO' — nacen editables con la lista concreta equivalente.
+    const rutasBase = Array.isArray(capBase.rutas) ? capBase.rutas : [];
+    const rutasNuevas = rutasBase.includes('*')
+      ? RUTAS_SISTEMA.map((r) => r.slug)
+      : [...rutasBase];
+    const permisosBase = base ? [...(base.permisos || [])] : ['Mesas'];
+    const permisosNuevos = permisosBase.includes('TODO')
+      ? MODULOS_SISTEMA.map((m) => m.id)
+      : permisosBase;
     const payload = {
       id: uuid(),
       rol: nombre,
-      permisos: base ? [...(base.permisos || [])] : ['Mesas'],
-      capacidades: { ...capBase, es_sistema: false },
+      permisos: permisosNuevos,
+      capacidades: { ...capBase, rutas: rutasNuevas, es_sistema: false },
       restaurante_id: useAuthStore.getState().restauranteId,
     };
     guardarFila(payload);
@@ -503,7 +522,7 @@ export default function PermisosScreen() {
               <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Compass className="w-4 h-4" /> Pantallas permitidas
               </h3>
-              {accesoTotal || esSistema ? (
+              {esSistema ? (
                 <p className="text-sm font-bold text-slate-500 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-4">
                   Este rol tiene acceso a TODAS las pantallas.
                 </p>
@@ -511,7 +530,8 @@ export default function PermisosScreen() {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {RUTAS_SISTEMA.map((r) => {
-                      const activo = rutasDelRol.includes(r.slug);
+                      const activo =
+                        accesoTotal || rutasDelRol.includes(r.slug);
                       return (
                         <button
                           key={r.slug}
