@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../api/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
+import { useSessionStore } from '../../store/useSessionStore';
 import {
-  useSessionStore,
-  RUTA_INICIAL_POR_ROL,
-} from '../../store/useSessionStore';
+  getRolEfectivo,
+  getCapacidades,
+  tieneFlag,
+} from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore'; // FIX 3: sesión raíz (tenant)
 
 import {
@@ -28,15 +30,22 @@ export default function RelojChecadorScreen() {
   const PIN_MAX = 6;
 
   // Candado de jornada: configuracion.horas_jornada (0 = desactivado).
-  // La SALIDA se bloquea hasta cumplir las horas; el dueño (Admin) puede
-  // autorizar una salida anticipada con su PIN. Exentos: Admin.
-  const ROLES_EXENTOS_JORNADA = ['Admin'];
+  // La SALIDA se bloquea hasta cumplir las horas; quien tenga el flag
+  // 'autoriza_salidas' (hoy: Admin) autoriza la anticipada con su PIN.
+  // Exentos del candado: flag 'exento_jornada'. (Proyecto L — flags, no roles.)
   const [salidaPendiente, setSalidaPendiente] = useState(null); // {empleado, horas, faltan}
   const [pinAdminSalida, setPinAdminSalida] = useState('');
   const [pinAdminError, setPinAdminError] = useState('');
 
-  const { staff, asistencias, turnos, configuracion, registrarAuditoria } =
-    useAppStore();
+  const {
+    staff,
+    asistencias,
+    turnos,
+    configuracion,
+    registrarAuditoria,
+    roles_permisos,
+  } = useAppStore();
+  const capDeRol = (rol) => getCapacidades(rol, roles_permisos);
   const { enqueueAction } = useSyncStore();
   const { abrirSesionEmpleado, cerrarSesionEmpleado, empleadoActivo } =
     useSessionStore();
@@ -74,7 +83,7 @@ export default function RelojChecadorScreen() {
       const p1 = String(s.pin ?? '').trim();
       const p2 = String(s.pin_acceso ?? '').trim();
       return (
-        ROLES_EXENTOS_JORNADA.includes(rolS) &&
+        tieneFlag(capDeRol(rolS), 'autoriza_salidas') &&
         activo &&
         ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
       );
@@ -133,9 +142,7 @@ export default function RelojChecadorScreen() {
 
     if (empleadoActivo) {
       const ruta =
-        RUTA_INICIAL_POR_ROL[
-          empleadoActivo.rol || empleadoActivo.puesto || 'Mesero'
-        ] || '/dashboard';
+        capDeRol(getRolEfectivo(empleadoActivo)).ruta_inicial || '/dashboard';
       navigate(ruta);
       return;
     }
@@ -147,7 +154,7 @@ export default function RelojChecadorScreen() {
     //  - Sesión de empleado → logout REAL y al login de empleados. Su sesión
     //    sin identidad activa no sirve para nada más que rebotar.
     const rolSesion = user?.rol || user?.puesto || '';
-    const esGestion = ['Admin', 'Gerente'].includes(rolSesion);
+    const esGestion = tieneFlag(capDeRol(rolSesion), 'gestion');
     if (esGestion && !user?.esEmpleado) {
       navigate('/dashboard');
       return;
@@ -252,11 +259,11 @@ export default function RelojChecadorScreen() {
           return;
         }
 
-        const rolSistema = empleado.rol || empleado.puesto || 'Mesero';
-        const rolNecesitaTurno = ![
-          'Admin',
-          'Gerente',
-        ].includes(rolSistema);
+        const rolSistema = getRolEfectivo(empleado);
+        const rolNecesitaTurno = !tieneFlag(
+          capDeRol(rolSistema),
+          'exento_turno',
+        );
 
         if (rolNecesitaTurno && !turnoAbierto) {
           mostrarFeedback(
@@ -297,8 +304,8 @@ export default function RelojChecadorScreen() {
           if (!useAuthStore.getState().user) {
             navigate('/login', { replace: true });
           } else {
-            const rolParaRuta = empleado.rol || empleado.puesto || 'Mesero';
-            const ruta = RUTA_INICIAL_POR_ROL[rolParaRuta] || '/mesas';
+            const ruta =
+              capDeRol(getRolEfectivo(empleado)).ruta_inicial || '/mesas';
             navigate(ruta, { replace: true });
           }
         }, 2000);
@@ -319,7 +326,7 @@ export default function RelojChecadorScreen() {
         // salvo rol exento o autorización del dueño (flujo del pinpad abajo).
         const horasJornada = Number(configuracion?.horas_jornada) || 0;
         const rolEmpleado = empleado.rol || empleado.puesto || '';
-        const exento = ROLES_EXENTOS_JORNADA.includes(rolEmpleado);
+        const exento = tieneFlag(capDeRol(rolEmpleado), 'exento_jornada');
         if (horasJornada > 0 && !exento) {
           const entradaT = new Date(turnoActivoEmpleado.fecha_hora).getTime();
           const horasTranscurridas = (Date.now() - entradaT) / 3600000;

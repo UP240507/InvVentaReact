@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   Settings,
@@ -88,14 +89,12 @@ export default function ConfiguracionScreen() {
   const [tab, setTab] = useState('restaurante');
 
   // Roles excluidos del reparto de propinas (columna real roles_sin_propina).
-  const ROLES_STAFF = [
-    'Admin',
-    'Gerente',
-    'Cajero',
-    'Mesero',
-    'Chef',
-    'Barista',
-  ];
+  // (Proyecto L) Lista VIVA desde roles_permisos: los roles que cree el tenant
+  // aparecen solos; fallback a los 6 base en primera sesión sin fetch.
+  const { roles_permisos } = useAppStore();
+  const ROLES_STAFF = roles_permisos?.length
+    ? roles_permisos.map((r) => r.rol)
+    : ['Admin', 'Gerente', 'Cajero', 'Mesero', 'Chef', 'Barista'];
   const [rolesSinPropina, setRolesSinPropina] = useState(
     Array.isArray(conf.roles_sin_propina)
       ? conf.roles_sin_propina
@@ -109,8 +108,9 @@ export default function ConfiguracionScreen() {
   // Jornada mínima antes de poder checar salida (0 = sin restricción).
   // SOLO la cuenta del dueño (Admin) puede modificarla; Gerente la ve
   // deshabilitada. El candado vive en el checador y en el logout.
-  const esAdminSesion = ['Admin'].includes(
-    user?.rol || user?.puesto,
+  const esAdminSesion = tieneFlag(
+    getCapacidades(user?.rol || user?.puesto, roles_permisos),
+    'admin_config',
   );
   const [horasJornada, setHorasJornada] = useState(
     Number(conf.horas_jornada) || 0,

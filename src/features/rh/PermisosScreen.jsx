@@ -274,8 +274,8 @@ export default function PermisosScreen() {
             <p className="text-slate-400 dark:text-ui-muted text-xs font-bold w-2/3">
               Los cambios se guardan y sincronizan automáticamente. Toma efecto
               en el siguiente inicio de sesión del usuario. OJO: los guards de
-              rutas siguen leyendo RUTAS_POR_ROL (hardcodeado); unificar con
-              esta tabla es un proyecto aparte.
+              rutas ya leen las CAPACIDADES por rol (roles_permisos); esta
+              pantalla de módulos se unificará con ellas próximamente.
             </p>
             <div className="bg-brand-cesped/20 text-brand-cesped px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 border border-brand-cesped/30">
               <Save className="w-4 h-4" /> Auto-Guardado

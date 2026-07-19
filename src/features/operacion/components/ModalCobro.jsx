@@ -18,6 +18,7 @@ import {
 import { useAppStore } from '../../../store/useAppStore';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
+import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -76,17 +77,18 @@ export default function ModalCobro({
   const [dialogoExcedente, setDialogoExcedente] = useState(null);
 
   // ─── DESCUENTO (autorizado) ────────────────────────────────────────────────
-  // Cualquiera puede ABRIR la opción, pero aplicarla exige rol alto:
-  //  - Sesión Admin/Gerente → aplica directo, sin fricción.
-  //  - Cualquier otra sesión → pinpad de autorización: un Gerente/Admin teclea
-  //    SU PIN (staff, 4-6 dígitos) y queda registrado como autorizador.
-  const ROLES_AUTORIZAN_DESCUENTO = ['Admin', 'Gerente'];
-  const { staff, clientes, upsertCliente, configuracion } = useAppStore();
+  // Cualquiera puede ABRIR la opción, pero aplicarla exige la capacidad
+  // 'autoriza_descuentos' (Proyecto L — flag, no nombre de rol):
+  //  - Sesión con el flag → aplica directo, sin fricción.
+  //  - Cualquier otra sesión → pinpad de autorización: alguien de staff con el
+  //    flag teclea SU PIN (4-6 dígitos) y queda registrado como autorizador.
+  const { staff, clientes, upsertCliente, configuracion, roles_permisos } =
+    useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
-  const sesionAutoriza = ROLES_AUTORIZAN_DESCUENTO.includes(
-    user?.rol || user?.puesto,
-  );
+  const autorizaDescuento = (rol) =>
+    tieneFlag(getCapacidades(rol, roles_permisos), 'autoriza_descuentos');
+  const sesionAutoriza = autorizaDescuento(user?.rol || user?.puesto);
 
   const [mostrarDescuento, setMostrarDescuento] = useState(false);
   const [descTipo, setDescTipo] = useState('pct'); // 'pct' | 'monto'
@@ -128,7 +130,7 @@ export default function ModalCobro({
       const p1 = String(s.pin ?? '').trim();
       const p2 = String(s.pin_acceso ?? '').trim();
       return (
-        ROLES_AUTORIZAN_DESCUENTO.includes(rolS) &&
+        autorizaDescuento(rolS) &&
         activo &&
         ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
       );

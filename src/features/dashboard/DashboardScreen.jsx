@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAppStore } from '../../store/useAppStore';
+import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore'; // 🌟 FIX: Importamos tu sesión de dueño
 
 import {
@@ -84,7 +85,10 @@ export default function DashboardScreen() {
 
   // 🌟 FIX: Lógica de Jerarquía de Operador
   // Si eres el dueño (Admin), mostramos tu nombre base. Si eres un empleado con PIN, mostramos el del empleado.
-  const esAdminPrincipal = ['Admin'].includes(user?.rol);
+  const esAdminPrincipal = tieneFlag(
+    getCapacidades(user?.rol, useAppStore.getState().roles_permisos),
+    'admin_config',
+  );
   const nombreUsuario = esAdminPrincipal
     ? user?.nombre
     : empleadoActivo?.nombre || user?.nombre || 'Usuario';

@@ -10,6 +10,7 @@ import { useAuthStore } from './useAuthStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { supabase } from '../../api/supabase';
+import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import {
   User,
   Mail,
@@ -28,11 +29,16 @@ import {
   BookMarked,
 } from 'lucide-react';
 
-const ROLES_ELEVADOS = ['Admin', 'Gerente'];
-
 export default function PerfilScreen() {
-  const { showToast, temaGlobal, toggleTemaGlobal, ventas, asistencias, staff } =
-    useAppStore();
+  const {
+    showToast,
+    temaGlobal,
+    toggleTemaGlobal,
+    ventas,
+    asistencias,
+    staff,
+    roles_permisos,
+  } = useAppStore();
   const { user, logout } = useAuthStore();
   const { empleadoActivo } = useSessionStore();
   const { enqueueAction } = useSyncStore();
@@ -48,7 +54,8 @@ export default function PerfilScreen() {
     '—';
   // Elevados (o sesión de gestión sin empleado) pueden cambiar SU contraseña.
   const esElevado =
-    ROLES_ELEVADOS.includes(rol) || (!empleadoActivo && !!user);
+    tieneFlag(getCapacidades(rol, roles_permisos), 'elevado') ||
+    (!empleadoActivo && !!user);
 
   // Fila staff viva (teléfono/email/fecha de ingreso) — solo si la sesión es
   // de un empleado; la cuenta del dueño vive en 'usuarios'.
@@ -147,7 +154,10 @@ export default function PerfilScreen() {
 
   const intentarLogout = () => {
     const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;
-    const exento = ['Admin'].includes(rolEmp);
+    const exento = tieneFlag(
+      getCapacidades(rolEmp, roles_permisos),
+      'exento_jornada',
+    );
     if (empleadoActivo && !exento) {
       const regs = (asistencias || [])
         .filter((a) => a.empleado_nombre === empleadoActivo.nombre)

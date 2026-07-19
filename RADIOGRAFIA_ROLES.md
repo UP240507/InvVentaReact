@@ -2,6 +2,9 @@
 
 Fecha: 18 de julio de 2026 · Tenant AZUL (`aorrfmxduefqwlrhfzzf`) · Solo lectura, cero cambios aplicados.
 
+> **Avance**: tanda 1 CERRADA (migración `20260718231143`, front purgado, EFs v4/v5/v3) — probada en caliente.
+> Tanda 2 CERRADA: `roles_permisos.capacidades` jsonb (migración `20260719014225`, seed espejo; `autoriza_salidas` SOLO Admin, fiel al pinpad del checador) + `lib/Permisos.js` (`CAPACIDADES_BASE` fallback) + `hooks/usePermisos.js`; guards migrados a flags: useSessionStore, App.jsx, SidebarLayout, ModalCobro, RelojChecador, PerfilScreen, EsperaScreen, Configuración (con `ROLES_STAFF` vivo desde roles_permisos), Dashboard. `RUTAS_POR_ROL`/`RUTA_INICIAL_POR_ROL` eliminados. Siguen: tanda 3 (EFs por flag `elevado`) y tanda 4 (CRUD de roles + FK).
+
 ## 1. Los 3 vocabularios (verificados en código y DB viva)
 
 ### A. Canónico operativo — `staff.rol` / `staff.puesto` (CHECK en DB)

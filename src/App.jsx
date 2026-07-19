@@ -11,6 +11,7 @@ import { useAppStore } from './store/useAppStore';
 import { useAuthStore } from './features/auth/useAuthStore';
 import { useSessionStore } from './store/useSessionStore';
 import { useNetworkListener } from './hooks/useNetworkListener';
+import { getCapacidades, tieneFlag } from './lib/Permisos';
 
 import SidebarLayout from './components/SidebarLayout';
 
@@ -77,9 +78,14 @@ function SuscripcionRoute() {
 function EmpleadoRoute() {
   const { empleadoActivo, puedeAcceder, getRutaInicial } = useSessionStore();
   const { user } = useAuthStore();
+  const rolesPermisos = useAppStore((s) => s.roles_permisos);
   const location = useLocation();
 
-  const rolAdmin = ['Admin', 'Gerente'].includes(user?.rol);
+  // (Proyecto L) shell de administración por FLAG, no por nombre de rol
+  const rolAdmin = tieneFlag(
+    getCapacidades(user?.rol, rolesPermisos),
+    'gestion',
+  );
   if (rolAdmin) return <Outlet />;
 
   if (!empleadoActivo) return <Navigate to="/checador" replace />;
@@ -95,11 +101,12 @@ function EmpleadoRoute() {
 function TurnoRoute() {
   const { hayTurnoActivo } = useSessionStore();
   const { user } = useAuthStore();
+  const rolesPermisos = useAppStore((s) => s.roles_permisos);
 
   // Reactividad para expulsar meseros en tiempo real si cierran la caja
   useAppStore((s) => s.turnos);
 
-  if (['Admin', 'Gerente'].includes(user?.rol))
+  if (tieneFlag(getCapacidades(user?.rol, rolesPermisos), 'exento_turno'))
     return <Outlet />;
   return hayTurnoActivo() ? <Outlet /> : <Navigate to="/espera" replace />;
 }
@@ -108,9 +115,11 @@ function TurnoRoute() {
 function RootRedirect() {
   const { user } = useAuthStore();
   const { getRutaInicial } = useSessionStore();
+  const rolesPermisos = useAppStore((s) => s.roles_permisos);
 
-  if (['Admin', 'Gerente'].includes(user?.rol)) {
-    return <Navigate to="/dashboard" replace />;
+  const capUser = getCapacidades(user?.rol, rolesPermisos);
+  if (tieneFlag(capUser, 'gestion')) {
+    return <Navigate to={capUser.ruta_inicial || '/dashboard'} replace />;
   }
   return <Navigate to={getRutaInicial()} replace />;
 }

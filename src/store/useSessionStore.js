@@ -1,52 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useAppStore } from './useAppStore';
+import {
+  getRolEfectivo,
+  getCapacidades,
+  puedeVerRuta,
+  tieneFlag,
+} from '../lib/Permisos';
 
-// ─── RUTAS PERMITIDAS POR ROL ─────────────────────────────────────────────────
-export const RUTAS_POR_ROL = {
-  Admin: '*',
-  Gerente: [
-    'dashboard',
-    'mesas',
-    'pos',
-    'kds',
-    'propinas',
-    'ingredientes',
-    'compras',
-    'recepcion',
-    'mermas',
-    'proveedores',
-    'empleados',
-    'asistencias',
-    'nominas',
-    'permisos',
-    'clientes',
-    'reportes',
-    'facturas',
-    'zonas-produccion',
-    'auditoria',
-    'configuracion',
-    'perfil',
-    'mi-plan',
-  ],
-  Cajero: ['pos', 'mesas', 'propinas', 'facturas', 'reportes', 'perfil'],
-  Mesero: ['mesas', 'pos', 'perfil'],
-  Chef: ['kds', 'perfil'],
-  Barista: ['kds', 'perfil'],
-};
-
-export const RUTA_INICIAL_POR_ROL = {
-  Admin: '/dashboard',
-  Gerente: '/dashboard',
-  // Cajero aterriza en /mesas (con sidebar), NO en /pos: /pos es full-screen y
-  // oculta el sidebar (isFullScreenRoute en App.jsx), dejándolo sin navegación y
-  // atrapado (al salir del POS rebotaría de vuelta a /pos). Desde /mesas alcanza
-  // POS/Propinas/Reportes/Facturas por el menú.
-  Cajero: '/mesas',
-  Mesero: '/mesas',
-  Chef: '/kds',
-  Barista: '/kds',
-};
+// ─── GUARDS POR CAPACIDADES (Proyecto L, tanda 2) ─────────────────────────────
+// Ya no hay mapas de rutas por NOMBRE de rol aquí: las capacidades viven en
+// roles_permisos.capacidades (editable por tenant, hidratada a Dexie) con
+// fallback a CAPACIDADES_BASE en lib/Permisos.js para la primera sesión.
+const capDe = (empleado) =>
+  getCapacidades(
+    getRolEfectivo(empleado),
+    useAppStore.getState().roles_permisos,
+  );
 
 export const useSessionStore = create(
   persist(
@@ -70,16 +40,7 @@ export const useSessionStore = create(
       puedeAcceder: (ruta) => {
         const { empleadoActivo } = get();
         if (!empleadoActivo) return false;
-
-        const rol = empleadoActivo.rol || empleadoActivo.puesto || 'Mesero';
-
-        if (['Admin'].includes(rol)) return true;
-
-        const rutaLimpia = ruta.replace(/^\//, '').split('/')[0] || 'dashboard';
-        const permitidas = RUTAS_POR_ROL[rol] || RUTAS_POR_ROL['Mesero'];
-
-        if (permitidas === '*') return true;
-        return permitidas.includes(rutaLimpia);
+        return puedeVerRuta(capDe(empleadoActivo), ruta);
       },
 
       // ── GUARDIA: turno activo ────────────────────────────────────────────
@@ -89,19 +50,17 @@ export const useSessionStore = create(
         const { empleadoActivo } = get();
         if (!empleadoActivo) return false;
 
-        const rol = empleadoActivo.rol || empleadoActivo.puesto || 'Mesero';
-        if (['Admin', 'Gerente'].includes(rol)) return true;
+        if (tieneFlag(capDe(empleadoActivo), 'exento_turno')) return true;
 
         const turnos = useAppStore.getState().turnos || [];
         return turnos.some((t) => t.estado === 'abierto');
       },
 
-      // ── HELPER: ruta inicial según rol ──────────────────────────────────
+      // ── HELPER: ruta inicial según capacidades del rol ──────────────────
       getRutaInicial: () => {
         const { empleadoActivo } = get();
         if (!empleadoActivo) return '/checador';
-        const rol = empleadoActivo.rol || empleadoActivo.puesto || 'Mesero';
-        return RUTA_INICIAL_POR_ROL[rol] || '/mesas';
+        return capDe(empleadoActivo).ruta_inicial || '/mesas';
       },
     }),
     {

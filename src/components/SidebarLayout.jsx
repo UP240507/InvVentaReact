@@ -35,7 +35,13 @@ import {
 import { useSyncStore } from '../store/useSyncStore';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../features/auth/useAuthStore';
-import { RUTAS_POR_ROL, useSessionStore } from '../store/useSessionStore';
+import { useSessionStore } from '../store/useSessionStore';
+import {
+  getRolEfectivo,
+  getCapacidades,
+  puedeVerRuta as capVerRuta,
+  tieneFlag,
+} from '../lib/Permisos';
 
 // 🌟 FIX: Importamos el Modal directamente en lugar del Widget
 import CierreTurnoModal from '../features/dashboard/CierreTurnoModal';
@@ -192,12 +198,14 @@ export default function SidebarLayout() {
   const isFullScreenRoute =
     location.pathname === '/pos' || location.pathname === '/kds';
 
-  // Rol e identidad — fuente única para gatear notificaciones y menú.
-  const rolActual = user?.rol || user?.puesto || 'Mesero';
-  const esGestion = ['Admin', 'Gerente'].includes(rolActual);
+  // Rol e identidad — capacidades vivas (Proyecto L): flags, no nombres.
+  const rolesPermisos = useAppStore((s) => s.roles_permisos);
+  const rolActual = getRolEfectivo(user);
+  const capActual = getCapacidades(rolActual, rolesPermisos);
+  const esGestion = tieneFlag(capActual, 'gestion');
   // Visibilidad de notificaciones por rol: gestión ve cobros/stock/compras; los
   // operativos NO (no les sirven). El mesero solo ve "pedidos listos".
-  const verCobros = esGestion || rolActual === 'Cajero';
+  const verCobros = esGestion || tieneFlag(capActual, 'abre_caja');
   const verStock = esGestion;
   const verCompras = esGestion;
   const verListos = !esGestion;
@@ -237,18 +245,10 @@ export default function SidebarLayout() {
     prevMesasCobrar.current = mesasCobrar.length;
   }, [mesasCobrar.length, verCobros]);
 
-  // Filtrado del menú por rol: MISMO criterio que puedeAcceder() en
-  // useSessionStore (fuente única de verdad), para que el sidebar muestre solo
+  // Filtrado del menú por capacidades: MISMO criterio que puedeAcceder() en
+  // useSessionStore (ambos usan lib/Permisos), para que el sidebar muestre solo
   // lo que el usuario realmente puede abrir y no queden links que rebotan.
-  // Admin ve todo; el resto, su lista de RUTAS_POR_ROL.
-  const rutasPermitidas = ['Admin'].includes(rolActual)
-    ? '*'
-    : RUTAS_POR_ROL[rolActual] || RUTAS_POR_ROL['Mesero'];
-  const puedeVerRuta = (path) => {
-    if (rutasPermitidas === '*') return true;
-    const limpia = path.replace(/^\//, '').split('/')[0];
-    return rutasPermitidas.includes(limpia);
-  };
+  const puedeVerRuta = (path) => capVerRuta(capActual, path);
   const gruposVisibles = menuGroups
     .map((g) => ({
       ...g,
@@ -256,14 +256,10 @@ export default function SidebarLayout() {
     }))
     .filter((g) => g.items.length > 0);
 
-  // Quién puede CERRAR la caja: mismo criterio que abrirla en EsperaScreen
-  // (ROLES_ABRIR_CAJA). Un Mesero/Chef/Barista no gestiona el turno, así que no
+  // Quién puede CERRAR la caja: mismo flag que abrirla en EsperaScreen
+  // (abre_caja). Un Mesero/Chef/Barista no gestiona el turno, así que no
   // ve el botón de corte aunque haya caja abierta.
-  const puedeCerrarCaja = [
-    'Cajero',
-    'Gerente',
-    'Admin',
-  ].includes(rolActual);
+  const puedeCerrarCaja = tieneFlag(capActual, 'abre_caja');
 
   const toastStyle = toast
     ? (TOAST_STYLES[toast.type] ?? TOAST_STYLES.info)
@@ -573,8 +569,13 @@ export default function SidebarLayout() {
                 // salida — y la salida tiene su propio candado de horas en el
                 // checador (con autorización del Admin). Exentos: gestión.
                 const { empleadoActivo } = useSessionStore.getState();
-                const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;
-                const exento = ['Admin'].includes(rolEmp);
+                const exento = tieneFlag(
+                  getCapacidades(
+                    getRolEfectivo(empleadoActivo),
+                    useAppStore.getState().roles_permisos,
+                  ),
+                  'exento_jornada',
+                );
                 if (empleadoActivo && !exento) {
                   const regs = (asistencias || [])
                     .filter((a) => a.empleado_nombre === empleadoActivo.nombre)

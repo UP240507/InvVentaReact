@@ -10,23 +10,25 @@ import {
 } from 'lucide-react';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAppStore } from '../../store/useAppStore';
+import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 
-// Roles que pueden ABRIR la caja desde /espera. Admin/Gerente hacen bypass de
-// TurnoRoute (no llegan aquí), pero se incluyen por defensa. El resto del staff
-// (Mesero/Chef/Barista) espera a que el cajero/gerente abra el turno.
-const ROLES_ABRIR_CAJA = ['Cajero', 'Gerente', 'Admin'];
-
+// Quién puede ABRIR la caja desde /espera: flag 'abre_caja' (Proyecto L).
+// Gestión hace bypass de TurnoRoute (no llega aquí), pero el flag la cubre por
+// defensa. El resto del staff espera a que alguien con el flag abra el turno.
 export default function EsperaScreen() {
   const { empleadoActivo, cerrarSesionEmpleado, getRutaInicial } =
     useSessionStore();
-  const { turnos, abrirTurno } = useAppStore();
+  const { turnos, abrirTurno, roles_permisos } = useAppStore();
   const navigate = useNavigate();
 
   const [fondo, setFondo] = useState('');
   const [abriendo, setAbriendo] = useState(false);
 
   const rol = empleadoActivo?.rol || empleadoActivo?.puesto || '';
-  const puedeAbrirCaja = ROLES_ABRIR_CAJA.includes(rol);
+  const puedeAbrirCaja = tieneFlag(
+    getCapacidades(rol, roles_permisos),
+    'abre_caja',
+  );
 
   // En cuanto se abra el turno, redirigir automáticamente.
   useEffect(() => {
