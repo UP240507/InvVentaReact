@@ -24,4 +24,23 @@
   --radius-brand: 2.5rem;
   --font-syne: 'Syne', sans-serif;
   --font-sans: 'DM Sans', sans-serif;
+
+  /* ── PROYECTO D: superficie ADMIN (lenguaje editorial del mock) ──────────
+     Convive con la industrial (ui-*/brand-*) que conserva OPERACIÓN.
+     Claro: crema/tinta/terracota/marino. Dark admin: noche (navy). */
+  --color-adm-crema: #f5f1ea; /* fondo claro */
+  --color-adm-panel: #ffffff; /* tarjetas/paneles */
+  --color-adm-arena: #eae5dc; /* fondos muted */
+  --color-adm-tinta: #110f0a; /* texto principal */
+  --color-adm-topo: #7a746a; /* texto secundario */
+  --color-adm-terracota: #c8442a; /* acento primario */
+  --color-adm-marino: #0d1b35; /* sidebar / sólidos */
+  --color-adm-marino-2: #162345; /* sidebar hover/activo */
+  --color-adm-bosque: #1a5c38; /* éxito/positivo */
+  --color-adm-ocre: #c8880a; /* advertencia */
+  --color-adm-noche: #0a1120; /* fondo dark admin */
+  --color-adm-noche-2: #111e34; /* paneles dark admin */
+  --radius-adm: 0.125rem; /* esquinas casi rectas del editorial */
+  --font-fraunces: 'Fraunces', serif; /* display: números grandes, títulos */
+  --font-figtree: 'Figtree', sans-serif; /* UI admin */
 }
