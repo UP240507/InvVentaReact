@@ -1,4 +1,4 @@
-// src/lib/fiscal.test.js — TDD del motor fiscal (Sprint 2)
+// src/lib/Fiscal.test.js — TDD del motor fiscal (Sprint 2)
 import { describe, it, expect } from 'vitest';
 import { calcularVenta } from './fiscal';
 

@@ -22,7 +22,7 @@ import {
 import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
 import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
-import { calcularVenta } from '../../lib/fiscal';
+import { calcularVenta } from '../../lib/Fiscal';
 import {
   verificarStock,
   esPaquete,
@@ -31,7 +31,7 @@ import {
   gruposDeEleccion,
   resolverComponentesPaquete,
   construirItemsComanda,
-} from '../../lib/inventario';
+} from '../../lib/Inventario';
 import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 
 // ─── HELPERS DE SANITIZACIÓN Y MATEMÁTICA ──────────────────────────────────

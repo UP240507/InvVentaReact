@@ -1,4 +1,4 @@
-// src/lib/inventario.js
+// src/lib/Inventario.js
 // Lógica pura de inventario para ventas: construcción de deltas (con sustituciones)
 // y verificación de stock antes de cobrar.
 

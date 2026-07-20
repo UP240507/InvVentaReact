@@ -1,6 +1,6 @@
 // src/test/canonical-price.test.js
 // Test de regresión Sprint 1: blinda el bug D6 (Pizza-en-$0) que ya migramos.
-// En Sprint 2 esta lógica se mueve a src/lib/fiscal.js con su propia suite TDD.
+// En Sprint 2 esta lógica se mueve a src/lib/Fiscal.js con su propia suite TDD.
 import { describe, it, expect } from 'vitest';
 
 const safePriceString = (val) => {

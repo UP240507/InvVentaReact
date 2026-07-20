@@ -6,7 +6,7 @@ import {
   X,
   ArrowRightLeft,
 } from 'lucide-react';
-import { verificarStock } from '../../../lib/inventario';
+import { verificarStock } from '../../../lib/Inventario';
 
 // Gate de inventario antes de cobrar: lista insumos agotados / bajo mínimo,
 // permite sustituir por otro producto con stock, o continuar de todas formas

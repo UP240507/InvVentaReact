@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { calcularVenta } from '../../lib/fiscal';
+import { calcularVenta } from '../../lib/Fiscal';
 import {
   Users,
   CreditCard,

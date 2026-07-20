@@ -1,4 +1,4 @@
-// src/lib/arqueo.js
+// src/lib/Arqueo.js
 // Cálculo de totales de un turno para el corte de caja. Fuente única del arqueo.
 // Arregla D5: bucketiza por el DESGLOSE real efectivo/tarjeta de cada venta
 // (que el POS persiste), no por el string metodo_pago sumando el total completo

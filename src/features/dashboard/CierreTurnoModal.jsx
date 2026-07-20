@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
-import { calcularTotalesTurno } from '../../lib/arqueo';
+import { calcularTotalesTurno } from '../../lib/Arqueo';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import {

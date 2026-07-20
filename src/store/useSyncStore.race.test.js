@@ -42,7 +42,7 @@ vi.mock('./useAppStore', () => ({
   },
 }));
 
-vi.mock('../lib/inventario', () => ({
+vi.mock('../lib/Inventario', () => ({
   construirDeltasStock: () => [],
 }));
 

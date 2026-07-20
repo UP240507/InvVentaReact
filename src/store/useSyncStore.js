@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { localDB } from './localDB';
 import { supabase } from '../api/supabase';
 import { useAuthStore } from '../features/auth/useAuthStore';
-import { construirDeltasStock } from '../lib/inventario';
+import { construirDeltasStock } from '../lib/Inventario';
 
 // ── Clasificación de errores de sincronización ───────────────────────────────
 // PERMANENTE = el reintento NUNCA va a arreglarlo (RLS, columna inexistente,

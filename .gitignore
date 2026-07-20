@@ -26,3 +26,7 @@ dist-ssr
 *.sw?
 
 e2e/.auth/
+
+# Tauri (artefactos de build Rust)
+src-tauri/target/
+src-tauri/gen/

@@ -2,9 +2,22 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// (Tauri) Dentro del contenedor Tauri el service worker/PWA se DESACTIVA:
+// el SW compite con el protocolo local del WebView y no aporta nada ahí
+// (el offline lo da Dexie). La build web normal lo conserva intacto.
+const esTauri = !!globalThis.process?.env?.TAURI_ENV_PLATFORM;
+
 export default defineConfig({
+  // Requisitos de `tauri dev`: consola sin limpiar y puerto FIJO (si 5173
+  // está ocupado, mejor fallar que abrir la ventana contra otro puerto).
+  clearScreen: false,
+  server: { port: 5173, strictPort: true },
+  envPrefix: ['VITE_', 'TAURI_ENV_'],
   plugins: [
     react(),
+    ...(esTauri
+      ? []
+      : [
     VitePWA({
       registerType: 'autoUpdate', // Se actualiza sola cuando liberas nueva versión
       injectRegister: 'auto',
@@ -83,5 +96,6 @@ export default defineConfig({
         ],
       },
     }),
+        ]),
   ],
 });

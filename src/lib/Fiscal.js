@@ -1,4 +1,4 @@
-// src/lib/fiscal.js
+// src/lib/Fiscal.js
 // Motor fiscal único de InvVenta. Fuente de verdad para subtotal/IVA/propina/total.
 // Reemplaza la matemática dispersa (y el bug D4: IVA calculado sobre la propina).
 //

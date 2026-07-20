@@ -1,4 +1,4 @@
-// src/lib/arqueo.test.js
+// src/lib/Arqueo.test.js
 import { describe, it, expect } from 'vitest';
 import { calcularTotalesTurno } from './arqueo';
 

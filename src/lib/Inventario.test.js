@@ -1,4 +1,4 @@
-// src/lib/inventario.test.js
+// src/lib/Inventario.test.js
 import { describe, it, expect } from 'vitest';
 import { construirDeltasStock, verificarStock } from './inventario';
 
