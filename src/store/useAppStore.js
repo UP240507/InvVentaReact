@@ -20,6 +20,7 @@ export const useAppStore = create((set, get) => ({
   isLoading: false,
   toast: null,
   temaGlobal: localStorage.getItem('theme') || 'light',
+  temaColor: localStorage.getItem('tema_color') || 'terracota',
 
   configuracion: null,
   productos: [],
@@ -127,6 +128,10 @@ export const useAppStore = create((set, get) => ({
     };
 
     await hidratarDesdeDexie();
+    // (Proyecto D) aplicar el tema del tenant desde la config local de Dexie
+    if (get().configuracion?.tema_color) {
+      get().aplicarTemaColor(get().configuracion.tema_color);
+    }
 
     // ── 2) Refrescar desde Supabase con TIMEOUT ──────────────────────────────
     // navigator.onLine === false → ni intentamos. Si dice true pero no hay red,
@@ -311,6 +316,8 @@ export const useAppStore = create((set, get) => ({
       };
       set(payload);
       useSyncStore.getState().setOfflineStatus(false); // red confirmada → apaga indicador
+      // (Proyecto D) tema del tenant desde el server (fuente de verdad)
+      if (confData?.tema_color) get().aplicarTemaColor(confData.tema_color);
 
       // Backup en Dexie (su fallo no debe tumbar nada)
       try {
@@ -690,6 +697,20 @@ export const useAppStore = create((set, get) => ({
   showToast: (mensaje, tipo = 'info') => {
     set({ toast: { msg: mensaje, type: tipo } });
     setTimeout(() => set({ toast: null }), 3500);
+  },
+
+  // (Proyecto D) Tema de color del TENANT: terracota | vino-cesped | fenix.
+  // Se aplica como data-tema en <html> (los tokens --adm-* reaccionan solos);
+  // localStorage lo adelanta en el boot sin parpadeo y configuracion.tema_color
+  // es la fuente de verdad por tenant (llega por fetch/Dexie).
+  aplicarTemaColor: (tema) => {
+    const t = ['terracota', 'vino-cesped', 'fenix'].includes(tema)
+      ? tema
+      : 'terracota';
+    if (t === 'terracota') delete document.documentElement.dataset.tema;
+    else document.documentElement.dataset.tema = t;
+    localStorage.setItem('tema_color', t);
+    set({ temaColor: t });
   },
 
   toggleTemaGlobal: () => {

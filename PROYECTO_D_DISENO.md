@@ -8,10 +8,14 @@ Decisión (Chris, 19-jul): **HÍBRIDO POR CONTEXTO**, un solo sistema de tokens 
 
 Referencia visual: zip de Figma Make (App.tsx con los 22 módulos mockeados + `design-system-spec.md` del industrial). Los tokens `adm-*` ya viven en `src/index.css` junto a los `ui-*`/`brand-*`.
 
+## Temas de color (aprobados por Chris, 19-jul)
+
+TRES temas por tenant (`configuracion.tema_color`, migración `20260720020019`, CHECK en DB) × claro/oscuro por dispositivo: **Terracota** (default, editorial del mock), **Vino × Cesped** (identidad vino + verde de marca como acción; en oscuro usa el cesped #00E5A0 puro) y **Fénix** (la paleta del logo: coral acción, esmeralda éxito, vino cobro, magenta detalles). Implementación: variables semánticas `--adm-*` por `[data-tema] × .dark` en `index.css` + `@theme inline` (utilidades `bg-adm-*` vivas); `aplicarTemaColor` en useAppStore (boot desde localStorage sin parpadeo, fuente de verdad el fetch/Dexie de configuracion); selector con swatches en Configuración → Restaurante, candado `admin_config`. Roles fijos de color: accent=acción, ok=éxito, danger=alerta, cobro=CTA dinero, chip=badge. Tema nuevo = un bloque CSS, cero JSX.
+
 ## Tandas
 
-1. **Fundación** ✅ tokens `adm-*` en `@theme` (hecho). PENDIENTE: fuentes self-hosted para offline/Tauri — `npm i @fontsource/fraunces @fontsource/figtree` e importarlas en `main.jsx` (Google Fonts no sirve offline sin el SW, y Tauri corre sin SW).
-2. **Shell admin**: SidebarLayout v2 editorial — sidebar marino colapsable (208px ↔ 56px, grupos con microtítulos tracking ancho), topbar con búsqueda global, **status bar inferior** (online/offline real del sync store, turno activo, ventas del turno, badge de cola/dead-letter — diagnóstico siempre visible). La superficie se decide por ruta: rutas de operación mantienen su shell.
+1. **Fundación** ✅ tokens semánticos + 3 temas + selector (hecho). PENDIENTE: fuentes self-hosted para offline/Tauri — `npm i @fontsource/fraunces @fontsource/figtree` e importarlas en `main.jsx` (Google Fonts no sirve offline sin el SW, y Tauri corre sin SW).
+2. **Shell admin** — AVANCE: fuentes @fontsource importadas en main.jsx (Chris debe `npm install` antes del próximo dev); StatusBar.jsx nueva (online real + turno + sesión + cola/dead-letter, tokens adm-*, oculta en POS/KDS) montada bajo el Outlet; sidebar RE-VESTIDO editorial (fondo adm-sidebar siempre oscuro, Fraunces en logo/avatar, nav con border-left accent, botón Cerrar Turno en adm-cobro, footer y panel de alertas en tokens). Lógica intacta. FALTA: colapsable 208↔56, topbar con búsqueda, re-skin del interior de pantallas. Original: SidebarLayout v2 editorial — sidebar marino colapsable (208px ↔ 56px, grupos con microtítulos tracking ancho), topbar con búsqueda global, **status bar inferior** (online/offline real del sync store, turno activo, ventas del turno, badge de cola/dead-letter — diagnóstico siempre visible). La superficie se decide por ruta: rutas de operación mantienen su shell.
 3. **Atajos de teclado** (Tauri es desktop: teclado es primera clase):
    - `Ctrl+K` command palette global (navegar a módulo, buscar cliente/receta/mesa, acciones rápidas) — filtrada por capacidades del rol (usePermisos).
    - Globales: `Ctrl+1..9` módulos del sidebar en orden, `F1` ayuda de atajos del módulo, `Ctrl+B` colapsar sidebar, `Ctrl+Shift+L` tema.
@@ -20,6 +24,11 @@ Referencia visual: zip de Figma Make (App.tsx con los 22 módulos mockeados + `d
 4. **Módulos piloto**: Dashboard (admin editorial, con el rediseño de métricas por periodo/P&L/alertas de AUDITORIA_SISTEMA) + Mesas (operación industrial con inspector del mock). Validar el híbrido en caliente antes de escalar.
 5. **Resto de módulos** por grupos: catálogos/tablas (patrón DataTable densa del mock con zebra + selección) → compras/almacén → RH/CRM → config.
 6. **Pulido**: contraste AA del texto muted sobre crema (#7a746a está al límite en letra chica — subir a ~#6a645a donde sea <14px), estados vacíos, transiciones 250ms, title bar nativa de Tauri (decidir si custom con controles overlay o estándar).
+
+## Encargos añadidos (Chris, 19-jul)
+
+- **Reparar la pantalla de login**: hay algo roto en LoginScreen (pedir a Chris el síntoma exacto al arrancar la tarea). Aprovechar para rediseñarla con los temas `adm-*` — es la primera cara del producto.
+- **Diseñar los planes de suscripción**: tiers y precios (~399–699 MXN/mes según traspaso), límites por plan (dispositivos, empleados, módulos premium: CFDI, CRM/lealtad, reportes avanzados), modelo de datos + enforcement, y rediseño de BillingScreen/PaywallScreen (hoy paywall estático).
 
 ## Notas del análisis del mock
 

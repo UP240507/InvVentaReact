@@ -16,6 +16,28 @@ import {
   Clock,
 } from 'lucide-react';
 
+// (Proyecto D) Temas de color por tenant — swatches para el selector.
+const TEMAS_COLOR = [
+  {
+    id: 'terracota',
+    nombre: 'Terracota',
+    desc: 'Editorial cálido (de fábrica)',
+    colores: ['#F5F1EA', '#0D1B35', '#C8442A', '#1A5C38'],
+  },
+  {
+    id: 'vino-cesped',
+    nombre: 'Vino × Cesped',
+    desc: 'Vino profundo con el verde de la marca',
+    colores: ['#F7F3EE', '#2A1218', '#0E8A63', '#8C2F39'],
+  },
+  {
+    id: 'fenix',
+    nombre: 'Fénix',
+    desc: 'La paleta del pajarito',
+    colores: ['#F9F3EC', '#171A15', '#D55A2B', '#A82877', '#178A5E'],
+  },
+];
+
 const TABS = [
   { id: 'restaurante', label: 'Restaurante', icon: Building2 },
   { id: 'fiscal', label: 'Fiscal / IVA', icon: Percent },
@@ -82,7 +104,13 @@ const Toggle = ({ label, field, description, form, setForm }) => (
 );
 
 export default function ConfiguracionScreen() {
-  const { configuracion, updateConfiguracion, showToast } = useAppStore();
+  const {
+    configuracion,
+    updateConfiguracion,
+    showToast,
+    temaColor,
+    aplicarTemaColor,
+  } = useAppStore();
   const { user } = useAuthStore();
 
   const conf = configuracion || {};
@@ -360,6 +388,72 @@ export default function ConfiguracionScreen() {
               {/* ── RESTAURANTE ── */}
               {tab === 'restaurante' && (
                 <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                  {/* ── APARIENCIA (Proyecto D): tema de color del tenant ── */}
+                  <div className="p-5 rounded-2xl border-2 border-slate-100 dark:border-ui-border bg-slate-50/50 dark:bg-ui-obsidiana/40">
+                    <h4 className="font-black text-slate-900 dark:text-brand-nacar text-sm">
+                      Tema de color
+                    </h4>
+                    <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-4">
+                      Aplica a todos los dispositivos del restaurante. El modo
+                      claro/oscuro se elige en cada equipo.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {TEMAS_COLOR.map((t) => {
+                        const activo = (temaColor || 'terracota') === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={!esAdminSesion}
+                            onClick={() => {
+                              if (!esAdminSesion) return;
+                              aplicarTemaColor(t.id);
+                              updateConfiguracion({
+                                ...conf,
+                                tema_color: t.id,
+                              });
+                              showToast(
+                                `Tema "${t.nombre}" aplicado al restaurante.`,
+                                'success',
+                              );
+                            }}
+                            className={`p-4 rounded-2xl border-2 text-left transition-all ${
+                              activo
+                                ? 'border-indigo-500 dark:border-brand-cesped bg-white dark:bg-ui-obsidiana shadow-md'
+                                : 'border-slate-100 dark:border-ui-border bg-white dark:bg-ui-obsidiana hover:border-slate-300'
+                            } ${!esAdminSesion ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            <div className="flex gap-1.5 mb-3">
+                              {t.colores.map((c) => (
+                                <span
+                                  key={c}
+                                  className="w-6 h-6 rounded-full border border-black/10"
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </div>
+                            <div className="font-black text-sm text-slate-900 dark:text-brand-nacar flex items-center gap-2">
+                              {t.nombre}
+                              {activo && (
+                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 dark:text-brand-cesped">
+                                  Activo
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-400 dark:text-ui-muted">
+                              {t.desc}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {!esAdminSesion && (
+                      <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted mt-3">
+                        Solo el Admin puede cambiar el tema del restaurante.
+                      </p>
+                    )}
+                  </div>
+
                   <Field
                     label="Nombre del restaurante *"
                     field="nombre_empresa"

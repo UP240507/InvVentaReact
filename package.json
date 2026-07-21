@@ -17,6 +17,8 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/figtree": "^5.1.0",
+    "@fontsource/fraunces": "^5.1.0",
     "@supabase/supabase-js": "^2.104.1",
     "dexie": "^4.4.2",
     "framer-motion": "^12.40.0",

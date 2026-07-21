@@ -45,6 +45,7 @@ import {
 
 // 🌟 FIX: Importamos el Modal directamente en lugar del Widget
 import CierreTurnoModal from '../features/dashboard/CierreTurnoModal';
+import StatusBar from './StatusBar';
 
 const menuGroups = [
   {
@@ -333,15 +334,15 @@ export default function SidebarLayout() {
 
       {/* SIDEBAR */}
       {!isFullScreenRoute && (
-        <aside className="w-64 bg-white dark:bg-ui-humo border-r border-slate-200 dark:border-ui-border flex flex-col h-full shadow-2xl z-20 flex-shrink-0 relative transition-colors duration-500">
+        <aside className="w-60 bg-adm-sidebar border-r border-adm-border flex flex-col h-full z-20 flex-shrink-0 relative transition-colors duration-500 font-figtree">
           {/* Logo + Subtítulo de Empresa Dinámico */}
-          <div className="px-5 py-6 border-b border-slate-200 dark:border-ui-border flex items-center justify-between">
+          <div className="px-5 py-6 border-b border-adm-sidebar-2 flex items-center justify-between">
             <div className="min-w-0 pr-2">
-              <h1 className="text-2xl font-black font-syne text-slate-800 dark:text-brand-nacar tracking-tight">
-                <span className="text-brand-amatista">Inv</span>Venta
+              <h1 className="text-2xl font-bold font-fraunces text-adm-sidebar-fg tracking-tight">
+                <span className="text-adm-accent">Inv</span>Venta
               </h1>
               <p
-                className="text-[10px] uppercase tracking-widest font-black text-slate-500 dark:text-ui-muted mt-0.5 truncate"
+                className="text-[10px] uppercase tracking-[0.18em] font-bold text-adm-sidebar-muted mt-0.5 truncate"
                 title={configuracion?.nombre_empresa || 'Mi Restaurante'}
               >
                 {configuracion?.nombre_empresa || 'Mi Restaurante'}
@@ -349,13 +350,13 @@ export default function SidebarLayout() {
             </div>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-1.5 rounded-lg text-slate-400 dark:text-ui-muted hover:bg-slate-100 dark:hover:bg-ui-obsidiana transition-colors"
+              className="relative p-1.5 rounded-lg text-adm-sidebar-muted hover:bg-adm-sidebar-2 transition-colors"
             >
               <Bell
-                className={`w-5 h-5 ${totalNotificaciones > 0 ? 'animate-pulse text-brand-ambar' : ''}`}
+                className={`w-5 h-5 ${totalNotificaciones > 0 ? 'animate-pulse text-adm-accent' : ''}`}
               />
               {totalNotificaciones > 0 && (
-                <span className="absolute -top-1 -right-1 bg-brand-arrecife text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-lg">
+                <span className="absolute -top-1 -right-1 bg-adm-danger text-adm-accent-fg text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                   {totalNotificaciones}
                 </span>
               )}
@@ -364,10 +365,10 @@ export default function SidebarLayout() {
 
           {/* 🌟 BOTÓN LIMPIO DE CIERRE DE TURNO (solo con caja abierta Y rol que la gestiona) */}
           {turnoActivo && puedeCerrarCaja && (
-            <div className="px-4 py-4 border-b border-slate-200 dark:border-ui-border bg-slate-50/50 dark:bg-ui-obsidiana/30">
+            <div className="px-4 py-4 border-b border-adm-sidebar-2">
               <button
                 onClick={() => setShowCierreModal(true)}
-                className="w-full py-2.5 px-4 bg-white dark:bg-ui-humo hover:bg-rose-50 dark:hover:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife border border-rose-200 dark:border-brand-arrecife/30 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
+                className="w-full py-2.5 px-4 bg-adm-cobro hover:opacity-90 text-adm-cobro-fg rounded-adm font-bold text-sm transition-opacity flex items-center justify-center gap-2"
               >
                 <X className="w-4 h-4 shrink-0" />
                 <span className="truncate">Cerrar Turno</span>
@@ -377,9 +378,9 @@ export default function SidebarLayout() {
 
           {/* Panel de notificaciones */}
           {showNotifications && (
-            <div className="absolute top-20 left-[260px] w-80 bg-white dark:bg-ui-humo rounded-3xl shadow-2xl border border-slate-200 dark:border-ui-border z-50 overflow-hidden animate-in slide-in-from-left-2 fade-in">
-              <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 flex justify-between items-center border-b border-slate-200 dark:border-ui-border">
-                <h3 className="text-slate-800 dark:text-brand-nacar font-black">
+            <div className="absolute top-20 left-[244px] w-80 bg-adm-panel rounded-adm shadow-2xl border border-adm-border z-50 overflow-hidden animate-in slide-in-from-left-2 fade-in font-figtree">
+              <div className="bg-adm-bg p-4 flex justify-between items-center border-b border-adm-border">
+                <h3 className="text-adm-ink font-bold font-fraunces">
                   Centro de Alertas
                 </h3>
                 <button
@@ -502,20 +503,20 @@ export default function SidebarLayout() {
           <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar">
             {gruposVisibles.map((group, gi) => (
               <div key={gi}>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted mb-2 px-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-adm-sidebar-muted/70 mb-2 px-2">
                   {group.title}
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-0.5">
                   {group.items.map((item, ii) => (
                     <li key={ii}>
                       <NavLink
                         to={item.path}
                         onClick={() => setShowNotifications(false)}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                          `flex items-center gap-3 px-3 py-2.5 font-medium text-sm transition-all border-l-2 ${
                             isActive
-                              ? 'bg-brand-arrecife text-white shadow-lg shadow-brand-arrecife/20'
-                              : 'text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border hover:text-slate-800 dark:hover:text-brand-nacar'
+                              ? 'bg-adm-sidebar-2 text-adm-sidebar-fg border-adm-accent'
+                              : 'text-adm-sidebar-muted border-transparent hover:bg-adm-sidebar-2 hover:text-adm-sidebar-fg'
                           }`
                         }
                       >
@@ -530,10 +531,10 @@ export default function SidebarLayout() {
           </nav>
 
           {/* Footer: theme + perfil + logout */}
-          <div className="px-3 py-4 border-t border-slate-200 dark:border-ui-border flex items-center gap-2 bg-slate-50/50 dark:bg-ui-obsidiana/30">
+          <div className="px-3 py-4 border-t border-adm-sidebar-2 flex items-center gap-2">
             <button
               onClick={toggleTheme}
-              className="p-2.5 text-slate-400 dark:text-ui-muted hover:text-brand-ambar hover:bg-slate-100 dark:hover:bg-ui-border rounded-xl transition-all active:scale-95"
+              className="p-2.5 text-adm-sidebar-muted hover:text-adm-accent hover:bg-adm-sidebar-2 rounded-adm transition-all active:scale-95"
               title="Cambiar Ambiente"
             >
               {isDark ? (
@@ -546,17 +547,17 @@ export default function SidebarLayout() {
             <NavLink
               to="/perfil"
               className={({ isActive }) =>
-                `flex-1 flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${isActive ? 'bg-slate-100 dark:bg-ui-border' : 'hover:bg-slate-100 dark:hover:bg-ui-border'}`
+                `flex-1 flex items-center gap-3 px-3 py-2 rounded-adm transition-all ${isActive ? 'bg-adm-sidebar-2' : 'hover:bg-adm-sidebar-2'}`
               }
             >
-              <div className="w-9 h-9 bg-brand-amatista rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm">
+              <div className="w-9 h-9 bg-adm-accent rounded-adm flex items-center justify-center text-adm-accent-fg font-bold font-fraunces text-sm shrink-0">
                 {user?.nombre?.charAt(0).toUpperCase() ?? 'U'}
               </div>
               <div className="flex-1 min-w-0 hidden lg:block">
-                <p className="text-sm font-bold text-slate-800 dark:text-brand-nacar leading-none truncate">
+                <p className="text-sm font-bold text-adm-sidebar-fg leading-none truncate">
                   {user?.nombre ?? 'Usuario'}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-ui-muted font-black uppercase tracking-widest mt-1 truncate">
+                <p className="text-[10px] text-adm-sidebar-muted font-bold uppercase tracking-[0.18em] mt-1 truncate">
                   @{user?.username ?? user?.rol ?? 'sin sesión'}
                 </p>
               </div>
@@ -589,7 +590,7 @@ export default function SidebarLayout() {
                 }
                 setConfirmLogout(true);
               }}
-              className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife hover:bg-rose-50 dark:hover:bg-brand-arrecife/10 rounded-xl transition-colors"
+              className="p-2 text-adm-sidebar-muted hover:text-adm-danger hover:bg-adm-sidebar-2 rounded-adm transition-colors"
               title="Cerrar Sesión"
             >
               <LogOut className="w-5 h-5" />
@@ -598,13 +599,18 @@ export default function SidebarLayout() {
         </aside>
       )}
 
-      {/* CONTENIDO PRINCIPAL */}
-      <main
-        className={`flex-1 h-full overflow-y-auto bg-transparent relative ${isFullScreenRoute ? 'w-full' : ''}`}
-        onClick={() => setShowNotifications(false)}
+      {/* CONTENIDO PRINCIPAL + STATUS BAR (Proyecto D) */}
+      <div
+        className={`flex-1 h-full flex flex-col min-h-0 ${isFullScreenRoute ? 'w-full' : ''}`}
       >
-        <Outlet />
-      </main>
+        <main
+          className="flex-1 overflow-y-auto bg-transparent relative"
+          onClick={() => setShowNotifications(false)}
+        >
+          <Outlet />
+        </main>
+        {!isFullScreenRoute && <StatusBar />}
+      </div>
 
       {/* 🌟 MODAL GLOBAL DE CIERRE DE TURNO */}
       {showCierreModal && (

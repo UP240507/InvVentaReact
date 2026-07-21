@@ -26,21 +26,158 @@
   --font-sans: 'DM Sans', sans-serif;
 
   /* ── PROYECTO D: superficie ADMIN (lenguaje editorial del mock) ──────────
-     Convive con la industrial (ui-*/brand-*) que conserva OPERACIÓN.
-     Claro: crema/tinta/terracota/marino. Dark admin: noche (navy). */
-  --color-adm-crema: #f5f1ea; /* fondo claro */
-  --color-adm-panel: #ffffff; /* tarjetas/paneles */
-  --color-adm-arena: #eae5dc; /* fondos muted */
-  --color-adm-tinta: #110f0a; /* texto principal */
-  --color-adm-topo: #7a746a; /* texto secundario */
-  --color-adm-terracota: #c8442a; /* acento primario */
-  --color-adm-marino: #0d1b35; /* sidebar / sólidos */
-  --color-adm-marino-2: #162345; /* sidebar hover/activo */
-  --color-adm-bosque: #1a5c38; /* éxito/positivo */
-  --color-adm-ocre: #c8880a; /* advertencia */
-  --color-adm-noche: #0a1120; /* fondo dark admin */
-  --color-adm-noche-2: #111e34; /* paneles dark admin */
+     Los COLORES viven abajo como variables semánticas --adm-* por tema
+     ([data-tema] × .dark) y se registran como utilidades en @theme inline. */
   --radius-adm: 0.125rem; /* esquinas casi rectas del editorial */
   --font-fraunces: 'Fraunces', serif; /* display: números grandes, títulos */
   --font-figtree: 'Figtree', sans-serif; /* UI admin */
+}
+
+/* ─── PROYECTO D: TEMAS DE COLOR (aprobados 19-jul) ──────────────────────────
+   Tema por TENANT (configuracion.tema_color, aplicado como data-tema en <html>)
+   × modo claro/oscuro por DISPOSITIVO (clase .dark de siempre).
+   Roles fijos: accent = acción primaria · ok = éxito/online · danger = alerta ·
+   cobro = CTA de dinero · chip = badge secundario. Los componentes consumen
+   SOLO estos roles — agregar un tema nuevo es agregar un bloque, cero JSX. */
+
+/* Terracota (default) — editorial del mock: crema, marino, terracota */
+:root {
+  --adm-bg: #f5f1ea;
+  --adm-panel: #ffffff;
+  --adm-ink: #110f0a;
+  --adm-muted: #7a746a;
+  --adm-border: rgba(17, 15, 10, 0.12);
+  --adm-sidebar: #0d1b35;
+  --adm-sidebar-2: #162345;
+  --adm-sidebar-fg: #e8e0d0;
+  --adm-sidebar-muted: #5b7ba8;
+  --adm-accent: #c8442a;
+  --adm-accent-fg: #ffffff;
+  --adm-ok: #1a5c38;
+  --adm-danger: #993c1d;
+  --adm-cobro: #0d1b35;
+  --adm-cobro-fg: #e8e0d0;
+  --adm-chip: #eae5dc;
+  --adm-chip-fg: #5f5e5a;
+}
+:root.dark {
+  --adm-bg: #0a1120;
+  --adm-panel: #111e34;
+  --adm-ink: #e8e0d0;
+  --adm-muted: #6080a8;
+  --adm-border: rgba(232, 224, 208, 0.1);
+  --adm-sidebar: #060d1c;
+  --adm-sidebar-2: #0d1b35;
+  --adm-sidebar-fg: #e8e0d0;
+  --adm-sidebar-muted: #4a6a90;
+  --adm-accent: #c8442a;
+  --adm-accent-fg: #ffffff;
+  --adm-ok: #2a8c58;
+  --adm-danger: #e06a4a;
+  --adm-cobro: #162345;
+  --adm-cobro-fg: #e8e0d0;
+  --adm-chip: #162345;
+  --adm-chip-fg: #8fa8c8;
+}
+
+/* Vino × Cesped — identidad vino, acción en el verde de marca */
+:root[data-tema='vino-cesped'] {
+  --adm-bg: #f7f3ee;
+  --adm-panel: #ffffff;
+  --adm-ink: #171114;
+  --adm-muted: #7c7370;
+  --adm-border: rgba(23, 17, 20, 0.12);
+  --adm-sidebar: #2a1218;
+  --adm-sidebar-2: #3b1e26;
+  --adm-sidebar-fg: #f2e6e2;
+  --adm-sidebar-muted: #9a7a80;
+  --adm-accent: #0e8a63;
+  --adm-accent-fg: #ffffff;
+  --adm-ok: #0e8a63;
+  --adm-danger: #8c2f39;
+  --adm-cobro: #8c2f39;
+  --adm-cobro-fg: #f2e6e2;
+  --adm-chip: #efe4de;
+  --adm-chip-fg: #7c6368;
+}
+:root[data-tema='vino-cesped'].dark {
+  --adm-bg: #160d10;
+  --adm-panel: #221419;
+  --adm-ink: #fdf2e9;
+  --adm-muted: #8e6e75;
+  --adm-border: rgba(253, 242, 233, 0.1);
+  --adm-sidebar: #0f080a;
+  --adm-sidebar-2: #2a1218;
+  --adm-sidebar-fg: #fdf2e9;
+  --adm-sidebar-muted: #7a5a62;
+  --adm-accent: #00e5a0;
+  --adm-accent-fg: #0f080a;
+  --adm-ok: #00e5a0;
+  --adm-danger: #ff5f40;
+  --adm-cobro: #8c2f39;
+  --adm-cobro-fg: #fdf2e9;
+  --adm-chip: #2a1218;
+  --adm-chip-fg: #b08a92;
+}
+
+/* Fénix — la paleta del pajarito: coral, esmeralda, vino y magenta */
+:root[data-tema='fenix'] {
+  --adm-bg: #f9f3ec;
+  --adm-panel: #ffffff;
+  --adm-ink: #181510;
+  --adm-muted: #7e756b;
+  --adm-border: rgba(24, 21, 16, 0.12);
+  --adm-sidebar: #171a15;
+  --adm-sidebar-2: #242820;
+  --adm-sidebar-fg: #f8e8da;
+  --adm-sidebar-muted: #8a8578;
+  --adm-accent: #d55a2b;
+  --adm-accent-fg: #ffffff;
+  --adm-ok: #178a5e;
+  --adm-danger: #8e1e3c;
+  --adm-cobro: #8e1e3c;
+  --adm-cobro-fg: #f8e8da;
+  --adm-chip: #f3e2f0;
+  --adm-chip-fg: #a82877;
+}
+:root[data-tema='fenix'].dark {
+  --adm-bg: #12140f;
+  --adm-panel: #1c1f19;
+  --adm-ink: #f8e8da;
+  --adm-muted: #8a8578;
+  --adm-border: rgba(248, 232, 218, 0.1);
+  --adm-sidebar: #0b0d09;
+  --adm-sidebar-2: #1c1f19;
+  --adm-sidebar-fg: #f8e8da;
+  --adm-sidebar-muted: #6e6a5e;
+  --adm-accent: #f0824f;
+  --adm-accent-fg: #12140f;
+  --adm-ok: #3ecf8e;
+  --adm-danger: #e8506b;
+  --adm-cobro: #8e1e3c;
+  --adm-cobro-fg: #f8e8da;
+  --adm-chip: #2a1c28;
+  --adm-chip-fg: #d14fa6;
+}
+
+/* Utilidades Tailwind vivas: bg-adm-panel, text-adm-ink, border-adm-border...
+   'inline' = resuelven la variable al usarse → reaccionan a data-tema/.dark. */
+@theme inline {
+  --color-adm-bg: var(--adm-bg);
+  --color-adm-panel: var(--adm-panel);
+  --color-adm-ink: var(--adm-ink);
+  --color-adm-muted: var(--adm-muted);
+  --color-adm-border: var(--adm-border);
+  --color-adm-sidebar: var(--adm-sidebar);
+  --color-adm-sidebar-2: var(--adm-sidebar-2);
+  --color-adm-sidebar-fg: var(--adm-sidebar-fg);
+  --color-adm-sidebar-muted: var(--adm-sidebar-muted);
+  --color-adm-accent: var(--adm-accent);
+  --color-adm-accent-fg: var(--adm-accent-fg);
+  --color-adm-ok: var(--adm-ok);
+  --color-adm-danger: var(--adm-danger);
+  --color-adm-cobro: var(--adm-cobro);
+  --color-adm-cobro-fg: var(--adm-cobro-fg);
+  --color-adm-chip: var(--adm-chip);
+  --color-adm-chip-fg: var(--adm-chip-fg);
 }

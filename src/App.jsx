@@ -139,6 +139,11 @@ export default function App() {
       (!('theme' in localStorage) &&
         window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', isDark);
+    // (Proyecto D) adelantar el tema de color del tenant sin esperar el fetch
+    const temaC = localStorage.getItem('tema_color');
+    if (temaC && temaC !== 'terracota') {
+      document.documentElement.dataset.tema = temaC;
+    }
   }, []);
 
   useEffect(() => {
