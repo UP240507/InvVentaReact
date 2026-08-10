@@ -30,46 +30,44 @@ export default function AbrirTurnoModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-ui-humo rounded-[2rem] border border-slate-200 dark:border-ui-border shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
-        <div className="px-8 py-6 border-b border-slate-200 dark:border-ui-border flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana/50">
+    <div className="fixed inset-0 z-[200] bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
+        <div className="px-8 py-6 border-b border-adm-border flex justify-between items-center bg-adm-bg">
           <div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar">
+            <h2 className="text-2xl font-black font-syne text-adm-ink">
               Abrir Turno
             </h2>
-            <p className="text-sm font-bold text-slate-500 dark:text-ui-muted uppercase tracking-widest mt-1">
+            <p className="text-sm font-bold text-adm-muted uppercase tracking-widest mt-1">
               Apertura de Caja
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-ui-border rounded-xl transition-colors"
+            className="p-2 text-adm-muted hover:bg-adm-chip dark:hover:bg-adm-border rounded-ui transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="p-8 bg-white dark:bg-ui-humo space-y-6">
-          <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-brand-cesped/10 rounded-2xl border border-emerald-200 dark:border-brand-cesped/30">
-            <div className="w-12 h-12 bg-emerald-100 dark:bg-brand-cesped/20 rounded-full flex items-center justify-center shrink-0">
-              <Wallet className="w-6 h-6 text-emerald-600 dark:text-brand-cesped" />
+        <div className="p-8 bg-white dark:bg-adm-panel space-y-6">
+          <div className="flex items-center gap-4 p-4 bg-adm-ok/10 rounded-ui border border-adm-ok/30">
+            <div className="w-12 h-12 bg-adm-ok/15 rounded-full flex items-center justify-center shrink-0">
+              <Wallet className="w-6 h-6 text-adm-ok" />
             </div>
             <div>
-              <p className="text-sm font-black text-emerald-800 dark:text-brand-cesped uppercase tracking-widest">
+              <p className="text-sm font-black text-adm-ok uppercase tracking-widest">
                 Responsable
               </p>
-              <p className="font-bold text-slate-700 dark:text-brand-nacar">
-                {responsable}
-              </p>
+              <p className="font-bold text-adm-ink">{responsable}</p>
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-brand-amatista uppercase tracking-widest mb-2 block">
+            <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
               Fondo inicial de caja (Efectivo para cambios)
             </label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-adm-muted" />
               <input
                 type="number"
                 step="0.01"
@@ -78,23 +76,23 @@ export default function AbrirTurnoModal({ onClose }) {
                 onChange={(e) => setFondo(e.target.value)}
                 placeholder="0.00"
                 autoFocus
-                className="w-full pl-10 pr-4 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border focus:border-brand-cesped rounded-xl text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar outline-none transition-colors"
+                className="w-full pl-10 pr-4 py-4 bg-adm-bg border-2 border-adm-field focus:border-adm-ok rounded-ui text-2xl font-black font-syne text-adm-ink outline-none transition-colors"
               />
             </div>
           </div>
         </div>
 
-        <div className="px-8 py-6 border-t border-slate-200 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana/50 flex gap-4">
+        <div className="px-8 py-6 border-t border-adm-border bg-adm-bg flex gap-4">
           <button
             onClick={onClose}
-            className="flex-1 py-4 rounded-2xl font-bold text-slate-600 dark:text-brand-nacar hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
+            className="flex-1 py-4 rounded-ui font-bold text-adm-muted dark:text-adm-ink hover:bg-adm-chip dark:hover:bg-adm-border transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirmarApertura}
             disabled={fondo === ''}
-            className="flex-1 py-4 rounded-2xl font-black text-white bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:text-ui-obsidiana shadow-lg shadow-emerald-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex-1 py-4 rounded-ui font-black text-adm-ok-fg bg-adm-ok dark:text-adm-bg shadow-lg shadow-adm-ok/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Play className="w-5 h-5 fill-current" /> Iniciar Turno
           </button>

@@ -115,6 +115,36 @@ Deno.serve(async (req) => {
         403,
       );
 
+    // 4.5 Fase 1 (enforcement): límite de EMPLEADOS ACTIVOS del plan. El
+    //     cliente ya avisa en UX; ESTA es la barrera real (service role).
+    //     Se excluye el propio staffId (re-alta del mismo empleado no debe
+    //     contar doble) y solo cuenta activos (desactivar libera cupo).
+    const { data: sus } = await admin
+      .from('suscripciones')
+      .select('plan, estado, planes(limites)')
+      .eq('restaurante_id', tenantCaller)
+      .maybeSingle();
+    // Espejo del seed 20260725170733 por si la suscripción no embebe el plan.
+    const LIMITE_FALLBACK: Record<string, number> = {
+      fundador: 10, basico: 10, pro: 25, empresarial: 60,
+    };
+    const limiteEmpleados =
+      (sus?.planes as { limites?: { empleados?: number } } | null)?.limites
+        ?.empleados ?? LIMITE_FALLBACK[sus?.plan ?? ''] ?? 10;
+    const { count: activos } = await admin
+      .from('staff')
+      .select('id', { count: 'exact', head: true })
+      .eq('restaurante_id', tenantCaller)
+      .neq('id', staffId)
+      .not('activo', 'is', false);
+    if ((activos ?? 0) >= limiteEmpleados)
+      return json(
+        {
+          error: `Tu plan permite hasta ${limiteEmpleados} empleados activos. Desactiva uno o mejora tu plan.`,
+        },
+        403,
+      );
+
     // 5. Credencial de la cuenta según el FLAG 'elevado' del rol.
     //    ELEVADOS: entran por CORREO REAL + contraseña en /login.
     //    v3: su cuenta de Auth se crea con staff.email (obligatorio y válido);

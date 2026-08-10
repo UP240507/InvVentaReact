@@ -5,16 +5,11 @@ import { supabase } from '../../api/supabase';
 import { parseUTC } from '../../utils/parseUTC';
 import { unidadesDeSueldo, propinasPorEmpleado } from '../../lib/Nominas';
 import { useAppStore } from '../../store/useAppStore';
+import { PageShell, PageHeader, SegmentedControl } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import {
-  Banknote,
-  FileText,
-  History,
-  CheckCircle2,
-  Calculator,
-  Coins,
-} from 'lucide-react';
+import { Banknote, FileText, History, CheckCircle2, Coins } from 'lucide-react';
+import { aISOLocal } from '../../lib/Fechas';
 
 export default function NominaScreen() {
   const { staff, nominas, asistencias, turnos, showToast } = useAppStore();
@@ -26,10 +21,10 @@ export default function NominaScreen() {
   const hace7Dias = new Date(hoy);
   hace7Dias.setDate(hoy.getDate() - 6);
 
-  const [fechaInicio, setFechaInicio] = useState(
-    hace7Dias.toISOString().split('T')[0],
-  );
-  const [fechaFin, setFechaFin] = useState(hoy.toISOString().split('T')[0]);
+  // Fechas LOCALES: con UTC el periodo por defecto se corría un día entero
+  // desde las 18:00, y una nómina se calcula sobre días de calendario.
+  const [fechaInicio, setFechaInicio] = useState(aISOLocal(hace7Dias));
+  const [fechaFin, setFechaFin] = useState(aISOLocal(hoy));
 
   const [draft, setDraft] = useState({});
   // Repartos del Propinero que caen en el periodo (fuente de verdad de propinas).
@@ -213,71 +208,54 @@ export default function NominaScreen() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col h-full animate-in fade-in duration-500 transition-colors">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-ui-humo p-8 rounded-[2.5rem] border border-slate-200 dark:border-ui-border shadow-xl shadow-slate-200/50 dark:shadow-none mb-8 relative overflow-hidden transition-colors">
-        <div className="absolute top-0 right-0 p-12 bg-emerald-50 dark:bg-brand-cesped/5 rounded-full -mr-12 -mt-12 opacity-50" />
-        <div className="flex items-center gap-6 relative z-10">
-          <div className="bg-brand-cesped p-4 rounded-3xl shadow-lg shadow-emerald-500/40 dark:shadow-brand-cesped/20 text-ui-obsidiana">
-            <Banknote className="w-8 h-8" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 dark:text-brand-nacar tracking-tight">
-              Cálculo de Nómina
-            </h1>
-            <p className="text-slate-500 dark:text-ui-muted font-bold mt-1 flex items-center gap-2">
-              <Calculator className="w-4 h-4" /> Sueldos y dispersión de
-              propinas
-            </p>
-          </div>
-        </div>
-        <div className="flex bg-slate-100 dark:bg-ui-obsidiana p-1.5 rounded-2xl relative z-10 shadow-inner transition-colors">
-          <button
-            onClick={() => setTab('generar')}
-            className={`px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${tab === 'generar' ? 'bg-white dark:bg-ui-humo text-emerald-600 dark:text-brand-cesped shadow-md scale-100' : 'text-slate-500 dark:text-ui-muted hover:text-slate-900 dark:hover:text-brand-nacar'}`}
-          >
-            <Calculator className="w-4 h-4" /> Generar Periodo
-          </button>
-          <button
-            onClick={() => setTab('historial')}
-            className={`px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${tab === 'historial' ? 'bg-white dark:bg-ui-humo text-emerald-600 dark:text-brand-cesped shadow-md scale-100' : 'text-slate-500 dark:text-ui-muted hover:text-slate-900 dark:hover:text-brand-nacar'}`}
-          >
-            <History className="w-4 h-4" /> Historial
-          </button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        icono={Banknote}
+        titulo="Cálculo de Nómina"
+        descripcion="Sueldos y dispersión de propinas"
+        acciones={
+          <SegmentedControl
+            valor={tab}
+            onChange={setTab}
+            opciones={[
+              { id: 'generar', label: 'Generar periodo' },
+              { id: 'historial', label: 'Historial' },
+            ]}
+          />
+        }
+      />
 
       {tab === 'generar' && (
-        <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-right-4 duration-media">
           {/* BARRA DE FECHAS */}
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-[2rem] border-2 border-slate-50 dark:border-ui-border shadow-sm flex flex-wrap items-end gap-6 transition-colors">
+          <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm flex flex-wrap items-end gap-6 transition-colors">
             <div className="flex-1 min-w-[200px]">
-              <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-2 block">
+              <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-2 block">
                 Periodo Inicio
               </label>
               <input
                 type="date"
                 value={fechaInicio}
                 onChange={(e) => setFechaInicio(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border px-4 py-3 rounded-xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-emerald-500 dark:focus:border-brand-cesped transition-colors"
+                className="w-full bg-adm-bg border-2 border-adm-field px-4 py-3 rounded-ui font-bold text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok transition-colors"
               />
             </div>
             <div className="flex-1 min-w-[200px]">
-              <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-2 block">
+              <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-2 block">
                 Periodo Fin
               </label>
               <input
                 type="date"
                 value={fechaFin}
                 onChange={(e) => setFechaFin(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border px-4 py-3 rounded-xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-emerald-500 dark:focus:border-brand-cesped transition-colors"
+                className="w-full bg-adm-bg border-2 border-adm-field px-4 py-3 rounded-ui font-bold text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok transition-colors"
               />
             </div>
             <div className="w-full md:w-auto flex flex-col min-w-[150px]">
-              <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-2 block text-right">
+              <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-2 block text-right">
                 Empleados Activos
               </label>
-              <div className="bg-emerald-50 dark:bg-brand-cesped/10 text-emerald-600 dark:text-brand-cesped px-6 py-3 rounded-xl font-black text-center border border-emerald-100 dark:border-brand-cesped/30">
+              <div className="bg-adm-ok/10 text-adm-ok px-6 py-3 rounded-ui font-black text-center border border-adm-ok/30">
                 {empleadosActivos.length} Staff
               </div>
             </div>
@@ -285,10 +263,10 @@ export default function NominaScreen() {
 
           {/* ESTADO DE PROPINAS (fuente: Propinero) */}
           <div
-            className={`mb-4 px-5 py-3 rounded-2xl border-2 text-xs font-bold flex items-center gap-2 ${
+            className={`mb-4 px-5 py-3 rounded-ui border-2 text-xs font-bold flex items-center gap-2 ${
               propinasStatus === 'offline'
-                ? 'bg-amber-50 dark:bg-brand-ambar/10 border-amber-200 dark:border-brand-ambar/30 text-amber-700 dark:text-brand-ambar'
-                : 'bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-100 dark:border-brand-cesped/30 text-emerald-700 dark:text-brand-cesped'
+                ? 'bg-adm-warn/10 border-adm-warn/30 text-adm-warn'
+                : 'bg-adm-ok/10 border-adm-ok/30 text-adm-ok'
             }`}
           >
             {propinasStatus === 'offline'
@@ -299,34 +277,34 @@ export default function NominaScreen() {
           </div>
 
           {/* TABLA EDITABLE */}
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-50 dark:border-ui-border shadow-sm overflow-hidden flex-1 transition-colors">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-sm overflow-hidden flex-1 transition-colors">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 dark:bg-ui-obsidiana/50 border-b border-slate-100 dark:border-ui-border transition-colors">
+                <thead className="bg-adm-bg border-b border-adm-border transition-colors">
                   <tr>
-                    <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em]">
+                    <th className="p-5 text-[10px] font-black text-adm-muted uppercase tracking-[0.15em]">
                       Colaborador
                     </th>
-                    <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em] text-center w-32">
+                    <th className="p-5 text-[10px] font-black text-adm-muted uppercase tracking-[0.15em] text-center w-32">
                       Unidades
                     </th>
-                    <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em] text-right w-40">
+                    <th className="p-5 text-[10px] font-black text-adm-muted uppercase tracking-[0.15em] text-right w-40">
                       Tarifa
                     </th>
-                    <th className="p-5 text-[10px] font-black text-emerald-500 dark:text-brand-cesped uppercase tracking-[0.15em] text-center w-40">
+                    <th className="p-5 text-[10px] font-black text-adm-ok uppercase tracking-[0.15em] text-center w-40">
                       + Propinas
                     </th>
-                    <th className="p-5 text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.15em] text-right w-40">
+                    <th className="p-5 text-[10px] font-black text-adm-muted uppercase tracking-[0.15em] text-right w-40">
                       Total a Pagar
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 dark:divide-ui-border">
+                <tbody className="divide-y divide-adm-border">
                   {empleadosActivos.length === 0 ? (
                     <tr>
                       <td
                         colSpan="5"
-                        className="p-12 text-center text-slate-400 dark:text-ui-muted font-bold"
+                        className="p-12 text-center text-adm-muted font-bold"
                       >
                         No hay empleados activos registrados.
                       </td>
@@ -335,13 +313,13 @@ export default function NominaScreen() {
                     resumenNomina.detalles.map((linea) => (
                       <tr
                         key={linea.id_empleado}
-                        className="hover:bg-slate-50/50 dark:hover:bg-ui-obsidiana/30 transition-colors group"
+                        className="hover:bg-adm-bg/50 dark:hover:bg-adm-bg/30 transition-colors group"
                       >
                         <td className="p-5">
-                          <p className="font-black text-slate-900 dark:text-brand-nacar">
+                          <p className="font-black text-adm-ink">
                             {linea.nombre}
                           </p>
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase">
+                          <span className="text-[10px] font-bold text-adm-muted uppercase">
                             {linea.puesto}
                           </span>
                         </td>
@@ -359,15 +337,15 @@ export default function NominaScreen() {
                                   e.target.value,
                                 )
                               }
-                              className="w-16 bg-white dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border text-center font-black text-slate-900 dark:text-brand-nacar py-2 rounded-xl focus:border-indigo-500 outline-none transition-colors"
+                              className="w-16 bg-white dark:bg-adm-bg border-2 border-adm-field text-center font-black text-adm-ink py-2 rounded-ui focus:border-adm-info outline-none transition-colors"
                             />
                             <span
-                              className={`ml-2 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border ${
+                              className={`ml-2 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-ui border ${
                                 draft[linea.id_empleado]?.tipo === 'hora'
-                                  ? 'bg-sky-50 text-sky-600 border-sky-200 dark:bg-brand-amatista/10 dark:text-brand-amatista dark:border-brand-amatista/30'
+                                  ? 'bg-adm-info/10 text-adm-info border-adm-info/30'
                                   : draft[linea.id_empleado]?.tipo === 'turno'
-                                    ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-brand-ambar/10 dark:text-brand-ambar dark:border-brand-ambar/30'
-                                    : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-ui-obsidiana dark:text-ui-muted dark:border-ui-border'
+                                    ? 'bg-adm-warn/10 text-adm-warn border-adm-warn/30'
+                                    : 'bg-adm-bg text-adm-muted border-adm-border'
                               }`}
                               title="Definido en Staff (tipo de sueldo)"
                             >
@@ -380,14 +358,14 @@ export default function NominaScreen() {
                           </div>
                         </td>
                         <td className="p-5 text-right">
-                          <p className="font-bold text-slate-600 dark:text-brand-nacar">
+                          <p className="font-bold text-adm-muted dark:text-adm-ink">
                             $
                             {linea.sueldo_diario.toLocaleString('es-MX', {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
                           </p>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 dark:text-brand-amatista">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-adm-info">
                             por{' '}
                             {linea.tipo_sueldo === 'hora'
                               ? 'hora'
@@ -395,7 +373,7 @@ export default function NominaScreen() {
                                 ? 'turno'
                                 : 'día'}
                           </p>
-                          <p className="text-[9px] font-bold text-slate-400 dark:text-ui-muted">
+                          <p className="text-[9px] font-bold text-adm-muted">
                             Total: $
                             {linea.total_sueldo.toLocaleString('es-MX', {
                               minimumFractionDigits: 2,
@@ -407,7 +385,7 @@ export default function NominaScreen() {
                             className="text-right"
                             title="Suma de los repartos del Propinero en el periodo"
                           >
-                            <p className="font-black text-emerald-600 dark:text-brand-cesped text-lg leading-none">
+                            <p className="font-black text-adm-ok text-lg leading-none">
                               $
                               {Number(
                                 draft[linea.id_empleado]?.propinas || 0,
@@ -415,13 +393,13 @@ export default function NominaScreen() {
                                 minimumFractionDigits: 2,
                               })}
                             </p>
-                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 dark:text-brand-cesped/60">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-adm-ok">
                               Propinero
                             </span>
                           </div>
                         </td>
                         <td className="p-5 text-right">
-                          <p className="font-black text-slate-900 dark:text-brand-nacar text-lg">
+                          <p className="font-black text-adm-ink text-lg">
                             $
                             {linea.total_pagar.toLocaleString('es-MX', {
                               minimumFractionDigits: 2,
@@ -438,38 +416,37 @@ export default function NominaScreen() {
           </div>
 
           {/* FOOTER TOTALES Y GUARDAR */}
-          <div className="bg-slate-900 dark:bg-ui-obsidiana border dark:border-ui-border rounded-[2rem] p-6 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 mt-auto transition-colors">
+          <div className="bg-adm-ink dark:bg-adm-bg border dark:border-adm-border rounded-ui-lg p-6 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 mt-auto transition-colors">
             <div className="flex items-center gap-8 w-full md:w-auto overflow-x-auto custom-scrollbar pb-2 md:pb-0">
               <div>
-                <p className="text-[10px] text-slate-500 dark:text-ui-muted font-black uppercase tracking-[0.2em] mb-1">
+                <p className="text-[10px] text-adm-muted font-black uppercase tracking-[0.2em] mb-1">
                   Total Sueldos
                 </p>
-                <p className="text-xl font-black text-white dark:text-brand-nacar leading-none">
+                <p className="text-xl font-black text-adm-bg dark:text-adm-ink leading-none">
                   $
                   {resumenNomina.totalSueldos.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
                   })}
                 </p>
               </div>
-              <div className="h-10 w-px bg-slate-800 dark:bg-ui-border shrink-0" />
+              <div className="h-10 w-px bg-adm-ink dark:bg-adm-border shrink-0" />
               <div>
-                <p className="text-[10px] text-slate-500 dark:text-ui-muted font-black uppercase tracking-[0.2em] mb-1 flex items-center gap-1">
-                  <Coins className="w-3 h-3 text-emerald-500 dark:text-brand-cesped" />{' '}
-                  Total Propinas
+                <p className="text-[10px] text-adm-muted font-black uppercase tracking-[0.2em] mb-1 flex items-center gap-1">
+                  <Coins className="w-3 h-3 text-adm-ok" /> Total Propinas
                 </p>
-                <p className="text-xl font-black text-emerald-400 dark:text-brand-cesped leading-none">
+                <p className="text-xl font-black text-adm-ok leading-none">
                   $
                   {resumenNomina.totalPropinas.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
                   })}
                 </p>
               </div>
-              <div className="h-10 w-px bg-slate-800 dark:bg-ui-border shrink-0" />
+              <div className="h-10 w-px bg-adm-ink dark:bg-adm-border shrink-0" />
               <div>
-                <p className="text-[10px] text-indigo-400 dark:text-brand-amatista font-black uppercase tracking-[0.2em] mb-1">
+                <p className="text-[10px] text-adm-info font-black uppercase tracking-[0.2em] mb-1">
                   Gran Total Nómina
                 </p>
-                <p className="text-3xl font-black text-indigo-400 dark:text-brand-amatista leading-none">
+                <p className="text-3xl font-black text-adm-info leading-none">
                   $
                   {resumenNomina.granTotal.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
@@ -481,7 +458,7 @@ export default function NominaScreen() {
             <button
               onClick={guardarNomina}
               disabled={empleadosActivos.length === 0}
-              className="w-full md:w-auto bg-brand-cesped hover:bg-emerald-400 disabled:bg-slate-800 disabled:dark:bg-ui-border disabled:text-slate-600 disabled:dark:text-ui-muted disabled:cursor-not-allowed text-ui-obsidiana font-black px-10 py-5 rounded-2xl shadow-xl shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 whitespace-nowrap"
+              className="w-full md:w-auto bg-adm-ok disabled:bg-adm-ink disabled:dark:bg-adm-border disabled:text-adm-muted disabled:dark:text-adm-muted disabled:cursor-not-allowed text-adm-bg font-black px-10 py-5 rounded-ui shadow-xl shadow-adm-ok/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 whitespace-nowrap"
             >
               <CheckCircle2 className="w-5 h-5" /> Procesar y Guardar
             </button>
@@ -491,13 +468,13 @@ export default function NominaScreen() {
 
       {/* PESTAÑA HISTORIAL */}
       {tab === 'historial' && (
-        <div className="flex-1 overflow-y-auto custom-scrollbar animate-in slide-in-from-left-4 duration-300">
+        <div className="flex-1 overflow-y-auto custom-scrollbar animate-in slide-in-from-left-4 duration-media">
           {(nominas || []).length === 0 ? (
-            <div className="bg-white dark:bg-ui-humo rounded-[3rem] border-4 border-dashed border-slate-100 dark:border-ui-border py-32 text-center transition-colors">
-              <div className="bg-slate-50 dark:bg-ui-obsidiana w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                <History className="w-10 h-10 text-slate-300 dark:text-ui-muted" />
+            <div className="bg-white dark:bg-adm-panel rounded-ui-lg border-4 border-dashed border-adm-border py-32 text-center transition-colors">
+              <div className="bg-adm-bg w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <History className="w-10 h-10 text-adm-muted" />
               </div>
-              <h3 className="text-xl font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+              <h3 className="text-xl font-black text-adm-muted uppercase tracking-widest">
                 No hay historial de nóminas
               </h3>
             </div>
@@ -509,44 +486,44 @@ export default function NominaScreen() {
                 .map((nom) => (
                   <div
                     key={nom.id}
-                    className="bg-white dark:bg-ui-humo border-2 border-slate-100 dark:border-ui-border rounded-[2rem] p-6 shadow-sm hover:shadow-xl transition-all group transition-colors"
+                    className="bg-white dark:bg-adm-panel border-2 border-adm-border rounded-ui-lg p-6 shadow-sm hover:shadow-xl transition-all group transition-colors"
                   >
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center gap-3">
-                        <div className="bg-emerald-50 dark:bg-brand-cesped/10 p-3 rounded-2xl text-emerald-600 dark:text-brand-cesped">
+                        <div className="bg-adm-ok/10 p-3 rounded-ui text-adm-ok">
                           <FileText className="w-6 h-6" />
                         </div>
                         <div>
-                          <h4 className="font-black text-slate-900 dark:text-brand-nacar">
+                          <h4 className="font-black text-adm-ink">
                             Nómina Pagada
                           </h4>
-                          <p className="text-xs font-bold text-slate-500 dark:text-ui-muted">
+                          <p className="text-xs font-bold text-adm-muted">
                             {nom.fecha_inicio} al {nom.fecha_fin}
                           </p>
                         </div>
                       </div>
-                      <span className="bg-slate-100 dark:bg-ui-obsidiana text-slate-600 dark:text-ui-muted text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-slate-200 dark:border-ui-border">
+                      <span className="bg-adm-chip dark:bg-adm-bg text-adm-muted text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-adm-border">
                         {(nom.detalles || []).length} Staff
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="bg-slate-50 dark:bg-ui-obsidiana rounded-xl p-3 border border-slate-100 dark:border-ui-border">
-                        <p className="text-[9px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-wider mb-1">
+                      <div className="bg-adm-bg rounded-ui p-3 border border-adm-border">
+                        <p className="text-[9px] font-black text-adm-muted uppercase tracking-wider mb-1">
                           Sueldos Fijos
                         </p>
-                        <p className="font-bold text-slate-700 dark:text-brand-nacar">
+                        <p className="font-bold text-adm-ink">
                           $
                           {Number(nom.total_sueldos).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
                           })}
                         </p>
                       </div>
-                      <div className="bg-emerald-50 dark:bg-brand-cesped/10 rounded-xl p-3 border border-emerald-100 dark:border-brand-cesped/20">
-                        <p className="text-[9px] font-black text-emerald-600 dark:text-brand-cesped uppercase tracking-wider mb-1">
+                      <div className="bg-adm-ok/10 rounded-ui p-3 border border-adm-ok/30">
+                        <p className="text-[9px] font-black text-adm-ok uppercase tracking-wider mb-1">
                           Propinas Dispersadas
                         </p>
-                        <p className="font-bold text-emerald-700 dark:text-brand-cesped">
+                        <p className="font-bold text-adm-ok">
                           $
                           {Number(nom.total_propinas).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
@@ -555,11 +532,11 @@ export default function NominaScreen() {
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-100 dark:border-ui-border pt-4 flex justify-between items-center">
-                      <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                    <div className="border-t border-adm-border pt-4 flex justify-between items-center">
+                      <p className="text-[10px] font-black text-adm-muted uppercase tracking-widest">
                         Gran Total
                       </p>
-                      <p className="text-xl font-black text-slate-900 dark:text-brand-nacar">
+                      <p className="text-xl font-black text-adm-ink">
                         $
                         {Number(nom.gran_total).toLocaleString('es-MX', {
                           minimumFractionDigits: 2,
@@ -572,6 +549,6 @@ export default function NominaScreen() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

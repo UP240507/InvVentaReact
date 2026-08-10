@@ -1,115 +1,373 @@
-import { CreditCard, ShieldCheck, CheckCircle2, AlertTriangle, ExternalLink, Infinity } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  CreditCard,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowRight,
+  Users,
+  Sparkles,
+  ShieldCheck,
+} from 'lucide-react';
 import { useAuthStore } from '../auth/useAuthStore';
+import { useAppStore } from '../../store/useAppStore';
+import { usePlan } from '../../hooks/usePlan';
+import {
+  iniciarCheckout,
+  abrirPortal,
+  cargarCatalogo,
+  precioMXN,
+} from './checkout';
+
+// ─── Fase 1: BillingScreen real (editorial adm-*) ────────────────────────────
+// Muestra plan actual + uso vs límites, catálogo de upgrade y dispara el
+// Checkout de Stripe vía create-checkout. La BD la escribe SOLO el webhook.
+
+const ESTADO_UI = {
+  trial: { label: 'Prueba', cls: 'bg-adm-chip text-adm-chip-fg' },
+  activo: { label: 'Activa', cls: 'bg-adm-ok/10 text-adm-ok' },
+  moroso: { label: 'Pago pendiente', cls: 'bg-adm-danger/10 text-adm-danger' },
+  suspendido: { label: 'Suspendida', cls: 'bg-adm-danger/10 text-adm-danger' },
+  cancelado: { label: 'Cancelada', cls: 'bg-adm-chip text-adm-chip-fg' },
+};
 
 export default function BillingScreen() {
-  const { user, suscripcion } = useAuthStore();
+  const { user } = useAuthStore();
+  const staff = useAppStore((s) => s.staff);
+  const configuracion = useAppStore((s) => s.configuracion);
+  const nombreNegocio =
+    configuracion?.nombre_empresa || user?.nombre_negocio || 'Restaurante';
+  const {
+    suscripcion,
+    planNombre,
+    estado,
+    vigente,
+    limiteEmpleados,
+    modulos,
+    diasRestantes,
+  } = usePlan();
 
-  const planVigente = suscripcion !== null;
+  const [catalogo, setCatalogo] = useState({ planes: [], addons: [] });
+  const [cargando, setCargando] = useState(null); // plan_id en proceso
+  const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const pago = searchParams.get('pago'); // exito | cancelado (vuelta de Stripe)
 
-  // 🌟 Mapeo dinámico de los datos reales de Supabase
-  const datosPlan = {
-    plan: suscripcion?.plan_nombre || 'Plan Básico',
-    precio: suscripcion?.precio_mensual || 0,
-    estado: planVigente ? 'Activa' : 'Suspendida',
-    proximo_cobro: suscripcion?.fecha_vencimiento || 'Vencido',
-    tarjeta_terminacion: suscripcion?.tarjeta_terminacion || '----'
-  };
+  useEffect(() => {
+    cargarCatalogo()
+      .then(setCatalogo)
+      .catch(() => {});
+  }, []);
 
-  const handlePortalPago = () => {
-    // Aquí conectarías con el portal de Stripe (Stripe Customer Portal)
-    alert('Abriendo portal de Stripe para cambiar tarjeta o descargar facturas...');
+  const empleadosActivos = (staff || []).filter(
+    (s) => s.activo !== false,
+  ).length;
+  const usoPct =
+    limiteEmpleados > 0
+      ? Math.min(100, Math.round((empleadosActivos / limiteEmpleados) * 100))
+      : 0;
+
+  const estadoUi = ESTADO_UI[estado] ?? ESTADO_UI.cancelado;
+  const addonsContratados = Array.isArray(suscripcion?.addons)
+    ? suscripcion.addons
+    : [];
+
+  const handleCheckout = async (planId, addons = []) => {
+    setError('');
+    setCargando(planId);
+    try {
+      await iniciarCheckout(planId, addons);
+    } catch (e) {
+      setError(e.message);
+      setCargando(null);
+    }
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto h-full animate-in fade-in duration-500 transition-colors">
-      
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-brand-nacar tracking-tight flex items-center gap-3">
-            <CreditCard className="w-8 h-8 text-brand-arrecife" /> Facturación y Plan
-          </h1>
-          <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mt-1 uppercase tracking-widest">
-            {user?.nombre_negocio || 'Restaurante'} - Gestión de suscripción
-          </p>
-        </div>
-      </div>
+    <div className="p-4 md:p-8 max-w-6xl mx-auto font-figtree text-adm-ink animate-in fade-in duration-media">
+      {/* ── Header ── */}
+      <header className="mb-8">
+        <h1 className="font-fraunces text-3xl flex items-center gap-3">
+          <CreditCard className="w-7 h-7 text-adm-accent" /> Mi plan
+        </h1>
+        <p className="text-sm text-adm-muted mt-1">
+          {nombreNegocio} · suscripción anual
+        </p>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* TARJETA DEL PLAN */}
-        <div className="lg:col-span-2 bg-white dark:bg-ui-humo rounded-[3rem] p-8 border-2 border-slate-100 dark:border-ui-border shadow-sm flex flex-col transition-colors">
-          <div className="flex justify-between items-start mb-8">
+      {/* ── Aviso de retorno de Stripe ── */}
+      {pago === 'exito' && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-adm-ok/10 border border-adm-ok/30 rounded-ui mb-6 text-adm-ok text-sm font-semibold">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Pago recibido. Tu plan se activará en unos segundos (al confirmar
+          Stripe).
+        </div>
+      )}
+      {pago === 'cancelado' && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-adm-chip border border-adm-border rounded-ui mb-6 text-adm-chip-fg text-sm font-semibold">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          Pago cancelado. Tu plan no cambió.
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-adm-danger/5 border border-adm-danger/40 rounded-ui mb-6 text-adm-danger text-sm font-semibold">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {/* ── Plan actual + uso ── */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        <div className="lg:col-span-2 bg-adm-panel border border-adm-border rounded-ui p-6">
+          <div className="flex justify-between items-start mb-5">
             <div>
-              <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-2">Plan Actual</p>
-              <h2 className="text-4xl font-black font-syne text-slate-900 dark:text-brand-nacar">{datosPlan.plan}</h2>
+              <p className="text-[10px] font-bold text-adm-muted uppercase tracking-widest mb-1">
+                Plan actual
+              </p>
+              <h2 className="font-fraunces text-3xl">
+                {planNombre ?? 'Sin plan'}
+              </h2>
             </div>
-            <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 ${
-              planVigente 
-                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-brand-cesped/10 dark:text-brand-cesped dark:border-brand-cesped/30' 
-                : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-brand-arrecife/10 dark:text-brand-arrecife dark:border-brand-arrecife/30'
-            }`}>
-              {datosPlan.estado}
+            <span
+              className={`px-3 py-1.5 rounded-ui text-[11px] font-bold uppercase tracking-widest ${estadoUi.cls}`}
+            >
+              {estadoUi.label}
             </span>
           </div>
 
-          <div className="space-y-4 mb-10">
-            <div className="flex items-center gap-3 text-slate-600 dark:text-brand-nacar font-bold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-brand-cesped" /> Usuarios operativos ilimitados
+          <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm mb-6">
+            <div>
+              <p className="text-[10px] font-bold text-adm-muted uppercase tracking-widest">
+                {estado === 'trial' ? 'Prueba termina' : 'Vence'}
+              </p>
+              <p className="font-semibold tabular-nums">
+                {(
+                  estado === 'trial'
+                    ? suscripcion?.trial_hasta
+                    : suscripcion?.fecha_vencimiento
+                )
+                  ? new Date(
+                      estado === 'trial'
+                        ? suscripcion.trial_hasta
+                        : suscripcion.fecha_vencimiento,
+                    ).toLocaleDateString('es-MX', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  : '—'}
+                {vigente && (
+                  <span className="text-adm-muted">
+                    {' '}
+                    · {diasRestantes} días
+                  </span>
+                )}
+              </p>
             </div>
-            <div className="flex items-center gap-3 text-slate-600 dark:text-brand-nacar font-bold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-brand-cesped" /> Soporte técnico prioritario
-            </div>
-            <div className="flex items-center gap-3 text-slate-600 dark:text-brand-nacar font-bold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-brand-cesped" /> Almacenamiento en la nube (AWS/Supabase)
+            <div>
+              <p className="text-[10px] font-bold text-adm-muted uppercase tracking-widest">
+                Módulos premium
+              </p>
+              <p className="font-semibold">
+                {modulos.length ? modulos.join(' · ') : 'Ninguno'}
+                {addonsContratados.length > 0 && (
+                  <span className="text-adm-muted">
+                    {' '}
+                    (add-on: {addonsContratados.join(', ')})
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
-          <div className="mt-auto bg-slate-50 dark:bg-ui-obsidiana p-6 rounded-3xl border border-slate-200 dark:border-ui-border flex flex-col sm:flex-row justify-between items-center gap-4 transition-colors">
-            {planVigente ? (
-              <div>
-                <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">Siguiente Cargo</p>
-                <p className="text-xl font-black text-slate-900 dark:text-brand-nacar">${datosPlan.precio} MXN <span className="text-sm text-slate-500 dark:text-ui-muted">/ mes</span></p>
-                <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-1">
-                  Vencimiento: {new Date(datosPlan.proximo_cobro).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-[10px] font-black text-rose-500 dark:text-brand-arrecife uppercase tracking-widest">Servicio Suspendido</p>
-                <p className="text-xl font-black text-slate-900 dark:text-brand-nacar">Renueva tu plan</p>
-                <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-1">Para reactivar la operación de tu ERP</p>
-              </div>
+          {/* Uso: empleados (el único límite duro) */}
+          <div className="bg-adm-bg border border-adm-border rounded-ui p-4">
+            <div className="flex items-center justify-between mb-2 text-sm">
+              <span className="flex items-center gap-2 font-semibold">
+                <Users className="w-4 h-4 text-adm-muted" /> Empleados activos
+              </span>
+              <span className="font-semibold tabular-nums">
+                {empleadosActivos} / {limiteEmpleados || '—'}
+              </span>
+            </div>
+            <div className="h-1.5 bg-adm-chip rounded-ui overflow-hidden">
+              <div
+                className={`h-full transition-all ${usoPct >= 100 ? 'bg-adm-danger' : 'bg-adm-accent'}`}
+                style={{ width: `${usoPct}%` }}
+              />
+            </div>
+            {usoPct >= 100 && (
+              <p className="text-xs text-adm-danger font-semibold mt-2">
+                Límite alcanzado: desactiva un empleado o mejora tu plan.
+              </p>
             )}
-            <button onClick={handlePortalPago} className="w-full sm:w-auto bg-slate-900 dark:bg-brand-arrecife hover:bg-slate-800 dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana px-8 py-4 rounded-2xl font-black shadow-lg shadow-slate-900/20 dark:shadow-brand-arrecife/30 transition-transform active:scale-95 flex items-center justify-center gap-2">
-              Administrar Plan <ExternalLink className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
-        {/* MÉTODO DE PAGO */}
-        <div className="bg-slate-900 dark:bg-ui-obsidiana rounded-[3rem] p-8 shadow-xl border border-slate-800 dark:border-ui-border text-white dark:text-brand-nacar flex flex-col transition-colors">
-          <h3 className="font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest text-xs mb-8 flex items-center gap-2">
-            <CreditCard className="w-4 h-4" /> Método de Pago
+        {/* Renovación / pago */}
+        <div className="bg-adm-sidebar text-adm-sidebar-fg rounded-ui p-6 flex flex-col">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-adm-sidebar-muted mb-4 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" /> Renovación
           </h3>
-
-          <div className="bg-gradient-to-br from-slate-800 to-slate-700 dark:from-ui-humo dark:to-ui-obsidiana p-6 rounded-2xl shadow-inner border border-slate-600 dark:border-ui-border mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <ShieldCheck className="w-8 h-8 text-emerald-400 dark:text-brand-cesped" />
-              <span className="font-black italic text-xl">TARJETA</span>
-            </div>
-            <p className="font-mono text-xl tracking-[0.2em] mb-2">**** **** **** {datosPlan.tarjeta_terminacion}</p>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">Método asociado a Stripe</p>
-          </div>
-
-          <button onClick={handlePortalPago} className="mt-auto w-full bg-white dark:bg-ui-humo text-slate-900 dark:text-brand-nacar hover:bg-slate-100 dark:hover:bg-ui-border py-4 rounded-2xl font-black transition-colors">
-            Actualizar Tarjeta
+          <p className="text-sm leading-relaxed mb-6">
+            Anualidad con renovación automática. El pago se procesa de forma
+            segura en Stripe; los precios no incluyen IVA.
+          </p>
+          {suscripcion?.cancelar_al_final && (
+            <p className="text-xs font-semibold text-adm-danger mb-4">
+              Cancelación programada al final del periodo.
+            </p>
+          )}
+          <button
+            onClick={() =>
+              handleCheckout(suscripcion?.plan ?? 'basico', addonsContratados)
+            }
+            disabled={cargando !== null}
+            className="mt-auto w-full py-3 bg-adm-accent text-adm-accent-fg rounded-ui font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all"
+          >
+            {cargando ? 'Abriendo Stripe…' : 'Renovar / actualizar pago'}
+            <ArrowRight className="w-4 h-4" />
           </button>
-          <button onClick={handlePortalPago} className="w-full mt-3 text-slate-400 dark:text-ui-muted hover:text-white dark:hover:text-brand-nacar font-bold py-3 text-sm transition-colors">
-            Descargar Facturas CFDI
-          </button>
+          {suscripcion?.stripe_customer_id && (
+            <button
+              onClick={async () => {
+                setError('');
+                setCargando('portal');
+                try {
+                  await abrirPortal();
+                } catch (e) {
+                  setError(e.message);
+                  setCargando(null);
+                }
+              }}
+              disabled={cargando !== null}
+              className="w-full mt-3 py-2.5 rounded-ui font-bold text-sm text-adm-sidebar-fg border border-adm-sidebar-fg/20 hover:bg-adm-sidebar-2 disabled:opacity-50 transition-colors"
+            >
+              {cargando === 'portal'
+                ? 'Abriendo portal…'
+                : 'Tarjeta, facturas y cancelación'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ── Catálogo de planes ── */}
+      <section>
+        <h2 className="font-fraunces text-2xl mb-4">Planes</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {catalogo.planes
+            .filter((p) => p.activo || p.id === suscripcion?.plan)
+            .map((p) => {
+              const esActual = p.id === suscripcion?.plan;
+              const lim = p.limites ?? {};
+              return (
+                <div
+                  key={p.id}
+                  className={`bg-adm-panel border rounded-ui p-5 flex flex-col ${
+                    esActual ? 'border-adm-accent' : 'border-adm-border'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-fraunces text-xl">{p.nombre}</h3>
+                    {esActual && (
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-adm-accent">
+                        Actual
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold tabular-nums mb-1">
+                    {precioMXN(p.precio_anual_centavos)}
+                    <span className="text-sm font-semibold text-adm-muted">
+                      {' '}
+                      /año más IVA
+                    </span>
+                  </p>
+                  <ul className="text-sm text-adm-muted space-y-1.5 my-4">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-adm-ok shrink-0" />
+                      Dispositivos ilimitados
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-adm-ok shrink-0" />
+                      Hasta {lim.empleados ?? '—'} empleados
+                    </li>
+                    {(lim.modulos ?? []).map((m) => (
+                      <li key={m} className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-adm-accent shrink-0" />
+                        {m === 'lealtad'
+                          ? 'Sistema de Lealtad'
+                          : m === 'multisucursal'
+                            ? 'Multi-sucursal'
+                            : m}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => handleCheckout(p.id)}
+                    disabled={esActual || cargando !== null}
+                    className={`mt-auto w-full py-2.5 rounded-ui font-bold text-sm transition-all ${
+                      esActual
+                        ? 'bg-adm-chip text-adm-muted cursor-default'
+                        : 'bg-adm-accent text-adm-accent-fg hover:opacity-90 disabled:opacity-50'
+                    }`}
+                  >
+                    {esActual
+                      ? 'Tu plan'
+                      : cargando === p.id
+                        ? 'Abriendo Stripe…'
+                        : 'Cambiar a este plan'}
+                  </button>
+                </div>
+              );
+            })}
         </div>
 
-      </div>
+        {/* Add-ons */}
+        {catalogo.addons.some((a) => a.disponible) && (
+          <div className="mt-6">
+            <h3 className="font-fraunces text-lg mb-3">Add-ons</h3>
+            <div className="flex flex-wrap gap-4">
+              {catalogo.addons.map((a) => {
+                const incluido = modulos.includes(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    className="bg-adm-panel border border-adm-border rounded-ui p-4 flex items-center gap-4"
+                  >
+                    <div>
+                      <p className="font-semibold text-sm">{a.nombre}</p>
+                      <p className="text-sm text-adm-muted tabular-nums">
+                        {precioMXN(a.precio_anual_centavos)} /año más IVA
+                      </p>
+                    </div>
+                    {incluido ? (
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-adm-ok">
+                        Incluido
+                      </span>
+                    ) : a.disponible ? (
+                      <button
+                        onClick={() =>
+                          handleCheckout(suscripcion?.plan ?? 'basico', [
+                            ...addonsContratados,
+                            a.id,
+                          ])
+                        }
+                        disabled={cargando !== null}
+                        className="py-2 px-4 bg-adm-accent text-adm-accent-fg rounded-ui font-bold text-xs hover:opacity-90 disabled:opacity-50 transition-all"
+                      >
+                        Agregar
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-adm-muted">
+                        Próximamente
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

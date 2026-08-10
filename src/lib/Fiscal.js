@@ -8,18 +8,70 @@
 //    hacia atrás. Si es false, el IVA se suma encima.
 //  - La PROPINA nunca forma parte de la base gravable (no se le calcula IVA).
 //  - El DESCUENTO reduce la base gravable; el IVA se recalcula sobre la base neta.
+//
+// ── DESCUENTO POR LÍNEA (25-jul) ─────────────────────────────────────────────
+// Además del descuento de TICKET (%/$ sobre toda la cuenta) existe el descuento
+// por PRODUCTO: `item.descuento = { tipo, valor }` con tipo 'pct' | 'monto' |
+// 'cortesia'.
+//
+// CASCADA — el orden importa y no es arbitrario:
+//   1. Cada línea se descuenta primero. Su resultado ES el importe real de esa
+//      línea, igual que si el platillo se hubiera vendido a ese precio.
+//   2. El descuento de ticket se aplica DESPUÉS, sobre lo que quedó.
+// Al revés (ticket primero) el % de ticket se calcularía sobre dinero que el
+// cliente nunca iba a pagar, y el total no cuadraría con la suma de las líneas.
+//
+// Un descuento de línea NUNCA puede dejar la línea en negativo: se acota al
+// importe de la propia línea. Una caja que devuelve dinero por descontar de más
+// es un agujero, no una promoción.
 
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+const num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Importe de una línea, ya con su descuento de producto aplicado.
+ * Exportada porque la usan el carrito, el ticket y el P&L: si cada uno lo
+ * recalculara a su manera, acabarían discrepando por centavos.
+ *
+ * @param {{precio:number, cantidad:number, descuento?:{tipo:string, valor:number}}} item
+ * @returns {{ bruto:number, descuento:number, neto:number }}
+ */
+export function importeDeLinea(item) {
+  const bruto = round2(num(item?.precio) * num(item?.cantidad));
+  const d = item?.descuento;
+  if (!d || !d.tipo || bruto <= 0) {
+    return { bruto, descuento: 0, neto: bruto };
+  }
+
+  let descuento = 0;
+  if (d.tipo === 'cortesia') {
+    descuento = bruto; // el platillo va sin costo
+  } else if (d.tipo === 'pct') {
+    const pct = Math.min(100, Math.max(0, num(d.valor)));
+    descuento = round2(bruto * (pct / 100));
+  } else if (d.tipo === 'monto') {
+    // Acotado al importe: descontar $200 de un platillo de $150 deja la línea
+    // en 0, no en −50.
+    descuento = round2(Math.min(Math.max(0, num(d.valor)), bruto));
+  }
+
+  return { bruto, descuento, neto: round2(bruto - descuento) };
+}
+
 /**
  * @param {Object}  p
- * @param {Array}   p.items                 [{ precio, cantidad }]
+ * @param {Array}   p.items                 [{ precio, cantidad, descuento? }]
  * @param {number}  [p.ivaRate=0.16]        tasa IVA (0.16 = 16%)
  * @param {boolean} [p.preciosIncluyenIva=true]
- * @param {number}  [p.descuentoPct=0]      % de descuento sobre la base
+ * @param {number}  [p.descuentoPct=0]      % de descuento de TICKET sobre la base
  * @param {number}  [p.propinaPct=0]        % de propina sobre la base neta
  * @param {number|null} [p.propinaMonto=null] propina fija (override del %)
- * @returns {{ subtotal:number, descuento:number, iva:number, propina:number, total:number }}
+ * @returns {{ subtotal:number, descuento:number, descuentoLineas:number,
+ *            descuentoTicket:number, iva:number, propina:number, total:number }}
  */
 export function calcularVenta({
   items = [],
@@ -29,31 +81,51 @@ export function calcularVenta({
   propinaPct = 0,
   propinaMonto = null,
 } = {}) {
-  const rate = Math.max(0, Number(ivaRate) || 0);
+  const rate = Math.max(0, num(ivaRate));
+  const lista = Array.isArray(items) ? items : [];
 
-  const bruto = (Array.isArray(items) ? items : []).reduce(
-    (acc, it) => acc + (Number(it?.precio) || 0) * (Number(it?.cantidad) || 0),
-    0,
-  );
+  // 1) Descuento POR LÍNEA (en dinero de venta, con IVA dentro si aplica)
+  let brutoLineas = 0;
+  let descLineasBruto = 0;
+  for (const it of lista) {
+    const { bruto, descuento } = importeDeLinea(it);
+    brutoLineas += bruto;
+    descLineasBruto += descuento;
+  }
+  const brutoNeto = round2(brutoLineas - descLineasBruto);
 
-  // Base antes de descuento (desglose hacia atrás si el precio incluye IVA)
-  const baseAntesDesc = preciosIncluyenIva ? bruto / (1 + rate) : bruto;
+  // Base gravable (desglose hacia atrás si el precio incluye IVA). El descuento
+  // de línea se expresa en la misma moneda que el precio, así que se convierte
+  // a base con el mismo criterio.
+  const aBase = (v) => (preciosIncluyenIva ? v / (1 + rate) : v);
+  const baseAntesDesc = aBase(brutoNeto);
+  const descuentoLineas = round2(aBase(descLineasBruto));
 
-  // Descuento sobre la base
-  const descPct = Math.min(100, Math.max(0, Number(descuentoPct) || 0));
-  const descuento = round2(baseAntesDesc * (descPct / 100));
-  const subtotal = round2(baseAntesDesc - descuento);
+  // 2) Descuento de TICKET sobre lo que quedó
+  const descPct = Math.min(100, Math.max(0, num(descuentoPct)));
+  const descuentoTicket = round2(baseAntesDesc * (descPct / 100));
+  const subtotal = round2(baseAntesDesc - descuentoTicket);
 
-  // IVA sobre la base NETA (post-descuento)
+  // IVA sobre la base NETA (post-descuentos)
   const iva = round2(subtotal * rate);
 
   // Propina: fija o % de la base neta. NUNCA gravada.
   const propina =
     propinaMonto != null
-      ? round2(Number(propinaMonto) || 0)
-      : round2(subtotal * ((Number(propinaPct) || 0) / 100));
+      ? round2(num(propinaMonto))
+      : round2(subtotal * (num(propinaPct) / 100));
 
   const total = round2(subtotal + iva + propina);
 
-  return { subtotal, descuento, iva, propina, total };
+  return {
+    subtotal,
+    // `descuento` se mantiene con el significado histórico (descuento de
+    // ticket) para no romper a quien ya lo lee; el desglose nuevo va aparte.
+    descuento: descuentoTicket,
+    descuentoTicket,
+    descuentoLineas,
+    iva,
+    propina,
+    total,
+  };
 }

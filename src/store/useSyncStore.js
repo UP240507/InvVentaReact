@@ -3,6 +3,7 @@ import { localDB } from './localDB';
 import { supabase } from '../api/supabase';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { construirDeltasStock } from '../lib/Inventario';
+import { sinCamposDerivados } from '../lib/Payload';
 
 // ── Clasificación de errores de sincronización ───────────────────────────────
 // PERMANENTE = el reintento NUNCA va a arreglarlo (RLS, columna inexistente,
@@ -54,7 +55,16 @@ export const useSyncStore = create((set, get) => ({
 
   enqueueAction: async (tabla, metodo, data) => {
     // 1. Clon profundo para evitar mutaciones extrañas en React
-    const payload = JSON.parse(JSON.stringify(data));
+    const clon = JSON.parse(JSON.stringify(data));
+
+    // 1a. Fuera los campos DERIVADOS (`_costo`, `_margen`…). Una pantalla puede
+    //     decorar una fila para mostrarla; al guardar, esos campos no existen
+    //     como columnas y PostgREST rechaza la fila ENTERA (PGRST204). Se limpia
+    //     aquí, antes de la copia local y de la cola, porque esta función es la
+    //     única puerta a la base: pedirle a cada pantalla que se acuerde de
+    //     desnudar su fila es pedir que alguna se olvide, y el síntoma —"se
+    //     guardó" en pantalla, nada en la nube— tarda días en notarse.
+    const payload = sinCamposDerivados(clon);
 
     // 1b. ✅ Sprint 3: estampar restaurante_id en TODO insert/upsert/update que no lo traiga.
     //     Una sola fuente → ningún insert futuro se queda sin tenant (RLS WITH CHECK).
@@ -523,6 +533,14 @@ export const useSyncStore = create((set, get) => ({
     const { id, motivo, lastError, fecha_error, ...resto } = item;
     await localDB.sync_queue.add({
       ...resto,
+      // Se sanea otra vez al reencolar: la tarea se guardó ANTES de que
+      // existiera este filtro, así que su payload todavía puede traer los
+      // campos derivados que la mataron. Sin esto, "Reintentar" fallaría igual
+      // y el usuario concluiría, con razón, que el botón no sirve.
+      data:
+        resto.metodo === 'rpc'
+          ? resto.data // los argumentos de una función SÍ pueden llamarse `_algo`
+          : sinCamposDerivados(resto.data),
       estado: 'pending',
       intentos: 0,
       nextAttemptAt: null,

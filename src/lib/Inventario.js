@@ -149,7 +149,11 @@ export function expandirInsumosPaquete(paquete, recetas = []) {
  *   nota conserva el nombre del paquete para dar contexto a cocina.
  * enrutamiento = configuracion.enrutamiento { [categoria]: zona }.
  */
-export function construirItemsComanda(items = [], recetas = [], enrutamiento = {}) {
+export function construirItemsComanda(
+  items = [],
+  recetas = [],
+  enrutamiento = {},
+) {
   const mapaRecetas = new Map((recetas || []).map((r) => [String(r.id), r]));
   const destinoDe = (categoria) => enrutamiento?.[categoria] || 'Cocina';
   const out = [];

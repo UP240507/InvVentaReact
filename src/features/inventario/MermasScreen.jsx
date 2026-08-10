@@ -1,13 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import {
+  PageShell,
+  PageHeader,
+  Button,
+  Chip,
+  EmptyState,
+  SearchField,
+  DataTable,
+} from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   Trash2,
   Plus,
   Search,
-  ArrowDownRight,
-  ArrowUpRight,
   AlertTriangle,
   PackageMinus,
   X,
@@ -139,169 +146,171 @@ export default function MermasScreen() {
   const formatNum = (num) =>
     Number(num).toLocaleString('es-MX', { maximumFractionDigits: 3 });
 
-  return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col h-full animate-in fade-in transition-colors duration-500">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-ui-humo p-6 rounded-3xl border border-slate-200 dark:border-ui-border shadow-sm mb-6 transition-colors">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-brand-nacar flex items-center gap-3">
-            <div className="bg-rose-100 dark:bg-brand-arrecife/10 p-2 rounded-xl">
-              <Trash2 className="w-6 h-6 text-rose-600 dark:text-brand-arrecife" />
-            </div>
-            Mermas y Ajustes
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-ui-muted mt-1">
-            Registra pérdidas, consumos de personal o cuadres de inventario
-            físico.
+  // ── Columnas del historial ──────────────────────────────────────────────
+  // Es un LIBRO: solo se lee, no se edita ni se borra (un ajuste de inventario
+  // no se deshace, se compensa con otro). Por eso la tabla no recibe
+  // onEditar/onEliminar y sus atajos no llegan a registrarse.
+  const columnas = [
+    {
+      id: 'cuando',
+      titulo: 'Fecha / Usuario',
+      ancho: '1%',
+      celda: (mov) => (
+        <>
+          <p className="font-bold text-adm-ink whitespace-nowrap">
+            {new Date(mov.fecha).toLocaleString('es-MX', {
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </p>
-        </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana px-6 py-3 rounded-2xl font-black shadow-lg shadow-slate-900/20 dark:shadow-brand-arrecife/20 hover:bg-slate-800 dark:hover:bg-orange-600 transition-transform active:scale-95 flex items-center justify-center gap-2"
-        >
-          <Plus className="w-5 h-5" /> Registrar Ajuste
-        </button>
-      </div>
-
-      {/* BÚSQUEDA */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Search className="w-5 h-5 text-slate-400 dark:text-ui-muted absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por insumo o motivo..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full bg-white dark:bg-ui-humo border border-slate-200 dark:border-ui-border text-slate-900 dark:text-brand-nacar font-bold pl-12 pr-4 py-3.5 rounded-2xl outline-none focus:border-rose-500 dark:focus:border-brand-arrecife shadow-sm transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* TABLA DE HISTORIAL */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
-        {historialAjustes.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-ui-humo rounded-3xl border border-dashed border-slate-300 dark:border-ui-border transition-colors">
-            <div className="bg-slate-50 dark:bg-ui-obsidiana w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-ui-border">
-              <ArchiveRestore className="w-12 h-12 text-slate-400 dark:text-ui-muted opacity-50" />
-            </div>
-            <h3 className="text-xl font-black text-slate-700 dark:text-brand-nacar">
-              Sin registros
-            </h3>
-            <p className="text-slate-500 dark:text-ui-muted mt-2 mb-6 font-medium">
-              No se han registrado mermas ni ajustes manuales recientemente.
+          <p className="text-[10px] font-bold text-adm-muted uppercase tracking-[0.14em] mt-0.5">
+            {mov.usuario}
+          </p>
+        </>
+      ),
+    },
+    {
+      id: 'insumo',
+      titulo: 'Insumo afectado',
+      celda: (mov) => {
+        const prod = productos.find(
+          (p) => String(p.id) === String(mov.producto_id),
+        );
+        return (
+          <>
+            <p className="font-bold text-adm-ink">
+              {prod ? prod.nombre : 'Insumo desconocido'}
             </p>
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-ui-humo rounded-3xl border border-slate-200 dark:border-ui-border shadow-sm overflow-hidden transition-colors">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 dark:bg-ui-obsidiana/50 text-slate-500 dark:text-ui-muted uppercase font-black text-[10px] tracking-widest border-b border-slate-200 dark:border-ui-border">
-                <tr>
-                  <th className="p-4 pl-6 w-32">Fecha / Usuario</th>
-                  <th className="p-4 w-48">Insumo Afectado</th>
-                  <th className="p-4">Tipo y Justificación</th>
-                  <th className="p-4 text-center w-36">Impacto (Cant)</th>
-                  <th className="p-4 text-right w-36">Inventario Final</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-ui-border">
-                {historialAjustes.map((mov) => {
-                  const prod = productos.find(
-                    (p) => String(p.id) === String(mov.producto_id),
-                  );
-                  const esMerma = mov.tipo === 'Merma';
-                  const match = (mov.referencia || '').match(/\[(.*?)\] (.*)/);
-                  const tipoEtiqueta = match ? match[1] : mov.tipo;
-                  const justificacion = match ? match[2] : mov.referencia || '';
+            {prod?.codigo && (
+              <p className="text-[10px] font-mono text-adm-muted mt-0.5">
+                {prod.codigo}
+              </p>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      id: 'motivo',
+      titulo: 'Tipo y justificación',
+      celda: (mov) => {
+        const match = (mov.referencia || '').match(/\[(.*?)\] (.*)/);
+        const etiqueta = match ? match[1] : mov.tipo;
+        const justificacion = match ? match[2] : mov.referencia || '';
+        const tono = etiqueta.includes('Alta')
+          ? 'ok'
+          : etiqueta.includes('Consumo')
+            ? 'alerta'
+            : 'peligro';
+        return (
+          <>
+            <Chip tono={tono}>{etiqueta}</Chip>
+            {justificacion && (
+              <p className="text-xs text-adm-muted mt-1 leading-relaxed">
+                {justificacion}
+              </p>
+            )}
+          </>
+        );
+      },
+    },
+    {
+      id: 'impacto',
+      titulo: 'Impacto',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (mov) => {
+        const prod = productos.find(
+          (p) => String(p.id) === String(mov.producto_id),
+        );
+        const esMerma = mov.tipo === 'Merma';
+        return (
+          <span
+            className={`font-bold whitespace-nowrap ${esMerma ? 'text-adm-danger' : 'text-adm-ok'}`}
+          >
+            {esMerma ? '−' : '+'}
+            {formatNum(mov.cantidad)} {prod?.unidad}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'final',
+      titulo: 'Inventario final',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (mov) => {
+        const prod = productos.find(
+          (p) => String(p.id) === String(mov.producto_id),
+        );
+        return (
+          <>
+            <p className="font-bold text-adm-ink whitespace-nowrap">
+              {formatNum(mov.stock_nuevo)} {prod?.unidad}
+            </p>
+            <p className="text-[10px] text-adm-muted mt-0.5">
+              era {formatNum(mov.stock_anterior)}
+            </p>
+          </>
+        );
+      },
+    },
+  ];
 
-                  return (
-                    <tr
-                      key={mov.id}
-                      className="hover:bg-slate-50 dark:hover:bg-ui-obsidiana/30 transition-colors group"
-                    >
-                      <td className="p-4 pl-6 align-top">
-                        <p className="font-bold text-slate-900 dark:text-brand-nacar">
-                          {new Date(mov.fecha).toLocaleString('es-MX', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest mt-0.5">
-                          {mov.usuario}
-                        </p>
-                      </td>
-                      <td className="p-4 align-top">
-                        <p className="font-black text-slate-700 dark:text-brand-nacar">
-                          {prod ? prod.nombre : 'Insumo Desconocido'}
-                        </p>
-                        {prod && prod.codigo && (
-                          <p className="text-[10px] font-mono text-slate-400 dark:text-ui-muted mt-0.5">
-                            {prod.codigo}
-                          </p>
-                        )}
-                      </td>
-                      <td className="p-4 align-top max-w-sm">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border mb-1.5 inline-block ${
-                            tipoEtiqueta.includes('Alta')
-                              ? 'bg-emerald-50 dark:bg-brand-cesped/10 text-emerald-600 dark:text-brand-cesped border-emerald-200 dark:border-brand-cesped/30'
-                              : tipoEtiqueta.includes('Consumo')
-                                ? 'bg-amber-50 dark:bg-brand-ambar/10 text-amber-600 dark:text-brand-ambar border-amber-200 dark:border-brand-ambar/30'
-                                : 'bg-rose-50 dark:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife border-rose-200 dark:border-brand-arrecife/30'
-                          }`}
-                        >
-                          {tipoEtiqueta}
-                        </span>
-                        <p className="text-xs font-medium text-slate-600 dark:text-brand-nacar whitespace-normal break-words leading-relaxed">
-                          {justificacion}
-                        </p>
-                      </td>
-                      <td className="p-4 text-center align-top">
-                        <div
-                          className={`inline-flex items-center gap-1 font-black px-3 py-1.5 rounded-lg ${esMerma ? 'bg-rose-50 dark:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife' : 'bg-emerald-50 dark:bg-brand-cesped/10 text-emerald-600 dark:text-brand-cesped'}`}
-                        >
-                          {esMerma ? (
-                            <ArrowDownRight className="w-4 h-4" />
-                          ) : (
-                            <ArrowUpRight className="w-4 h-4" />
-                          )}
-                          {formatNum(mov.cantidad)} {prod?.unidad}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right align-top">
-                        <p className="font-black text-slate-900 dark:text-brand-nacar">
-                          {formatNum(mov.stock_nuevo)} {prod?.unidad}
-                        </p>
-                        <p className="text-[10px] text-slate-400 dark:text-ui-muted font-bold mt-1">
-                          Era {formatNum(mov.stock_anterior)}
-                        </p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+  return (
+    <PageShell>
+      <PageHeader
+        icono={Trash2}
+        titulo="Mermas y Ajustes"
+        descripcion="Pérdidas, consumo de personal y cuadres de inventario físico"
+        acciones={
+          <Button icono={Plus} onClick={() => setIsModalOpen(true)}>
+            Registrar ajuste
+          </Button>
+        }
+      />
+
+      <SearchField
+        icono={Search}
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar por insumo o motivo…"
+        className="mb-4 max-w-md"
+      />
+
+      <DataTable
+        scope="tabla-mermas"
+        titulo="Historial de ajustes"
+        columnas={columnas}
+        filas={historialAjustes}
+        activo={!isModalOpen}
+        vacio={
+          <EmptyState
+            icono={ArchiveRestore}
+            titulo="Sin registros"
+            descripcion="No se han registrado mermas ni ajustes manuales recientemente."
+          />
+        }
+      />
 
       {/* MODAL REGISTRO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95 transition-colors">
-            <div className="p-6 border-b border-slate-100 dark:border-ui-border flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana transition-colors">
+        <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-lg shadow-2xl overflow-hidden border-2 border-adm-border animate-in zoom-in-95 transition-colors">
+            <div className="p-6 border-b border-adm-border flex justify-between items-center bg-adm-bg transition-colors">
               <div className="flex items-center gap-3">
-                <div className="bg-slate-200 dark:bg-ui-border p-2 rounded-xl">
-                  <PackageMinus className="w-5 h-5 text-slate-700 dark:text-brand-nacar" />
+                <div className="bg-adm-chip dark:bg-adm-border p-2 rounded-ui">
+                  <PackageMinus className="w-5 h-5 text-adm-ink" />
                 </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-brand-nacar">
+                <h2 className="text-xl font-black text-adm-ink">
                   Ajuste de Inventario
                 </h2>
               </div>
               <button
                 onClick={cerrarModal}
-                className="text-slate-400 dark:text-ui-muted hover:bg-slate-200 dark:hover:bg-ui-border p-2 rounded-full transition-colors"
+                className="text-adm-muted hover:bg-adm-chip dark:hover:bg-adm-border p-2 rounded-full transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -314,13 +323,13 @@ export default function MermasScreen() {
                 className="space-y-5"
               >
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-ui-muted mb-1.5">
+                  <label className="block text-xs font-bold text-adm-muted mb-1.5">
                     Insumo a afectar *
                   </label>
                   <select
                     value={insumoSeleccionado}
                     onChange={(e) => setInsumoSeleccionado(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border text-slate-900 dark:text-brand-nacar font-bold px-4 py-3 rounded-xl outline-none focus:border-slate-500 dark:focus:border-brand-amatista transition-colors"
+                    className="w-full bg-adm-bg border border-adm-field text-adm-ink font-bold px-4 py-3 rounded-ui outline-none focus:border-adm-field dark:focus:border-adm-info transition-colors"
                   >
                     <option value="">Selecciona un insumo...</option>
                     {(productos || [])
@@ -335,18 +344,18 @@ export default function MermasScreen() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-ui-muted mb-1.5">
+                    <label className="block text-xs font-bold text-adm-muted mb-1.5">
                       Categoría *
                     </label>
                     <select
                       value={tipoAjuste}
                       onChange={(e) => setTipoAjuste(e.target.value)}
-                      className={`w-full border font-bold px-4 py-3 rounded-xl outline-none transition-colors ${
+                      className={`w-full border font-bold px-4 py-3 rounded-ui outline-none transition-colors ${
                         tipoAjuste === 'Alta de Inventario'
-                          ? 'bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-200 dark:border-brand-cesped/30 text-emerald-800 dark:text-brand-cesped focus:border-emerald-500'
+                          ? 'bg-adm-ok/10 border-adm-ok/30 text-adm-ok focus:border-adm-ok'
                           : tipoAjuste === 'Consumo Interno'
-                            ? 'bg-amber-50 dark:bg-brand-ambar/10 border-amber-200 dark:border-brand-ambar/30 text-amber-800 dark:text-brand-ambar focus:border-amber-500'
-                            : 'bg-rose-50 dark:bg-brand-arrecife/10 border-rose-200 dark:border-brand-arrecife/30 text-rose-800 dark:text-brand-arrecife focus:border-rose-500'
+                            ? 'bg-adm-warn/10 border-adm-warn/30 text-adm-warn focus:border-adm-warn'
+                            : 'bg-adm-danger/10 border-adm-danger/30 text-adm-danger focus:border-adm-danger'
                       }`}
                     >
                       <option value="Merma">Merma (Desecho / Caducidad)</option>
@@ -360,7 +369,7 @@ export default function MermasScreen() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-ui-muted mb-1.5">
+                    <label className="block text-xs font-bold text-adm-muted mb-1.5">
                       Cantidad *
                     </label>
                     <input
@@ -370,22 +379,22 @@ export default function MermasScreen() {
                       required
                       value={cantidadAjuste}
                       onChange={(e) => setCantidadAjuste(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border text-slate-900 dark:text-brand-nacar font-black px-4 py-3 rounded-xl outline-none focus:border-slate-500 dark:focus:border-brand-amatista transition-colors"
+                      className="w-full bg-adm-bg border border-adm-field text-adm-ink font-black px-4 py-3 rounded-ui outline-none focus:border-adm-field dark:focus:border-adm-info transition-colors"
                       placeholder="0.00"
                     />
                   </div>
                 </div>
 
                 {insumoSeleccionado && cantidadAjuste && (
-                  <div className="bg-slate-100 dark:bg-ui-obsidiana p-3 rounded-lg flex items-start gap-3 mt-2 border border-slate-200 dark:border-ui-border transition-colors">
-                    <AlertTriangle className="w-5 h-5 text-slate-500 dark:text-ui-muted shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-brand-nacar font-medium">
+                  <div className="bg-adm-chip dark:bg-adm-bg p-3 rounded-ui flex items-start gap-3 mt-2 border border-adm-border transition-colors">
+                    <AlertTriangle className="w-5 h-5 text-adm-muted shrink-0 mt-0.5" />
+                    <p className="text-xs text-adm-muted dark:text-adm-ink font-medium">
                       El sistema va a{' '}
                       <strong
                         className={
                           tipoAjuste === 'Alta de Inventario'
-                            ? 'text-emerald-600 dark:text-brand-cesped'
-                            : 'text-rose-600 dark:text-brand-arrecife'
+                            ? 'text-adm-ok'
+                            : 'text-adm-danger'
                         }
                       >
                         {tipoAjuste === 'Alta de Inventario'
@@ -395,7 +404,7 @@ export default function MermasScreen() {
                       </strong>{' '}
                       unidades del inventario. <br />
                       Stock final estimado:{' '}
-                      <strong className="font-mono text-slate-900 dark:text-brand-nacar text-sm">
+                      <strong className="font-mono text-adm-ink text-sm">
                         {tipoAjuste === 'Alta de Inventario'
                           ? (
                               Number(
@@ -417,32 +426,32 @@ export default function MermasScreen() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-ui-muted mb-1.5">
+                  <label className="block text-xs font-bold text-adm-muted mb-1.5">
                     Justificación del Ajuste *
                   </label>
                   <textarea
                     required
                     value={motivoAjuste}
                     onChange={(e) => setMotivoAjuste(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border text-slate-900 dark:text-brand-nacar font-medium p-4 rounded-xl outline-none focus:border-slate-500 dark:focus:border-brand-amatista min-h-[100px] resize-none text-sm transition-colors"
+                    className="w-full bg-adm-bg border border-adm-field text-adm-ink font-medium p-4 rounded-ui outline-none focus:border-adm-field dark:focus:border-adm-info min-h-[100px] resize-none text-sm transition-colors"
                     placeholder="Ej. Se echó a perder, comida para el turno de la tarde, error de conteo anterior..."
                   ></textarea>
                 </div>
               </form>
             </div>
 
-            <div className="p-4 border-t border-slate-100 dark:border-ui-border bg-white dark:bg-ui-humo shrink-0 flex gap-4 transition-colors">
+            <div className="p-4 border-t border-adm-border bg-white dark:bg-adm-panel shrink-0 flex gap-4 transition-colors">
               <button
                 type="button"
                 onClick={cerrarModal}
-                className="flex-1 py-4 rounded-2xl border-2 border-slate-200 dark:border-ui-border text-slate-600 dark:text-brand-nacar font-black hover:bg-slate-50 dark:hover:bg-ui-obsidiana transition-colors"
+                className="flex-1 py-4 rounded-ui border-2 border-adm-border text-adm-muted dark:text-adm-ink font-black hover:bg-adm-bg dark:hover:bg-adm-bg transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 form="formAjuste"
-                className="flex-1 bg-slate-900 dark:bg-brand-arrecife hover:bg-slate-800 dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana font-black py-4 rounded-2xl shadow-lg shadow-slate-900/30 dark:shadow-brand-arrecife/30 transition-transform active:scale-95"
+                className="flex-1 bg-adm-ink dark:bg-adm-danger hover:bg-adm-ink dark:hover:bg-adm-warn text-adm-danger-fg font-black py-4 rounded-ui shadow-lg shadow-adm-border/30 dark:shadow-adm-danger/30 transition-transform active:scale-95"
               >
                 Confirmar Ajuste
               </button>
@@ -450,6 +459,6 @@ export default function MermasScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -20,15 +20,66 @@
   --color-ui-text: #fdf2e9;
   --color-ui-muted: #4a7a58;
 
-  /* Radios y Tipografía */
-  --radius-brand: 2.5rem;
+  /* ── RADIO: UNA SOLA ESCALA PARA TODA LA APP ────────────────────────────
+     Decisión de Chris (25-jul): el Dashboard es cuadrado, así que todo lo es.
+     Antes convivían nueve radios distintos (2.5rem en operación, 2px en admin,
+     xl/2xl/3xl sueltos) y el salto entre pantallas se notaba.
+
+     Solo DOS pasos, y la razón es multi-dispositivo: el radio es un valor
+     ABSOLUTO en px, no escala con el viewport. Un mismo 2px se percibe redondo
+     en un chip de 24px y desaparece en un modal de 600px — en el teléfono, con
+     la pantalla a 30 cm, esa diferencia se ve. Subir el radio solo en las
+     superficies grandes mantiene la redondez PERCIBIDA constante de un chip a
+     un modal, en teléfono, tablet y monitor.
+
+       --radius-ui     controles y tarjetas (botones, chips, inputs, filas)
+       --radius-ui-lg  superficies grandes (modales, paneles a ancho completo)
+
+     Los círculos (rounded-full: avatares, puntos de estado, badges) NO entran
+     en la escala: ahí el círculo es la forma, no una esquina redondeada. */
+  --radius-ui: 0.125rem; /* 2px — el del Dashboard */
+  --radius-ui-lg: 0.25rem; /* 4px */
+  /* Los antiguos --radius-adm (0.125rem) y --radius-brand (2.5rem) se
+     eliminaron: no queda ni un `rounded-adm` ni un `rounded-brand` en el
+     código. Dejarlos vivos invitaba a que alguien volviera a introducir un
+     radio fuera de la escala sin darse cuenta. */
+
+  /* ── MOVIMIENTO: TRES VELOCIDADES CON INTENCIÓN ─────────────────────────
+     Antes convivían cinco duraciones sueltas (150/200/300/500/700) más 477
+     transiciones sin duración explícita, que caían al default de 150ms.
+
+     La escala NO es un número único aplicado a todo. Una duración correcta
+     depende de CUÁNTA superficie se mueve y de si el usuario está esperando:
+
+       --dur-rapida  respuesta al dedo o al cursor. Hover, focus, color de un
+                     botón. Debe sentirse instantánea: por encima de ~150ms el
+                     control deja de parecer conectado a la mano.
+       --dur-media   cambios que reacomodan layout. Sidebar, acordeones,
+                     entrada de modales, cambio de tab. Hay que poder SEGUIR el
+                     movimiento para entender qué se movió a dónde.
+       --dur-lenta   cambios de superficie completa: tema claro/oscuro. Aquí
+                     lo lento es deliberado — un cambio global instantáneo se
+                     lee como un parpadeo o un fallo de render.
+
+     En operación esto importa más que en admin: el POS se usa con prisa y una
+     animación de media segundo en un botón de cobro es tiempo real perdido. */
+  --dur-rapida: 120ms;
+  --dur-media: 250ms;
+  --dur-lenta: 400ms;
+
+  /* Hay ~470 `transition-colors`/`transition-all` SIN duración explícita en la
+     app. Todas caían al default de Tailwind (150ms), que quedaba fuera de la
+     escala por accidente. Anclarlo aquí mete a la mayoría dentro sin tocar una
+     sola línea de JSX, y son justo las que deben ser rápidas: hover y focus. */
+  --default-transition-duration: var(--dur-rapida);
+
+  /* Tipografía */
   --font-syne: 'Syne', sans-serif;
   --font-sans: 'DM Sans', sans-serif;
 
   /* ── PROYECTO D: superficie ADMIN (lenguaje editorial del mock) ──────────
      Los COLORES viven abajo como variables semánticas --adm-* por tema
      ([data-tema] × .dark) y se registran como utilidades en @theme inline. */
-  --radius-adm: 0.125rem; /* esquinas casi rectas del editorial */
   --font-fraunces: 'Fraunces', serif; /* display: números grandes, títulos */
   --font-figtree: 'Figtree', sans-serif; /* UI admin */
 }
@@ -40,23 +91,45 @@
    cobro = CTA de dinero · chip = badge secundario. Los componentes consumen
    SOLO estos roles — agregar un tema nuevo es agregar un bloque, cero JSX. */
 
+/* ── BORDE: DOS TOKENS, PORQUE HACEN DOS TRABAJOS ───────────────────────────
+   --adm-border / --ops-border  SEPARADOR. Divide una tarjeta de la siguiente,
+     una fila de la de abajo. Es decoración: WCAG 1.4.11 no le exige contraste,
+     y subirlo a 3:1 convertiría la interfaz en una rejilla de líneas pesadas.
+
+   --adm-field / --ops-field    CONTORNO DE CONTROL. Inputs, selects, textareas.
+     Aquí sí es un componente de interfaz y la norma pide 3:1 — un campo que no
+     se distingue del fondo es un campo que no se encuentra. Están calculados
+     por tema para quedar en ~3.3:1 contra el fondo MÁS desfavorable de cada
+     bloque (panel, lienzo y, en operación, también panel-2).
+
+   Usar el que no toca no rompe nada visible de inmediato, que es justo el
+   problema: un input con --adm-border se ve "limpio" y es inaccesible.
+   `npm run contraste` verifica los dos por separado. */
+
 /* Terracota (default) — editorial del mock: crema, marino, terracota */
 :root {
   --adm-bg: #f5f1ea;
   --adm-panel: #ffffff;
   --adm-ink: #110f0a;
-  --adm-muted: #7a746a;
+  --adm-muted: #6a645a; /* AA: 5.2:1 sobre crema (antes #7a746a = 4.1, fallaba) */
+  --adm-field: rgba(17, 15, 10, 0.48);
   --adm-border: rgba(17, 15, 10, 0.12);
   --adm-sidebar: #0d1b35;
   --adm-sidebar-2: #162345;
   --adm-sidebar-fg: #e8e0d0;
-  --adm-sidebar-muted: #5b7ba8;
-  --adm-accent: #c8442a;
+  --adm-sidebar-muted: #7f9fc9;
+  --adm-accent: #c04128;
   --adm-accent-fg: #ffffff;
   --adm-ok: #1a5c38;
   --adm-danger: #993c1d;
   --adm-cobro: #0d1b35;
   --adm-cobro-fg: #e8e0d0;
+  --adm-warn: #8a5a08;
+  --adm-info: #3f5580;
+  --adm-ok-fg: #ffffff;
+  --adm-danger-fg: #ffffff;
+  --adm-warn-fg: #ffffff;
+  --adm-info-fg: #ffffff;
   --adm-chip: #eae5dc;
   --adm-chip-fg: #5f5e5a;
 }
@@ -64,18 +137,25 @@
   --adm-bg: #0a1120;
   --adm-panel: #111e34;
   --adm-ink: #e8e0d0;
-  --adm-muted: #6080a8;
+  --adm-muted: #8fa8c8;
+  --adm-field: rgba(232, 224, 208, 0.42);
   --adm-border: rgba(232, 224, 208, 0.1);
   --adm-sidebar: #060d1c;
   --adm-sidebar-2: #0d1b35;
   --adm-sidebar-fg: #e8e0d0;
-  --adm-sidebar-muted: #4a6a90;
-  --adm-accent: #c8442a;
-  --adm-accent-fg: #ffffff;
-  --adm-ok: #2a8c58;
+  --adm-sidebar-muted: #7794bb;
+  --adm-accent: #e8735a;
+  --adm-accent-fg: #0a1120;
+  --adm-ok: #3fbd7f;
   --adm-danger: #e06a4a;
   --adm-cobro: #162345;
   --adm-cobro-fg: #e8e0d0;
+  --adm-warn: #e8a33c;
+  --adm-info: #9db8dd;
+  --adm-ok-fg: #0a1120;
+  --adm-danger-fg: #0a1120;
+  --adm-warn-fg: #0a1120;
+  --adm-info-fg: #0a1120;
   --adm-chip: #162345;
   --adm-chip-fg: #8fa8c8;
 }
@@ -85,37 +165,51 @@
   --adm-bg: #f7f3ee;
   --adm-panel: #ffffff;
   --adm-ink: #171114;
-  --adm-muted: #7c7370;
+  --adm-muted: #6c6360; /* AA: 5.3:1 sobre crema (antes #7c7370 = 4.2, fallaba) */
+  --adm-field: rgba(23, 17, 20, 0.49);
   --adm-border: rgba(23, 17, 20, 0.12);
   --adm-sidebar: #2a1218;
   --adm-sidebar-2: #3b1e26;
   --adm-sidebar-fg: #f2e6e2;
   --adm-sidebar-muted: #9a7a80;
-  --adm-accent: #0e8a63;
+  --adm-accent: #0b7554;
   --adm-accent-fg: #ffffff;
-  --adm-ok: #0e8a63;
+  --adm-ok: #0b7554;
   --adm-danger: #8c2f39;
   --adm-cobro: #8c2f39;
   --adm-cobro-fg: #f2e6e2;
+  --adm-warn: #8a5a08;
+  --adm-info: #6d4a55;
+  --adm-ok-fg: #ffffff;
+  --adm-danger-fg: #ffffff;
+  --adm-warn-fg: #ffffff;
+  --adm-info-fg: #ffffff;
   --adm-chip: #efe4de;
-  --adm-chip-fg: #7c6368;
+  --adm-chip-fg: #6b5459;
 }
 :root[data-tema='vino-cesped'].dark {
   --adm-bg: #160d10;
   --adm-panel: #221419;
   --adm-ink: #fdf2e9;
-  --adm-muted: #8e6e75;
+  --adm-muted: #b8a2a8;
+  --adm-field: rgba(253, 242, 233, 0.38);
   --adm-border: rgba(253, 242, 233, 0.1);
   --adm-sidebar: #0f080a;
   --adm-sidebar-2: #2a1218;
   --adm-sidebar-fg: #fdf2e9;
-  --adm-sidebar-muted: #7a5a62;
+  --adm-sidebar-muted: #ae8b93;
   --adm-accent: #00e5a0;
   --adm-accent-fg: #0f080a;
   --adm-ok: #00e5a0;
   --adm-danger: #ff5f40;
   --adm-cobro: #8c2f39;
   --adm-cobro-fg: #fdf2e9;
+  --adm-warn: #ffb224;
+  --adm-info: #d99aa6;
+  --adm-ok-fg: #160d10;
+  --adm-danger-fg: #160d10;
+  --adm-warn-fg: #160d10;
+  --adm-info-fg: #160d10;
   --adm-chip: #2a1218;
   --adm-chip-fg: #b08a92;
 }
@@ -125,18 +219,25 @@
   --adm-bg: #f9f3ec;
   --adm-panel: #ffffff;
   --adm-ink: #181510;
-  --adm-muted: #7e756b;
+  --adm-muted: #6e655b; /* AA: 5.2:1 sobre crema (antes #7e756b = 4.1, fallaba) */
+  --adm-field: rgba(24, 21, 16, 0.49);
   --adm-border: rgba(24, 21, 16, 0.12);
   --adm-sidebar: #171a15;
   --adm-sidebar-2: #242820;
   --adm-sidebar-fg: #f8e8da;
   --adm-sidebar-muted: #8a8578;
-  --adm-accent: #d55a2b;
+  --adm-accent: #b84c21;
   --adm-accent-fg: #ffffff;
-  --adm-ok: #178a5e;
+  --adm-ok: #147553;
   --adm-danger: #8e1e3c;
   --adm-cobro: #8e1e3c;
   --adm-cobro-fg: #f8e8da;
+  --adm-warn: #8a5a08;
+  --adm-info: #9c2570;
+  --adm-ok-fg: #ffffff;
+  --adm-danger-fg: #ffffff;
+  --adm-warn-fg: #ffffff;
+  --adm-info-fg: #ffffff;
   --adm-chip: #f3e2f0;
   --adm-chip-fg: #a82877;
 }
@@ -145,24 +246,182 @@
   --adm-panel: #1c1f19;
   --adm-ink: #f8e8da;
   --adm-muted: #8a8578;
+  --adm-field: rgba(248, 232, 218, 0.39);
   --adm-border: rgba(248, 232, 218, 0.1);
   --adm-sidebar: #0b0d09;
   --adm-sidebar-2: #1c1f19;
   --adm-sidebar-fg: #f8e8da;
-  --adm-sidebar-muted: #6e6a5e;
+  --adm-sidebar-muted: #a09a8b;
   --adm-accent: #f0824f;
   --adm-accent-fg: #12140f;
   --adm-ok: #3ecf8e;
   --adm-danger: #e8506b;
   --adm-cobro: #8e1e3c;
   --adm-cobro-fg: #f8e8da;
+  --adm-warn: #f0b429;
+  --adm-info: #e072b4;
+  --adm-ok-fg: #12140f;
+  --adm-danger-fg: #12140f;
+  --adm-warn-fg: #12140f;
+  --adm-info-fg: #12140f;
   --adm-chip: #2a1c28;
-  --adm-chip-fg: #d14fa6;
+  --adm-chip-fg: #e078bb;
+}
+
+/* ─── SUPERFICIE DE OPERACIÓN (--ops-*) ──────────────────────────────────────
+   Decisión de Chris (25-jul): el tema del TENANT también llega a operación.
+   Antes el POS/KDS/Mesas/Propinero tenían la paleta industrial QUEMADA
+   (obsidiana/cesped/arrecife), así que cambiar de tema no se notaba en las
+   pantallas que más se usan.
+
+   Operación NO se vuelve admin: conserva su carácter —contraste alto, cifras
+   grandes, esquinas redondas, targets de 44px— pero el COLOR pasa a ser del
+   restaurante. Un tenant con Fénix ve su POS en Fénix.
+
+   Roles (los mismos en los tres temas; cambiar de tema = cambiar el bloque):
+     bg/panel/panel-2  superficies, de fuera hacia dentro
+     ink/muted/border  texto y separadores
+     accent            acción primaria y pestaña activa
+     cobro             CTA de dinero — el botón más visible de la pantalla
+     ok/warn/danger    estado: mesa libre / esperando cuenta / ocupada
+     info              reservas y secundarios
+
+   Los estados de mesa mapean a roles, NO a colores: libre→ok, ocupada→danger,
+   por_cobrar→warn, reservada→info. Por eso el mapa se lee igual en los 3 temas. */
+
+/* Terracota (default) */
+:root {
+  --ops-bg: #f2ede4;
+  --ops-panel: #ffffff;
+  --ops-panel-2: #f8f5ef;
+  --ops-ink: #14110c;
+  --ops-muted: #5f5950;
+  --ops-field: rgba(20, 17, 12, 0.49);
+  --ops-border: rgba(20, 17, 12, 0.14);
+  --ops-accent: #0d1b35;
+  --ops-accent-fg: #ffffff;
+  --ops-cobro: #c8442a;
+  --ops-cobro-fg: #ffffff;
+  --ops-ok: #146c45;
+  --ops-ok-fg: #ffffff;
+  --ops-warn: #8a5a08;
+  --ops-danger-fg: #ffffff;
+  --ops-danger: #b03a22;
+  --ops-info: #3f5580;
+}
+:root.dark {
+  --ops-bg: #080e1a;
+  --ops-panel: #0f1c30;
+  --ops-panel-2: #16263f;
+  --ops-ink: #eee7d9;
+  --ops-muted: #93aac6;
+  --ops-field: rgba(238, 231, 217, 0.41);
+  --ops-border: rgba(238, 231, 217, 0.14);
+  --ops-accent: #6f9bea;
+  --ops-accent-fg: #080e1a;
+  --ops-cobro: #e0603f;
+  --ops-cobro-fg: #14110c;
+  --ops-ok: #2fbf7f;
+  --ops-ok-fg: #080e1a;
+  --ops-warn: #e8a33c;
+  --ops-danger-fg: #14110c;
+  --ops-danger: #e0603f;
+  --ops-info: #9db8dd;
+}
+
+/* Vino × Cesped */
+:root[data-tema='vino-cesped'] {
+  --ops-bg: #f4efe9;
+  --ops-panel: #ffffff;
+  --ops-panel-2: #faf5f1;
+  --ops-ink: #171114;
+  --ops-muted: #63585a;
+  --ops-field: rgba(23, 17, 20, 0.49);
+  --ops-border: rgba(23, 17, 20, 0.14);
+  --ops-accent: #0b7554;
+  --ops-accent-fg: #ffffff;
+  --ops-cobro: #8c2f39;
+  --ops-cobro-fg: #ffffff;
+  --ops-ok: #0b7554;
+  --ops-ok-fg: #ffffff;
+  --ops-warn: #8a5a08;
+  --ops-danger-fg: #ffffff;
+  --ops-danger: #8c2f39;
+  --ops-info: #6d4a55;
+}
+:root[data-tema='vino-cesped'].dark {
+  --ops-bg: #120a0d;
+  --ops-panel: #1f1217;
+  --ops-panel-2: #2b191f;
+  --ops-ink: #fdf2e9;
+  --ops-muted: #b8a2a8;
+  --ops-field: rgba(253, 242, 233, 0.38);
+  --ops-border: rgba(253, 242, 233, 0.14);
+  --ops-accent: #00e5a0;
+  --ops-accent-fg: #120a0d;
+  --ops-cobro: #e8637a;
+  --ops-cobro-fg: #120a0d;
+  --ops-ok: #00e5a0;
+  --ops-ok-fg: #120a0d;
+  --ops-warn: #ffb224;
+  --ops-danger-fg: #120a0d;
+  --ops-danger: #ff7a5e;
+  --ops-info: #d99aa6;
+}
+
+/* Fénix */
+:root[data-tema='fenix'] {
+  --ops-bg: #f7f1ea;
+  --ops-panel: #ffffff;
+  --ops-panel-2: #fbf6f0;
+  --ops-ink: #181510;
+  --ops-muted: #635a51;
+  --ops-field: rgba(24, 21, 16, 0.49);
+  --ops-border: rgba(24, 21, 16, 0.14);
+  --ops-accent: #b44a20;
+  --ops-accent-fg: #ffffff;
+  --ops-cobro: #8e1e3c;
+  --ops-cobro-fg: #ffffff;
+  --ops-ok: #147553;
+  --ops-ok-fg: #ffffff;
+  --ops-warn: #8a5a08;
+  --ops-danger-fg: #ffffff;
+  --ops-danger: #8e1e3c;
+  --ops-info: #9c2570;
+}
+:root[data-tema='fenix'].dark {
+  --ops-bg: #101208;
+  --ops-panel: #1a1d14;
+  --ops-panel-2: #262a1f;
+  --ops-ink: #f8e8da;
+  --ops-muted: #a89f92;
+  --ops-field: rgba(248, 232, 218, 0.41);
+  --ops-border: rgba(248, 232, 218, 0.14);
+  --ops-accent: #f0824f;
+  --ops-accent-fg: #101208;
+  --ops-cobro: #e8506b;
+  --ops-cobro-fg: #101208;
+  --ops-ok: #3ecf8e;
+  --ops-ok-fg: #101208;
+  --ops-warn: #f0b429;
+  --ops-danger-fg: #101208;
+  --ops-danger: #f07a5e;
+  --ops-info: #e072b4;
 }
 
 /* Utilidades Tailwind vivas: bg-adm-panel, text-adm-ink, border-adm-border...
    'inline' = resuelven la variable al usarse → reaccionan a data-tema/.dark. */
 @theme inline {
+  /* Las tres velocidades como utilidades: duration-rapida / -media / -lenta.
+     Registrarlas aquí es lo que impide que vuelvan los números sueltos —
+     `duration-[250ms]` sigue siendo posible, pero ya no es el camino fácil. */
+  --transition-duration-rapida: var(--dur-rapida);
+  --transition-duration-media: var(--dur-media);
+  --transition-duration-lenta: var(--dur-lenta);
+
+  --color-adm-field: var(--adm-field);
+  --color-ops-field: var(--ops-field);
+
   --color-adm-bg: var(--adm-bg);
   --color-adm-panel: var(--adm-panel);
   --color-adm-ink: var(--adm-ink);
@@ -178,6 +437,155 @@
   --color-adm-danger: var(--adm-danger);
   --color-adm-cobro: var(--adm-cobro);
   --color-adm-cobro-fg: var(--adm-cobro-fg);
+  --color-adm-warn: var(--adm-warn);
+  --color-adm-warn-fg: var(--adm-warn-fg);
+  --color-adm-info: var(--adm-info);
+  --color-adm-info-fg: var(--adm-info-fg);
+  --color-adm-ok-fg: var(--adm-ok-fg);
+  --color-adm-danger-fg: var(--adm-danger-fg);
   --color-adm-chip: var(--adm-chip);
   --color-adm-chip-fg: var(--adm-chip-fg);
+
+  /* Operación: bg-ops-panel, text-ops-ink, border-ops-border… */
+  --color-ops-bg: var(--ops-bg);
+  --color-ops-panel: var(--ops-panel);
+  --color-ops-panel-2: var(--ops-panel-2);
+  --color-ops-ink: var(--ops-ink);
+  --color-ops-muted: var(--ops-muted);
+  --color-ops-border: var(--ops-border);
+  --color-ops-accent: var(--ops-accent);
+  --color-ops-accent-fg: var(--ops-accent-fg);
+  --color-ops-cobro: var(--ops-cobro);
+  --color-ops-cobro-fg: var(--ops-cobro-fg);
+  --color-ops-ok: var(--ops-ok);
+  --color-ops-ok-fg: var(--ops-ok-fg);
+  --color-ops-warn: var(--ops-warn);
+  --color-ops-danger: var(--ops-danger);
+  --color-ops-danger-fg: var(--ops-danger-fg);
+  --color-ops-info: var(--ops-info);
+}
+
+/* ─── SCROLLBARS ─────────────────────────────────────────────────────────────
+   Las nativas de Windows son grises de sistema: en el editorial crema cantan,
+   y en operación —donde el tema puede ser oscuro— aparecen como una franja
+   clara que no pertenece a nada.
+
+   Se tematizan derivando del color de TEXTO de cada superficie, no de un gris
+   fijo. Así siguen al tema del tenant sin definir un token nuevo por cada uno:
+   en un tema claro salen oscuras y en uno oscuro salen claras, solas.
+
+   Dos decisiones deliberadas:
+
+   · NO se adelgazan a 6px. En operación se toca con el dedo sobre una tablet,
+     y una barra fina es imposible de agarrar. 10px es el mínimo cómodo; el
+     ancho se gana en discreción de color, no en tamaño.
+
+   · La pista queda transparente. Una pista con fondo dibuja un canal
+     permanente al costado de cada lista, y en una pantalla con varias listas
+     eso son rayas por todas partes.
+
+   `scrollbar-color` cubre Firefox; `::-webkit-scrollbar` cubre Chrome, Edge y
+   el WebView de Tauri, que es donde corre la caja. */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, currentColor 22%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 999px;
+  /* El borde transparente con `background-clip` deja aire alrededor del pulgar
+     sin necesidad de márgenes: se ve más delgado de lo que es de agarrar. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, currentColor 38%, transparent);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, currentColor 52%, transparent);
+  background-clip: content-box;
+}
+
+/* La esquina donde se cruzan las dos barras: sin esto Windows pinta un cuadro
+   gris del sistema, que es justo lo que veníamos a quitar. */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* El ticket impreso y su vista previa se quedan con la barra nativa a
+   propósito: ese bloque simula papel térmico y no debe seguir el tema. */
+#area-impresion {
+  scrollbar-color: auto;
+}
+
+/* ── Con el dedo no hay barra que agarrar ────────────────────────────────────
+   En un puntero grueso —teléfono del mesero, tablet de la caja— la barra no es
+   un control: no se puede arrastrar con precisión y se desplaza empujando el
+   contenido. Ahí sólo hace dos cosas, y las dos malas: roba 10 px de ancho a
+   una lista que ya va justa, y dibuja una raya permanente al costado.
+
+   Lo de arriba sigue vigente donde SÍ hay ratón (la caja en Windows, el
+   escritorio del dueño): ahí la barra es un control de verdad y 10 px es el
+   mínimo agarrable.
+
+   Esto viene de los mockups de teléfono y tablet, que ocultan la barra por
+   completo. Tenían razón para touch y no para escritorio, así que se separa
+   por tipo de puntero en vez de elegir un bando. */
+@media (pointer: coarse) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* ── .solo-raton — superficie que SÓLO existe si hay cursor ──────────────────
+   Para los atajos que aparecen al pasar por encima. `opacity-0` +
+   `group-hover:opacity-100` es un buen trato con ratón: el control está a mano
+   y no roba sitio mientras no lo mires. Con el dedo el trato no existe, porque
+   no existe «pasar por encima»: el control queda montado, invisible e
+   inalcanzable, y la función que ofrece desaparece del producto sin que nadie
+   lo note — que es justo lo que pasaba con editar, reservar y traspasar en las
+   tarjetas del mapa de mesas.
+
+   Se oculta del todo en vez de hacerse visible en táctil a propósito. Esos
+   controles se dimensionaron para convivir con un cursor; sacarlos a la vista
+   sobre una tarjeta de 160 px los pone encima del sitio donde cae el pulgar y
+   compiten con el toque principal. La versión táctil de esas acciones vive en
+   el inspector, que es donde caben.
+
+   Vive aquí y no en una variante suelta de Tailwind para que la pregunta «¿hay
+   ratón?» se conteste en UN sitio, igual que el ancho se contesta en
+   `useAcoplado`. Repartida por el código, se cambia en dos de tres sitios.
+
+   La regla va en NEGATIVO —se oculta en puntero grueso— y no al revés. Si
+   escondiera por defecto y mostrara en `pointer: fine`, habría que devolver un
+   `display` concreto, y el correcto lo sabe el consumidor: uno de estos bloques
+   es `flex`, el siguiente podría ser `grid`. Un `revert` ahí devolvería `block`
+   y rompería la disposición sin decir nada.
+
+   Ocultando sólo en grueso, el `display` lo sigue poniendo la utilidad de
+   Tailwind y esto se limita a taparlo donde no sirve. Gana por orden en la hoja
+   —esta regla va después del `@import`— sin necesidad de `!important`. */
+@media (pointer: coarse) {
+  .solo-raton {
+    display: none;
+  }
 }

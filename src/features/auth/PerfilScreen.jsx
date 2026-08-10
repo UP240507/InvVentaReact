@@ -3,9 +3,10 @@
 // ventas/asistencias, teléfono espejado a staff, contraseña vía Supabase
 // Auth (solo elevados: los operativos entran por PIN y su credencial la
 // gestiona el Admin), y logout con el MISMO candado de jornada del sidebar.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
+import { PageShell } from '../../components/ui';
 import { useAuthStore } from './useAuthStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useSyncStore } from '../../store/useSyncStore';
@@ -27,6 +28,8 @@ import {
   Clock,
   X,
   BookMarked,
+  Store,
+  Copy,
 } from 'lucide-react';
 
 export default function PerfilScreen() {
@@ -71,6 +74,31 @@ export default function PerfilScreen() {
 
   const email = filaStaff?.email || user?.email || '—';
   const [telefono, setTelefono] = useState(filaStaff?.telefono || '');
+
+  // ── Código del restaurante (Fase 1.6) — solo sesión de gestión ────────────
+  // La llave que el staff teclea con su PIN al estrenar un dispositivo.
+  const esGestion = tieneFlag(getCapacidades(rol, roles_permisos), 'gestion');
+  const restauranteIdSesion = useAuthStore.getState().restauranteId;
+  const [codigoRestaurante, setCodigoRestaurante] = useState('');
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+  useEffect(() => {
+    if (!esGestion || !restauranteIdSesion) return;
+    supabase
+      .from('restaurantes')
+      .select('codigo')
+      .eq('id', restauranteIdSesion)
+      .maybeSingle()
+      .then(({ data }) => setCodigoRestaurante(data?.codigo || ''));
+  }, [esGestion, restauranteIdSesion]);
+  const copiarCodigoRestaurante = async () => {
+    try {
+      await navigator.clipboard.writeText(codigoRestaurante);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 2000);
+    } catch {
+      /* noop */
+    }
+  };
 
   // ── Métricas REALES de hoy ─────────────────────────────────────────────────
   const hoyStr = new Date().toDateString();
@@ -183,21 +211,25 @@ export default function PerfilScreen() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto flex flex-col h-full animate-in fade-in duration-500 pb-20 text-slate-800 dark:text-ui-text transition-colors">
+    <PageShell ancho="max-w-5xl" className="pb-20 overflow-y-auto">
       {/* ─── HEADER ─── */}
-      <div className="bg-white dark:bg-ui-humo p-8 rounded-[2.5rem] border-2 border-slate-100 dark:border-ui-border shadow-sm mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-6 transition-colors">
-        <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-indigo-500 to-violet-600 dark:from-brand-amatista dark:to-indigo-700 flex items-center justify-center text-white dark:text-ui-obsidiana text-4xl font-black shadow-xl shrink-0">
+      {/* `items-stretch` en columna, mismo motivo que en `OpsHeader`: con
+          `items-start` el bloque del nombre mide su contenido y el `truncate`
+          de abajo no tiene ancho contra el que recortar. El avatar no se
+          deforma porque lleva `w-24` explícito, que gana al estirado. */}
+      <div className="bg-white dark:bg-adm-panel p-8 rounded-ui-lg border-2 border-adm-border shadow-sm mb-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-6 transition-colors">
+        <div className="w-24 h-24 rounded-ui-lg bg-adm-info flex items-center justify-center text-adm-bg text-4xl font-black shadow-xl shrink-0">
           {(nombre[0] || '?').toUpperCase()}
         </div>
         <div className="min-w-0">
-          <h1 className="text-3xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tight truncate">
+          <h1 className="text-3xl font-black font-syne text-adm-ink tracking-tight truncate">
             {nombre}
           </h1>
-          <p className="text-indigo-600 dark:text-brand-amatista font-black flex items-center gap-2 uppercase text-xs tracking-widest bg-indigo-50 dark:bg-brand-amatista/10 px-3 py-1.5 rounded-xl w-fit mt-2 border border-indigo-100 dark:border-brand-amatista/30">
+          <p className="text-adm-info font-black flex items-center gap-2 uppercase text-xs tracking-widest bg-adm-info/10 px-3 py-1.5 rounded-ui w-fit mt-2 border border-adm-info/30">
             <Shield className="w-3.5 h-3.5" /> {rol}
           </p>
           {filaStaff?.fecha_ingreso && (
-            <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest mt-2 flex items-center gap-1.5">
+            <p className="text-[10px] font-bold text-adm-muted uppercase tracking-widest mt-2 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" /> En el equipo desde{' '}
               {new Date(filaStaff.fecha_ingreso).toLocaleDateString('es-MX', {
                 dateStyle: 'medium',
@@ -210,44 +242,44 @@ export default function PerfilScreen() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ─── MÉTRICAS DE HOY (reales) ─── */}
         <div className="space-y-4">
-          <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+          <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest px-2">
             Mi día, en números
           </h3>
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
+          <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
             <div className="flex justify-between items-start mb-3">
-              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-brand-cesped/10">
-                <Target className="w-5 h-5 text-emerald-600 dark:text-brand-cesped" />
+              <div className="p-3 rounded-ui bg-adm-ok/10">
+                <Target className="w-5 h-5 text-adm-ok" />
               </div>
-              <span className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+              <span className="text-[10px] font-black text-adm-muted uppercase tracking-widest">
                 {metricas.tickets} tickets
               </span>
             </div>
-            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted uppercase mb-1">
+            <p className="text-xs font-bold text-adm-muted uppercase mb-1">
               Ventas cobradas hoy
             </p>
-            <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+            <p className="text-2xl font-black text-adm-ink">
               {fmt(metricas.totalHoy)}
             </p>
           </div>
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
-            <div className="p-3 rounded-2xl bg-amber-50 dark:bg-brand-ambar/10 w-fit mb-3">
-              <Coins className="w-5 h-5 text-amber-500 dark:text-brand-ambar" />
+          <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
+            <div className="p-3 rounded-ui bg-adm-warn/10 w-fit mb-3">
+              <Coins className="w-5 h-5 text-adm-warn" />
             </div>
-            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted uppercase mb-1">
+            <p className="text-xs font-bold text-adm-muted uppercase mb-1">
               Propinas generadas hoy
             </p>
-            <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+            <p className="text-2xl font-black text-adm-ink">
               {fmt(metricas.propinasHoy)}
             </p>
           </div>
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
-            <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-brand-amatista/10 w-fit mb-3">
-              <Clock className="w-5 h-5 text-indigo-500 dark:text-brand-amatista" />
+          <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
+            <div className="p-3 rounded-ui bg-adm-info/10 w-fit mb-3">
+              <Clock className="w-5 h-5 text-adm-info" />
             </div>
-            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted uppercase mb-1">
+            <p className="text-xs font-bold text-adm-muted uppercase mb-1">
               Entrada de hoy
             </p>
-            <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+            <p className="text-2xl font-black text-adm-ink">
               {metricas.horaEntrada || 'Sin registro'}
             </p>
           </div>
@@ -255,40 +287,44 @@ export default function PerfilScreen() {
 
         {/* ─── DATOS + ACCIONES ─── */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-ui-humo p-8 rounded-[2.5rem] border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
-            <h3 className="text-xl font-black font-syne text-slate-900 dark:text-brand-nacar flex items-center gap-3 mb-6">
-              <User className="w-6 h-6 text-indigo-500 dark:text-brand-amatista" />{' '}
-              Datos de contacto
+          <div className="bg-white dark:bg-adm-panel p-8 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
+            <h3 className="text-xl font-black font-syne text-adm-ink flex items-center gap-3 mb-6">
+              <User className="w-6 h-6 text-adm-info" /> Datos de contacto
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2 opacity-80">
-                <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2 flex justify-between">
-                  Correo <span className="text-slate-300 dark:text-ui-muted/60">Lo gestiona el Admin en Staff</span>
+                <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2 flex justify-between">
+                  Correo{' '}
+                  <span className="text-adm-muted">
+                    Lo gestiona el Admin en Staff
+                  </span>
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-adm-muted" />
                   <input
                     type="email"
                     value={email}
                     readOnly
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-100 dark:bg-ui-obsidiana/50 border-2 border-transparent rounded-2xl font-bold text-slate-500 dark:text-ui-muted outline-none cursor-not-allowed"
+                    className="w-full pl-12 pr-4 py-3.5 bg-adm-chip dark:bg-adm-bg/50 border-2 border-transparent rounded-ui font-bold text-adm-muted outline-none cursor-not-allowed"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                   Teléfono de contacto
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-adm-muted" />
                     <input
                       type="tel"
                       value={telefono}
                       disabled={!filaStaff}
                       onChange={(e) => setTelefono(e.target.value)}
-                      placeholder={filaStaff ? '000 000 0000' : 'Sin fila de staff'}
-                      className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      placeholder={
+                        filaStaff ? '000 000 0000' : 'Sin fila de staff'
+                      }
+                      className="w-full pl-12 pr-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info dark:focus:border-adm-info transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   {filaStaff && (
@@ -298,7 +334,7 @@ export default function PerfilScreen() {
                         (telefono || '').trim() ===
                         (filaStaff.telefono || '').trim()
                       }
-                      className="px-4 rounded-2xl bg-slate-900 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana font-black disabled:opacity-30 active:scale-95 transition-all"
+                      className="px-4 rounded-ui bg-adm-ink dark:bg-adm-danger text-adm-danger-fg font-black disabled:opacity-30 active:scale-95 transition-all"
                       title="Guardar teléfono"
                     >
                       <Save className="w-4 h-4" />
@@ -309,31 +345,70 @@ export default function PerfilScreen() {
             </div>
           </div>
 
+          {/* ── Código del restaurante — solo gestión ── */}
+          {esGestion && codigoRestaurante && (
+            <div className="bg-white dark:bg-adm-panel p-8 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-black font-syne text-adm-ink flex items-center gap-3">
+                    <Store className="w-6 h-6 text-adm-info" /> Código del
+                    restaurante
+                  </h3>
+                  <p className="text-xs font-bold text-adm-muted mt-1">
+                    Tu equipo lo usa junto con su PIN para activar dispositivos
+                    nuevos.
+                  </p>
+                </div>
+                <button
+                  onClick={copiarCodigoRestaurante}
+                  title="Copiar código"
+                  className="shrink-0 flex items-center gap-2.5 px-5 py-3 rounded-ui border-2 border-adm-border bg-adm-bg font-black text-xl tracking-widest tabular-nums text-adm-ink hover:border-adm-info dark:hover:border-adm-ok transition-colors"
+                >
+                  {codigoRestaurante}
+                  <Copy className="w-4 h-4 text-adm-muted" />
+                </button>
+              </div>
+              {codigoCopiado && (
+                <p className="text-[11px] font-black text-adm-ok mt-2 text-right">
+                  Copiado ✓
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Tema */}
             <button
               onClick={toggleTemaGlobal}
-              className="p-6 rounded-[2rem] border-2 border-slate-100 dark:border-ui-border bg-white dark:bg-ui-humo flex items-center justify-between transition-all hover:border-indigo-200 dark:hover:border-brand-amatista/40"
+              className="p-6 rounded-ui-lg border-2 border-adm-border bg-white dark:bg-adm-panel flex items-center justify-between transition-all hover:border-adm-info/30 dark:hover:border-adm-info/40"
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${temaGlobal === 'dark' ? 'bg-brand-amatista/20' : 'bg-amber-50'}`}>
+                <div
+                  className={`p-2.5 rounded-ui ${temaGlobal === 'dark' ? 'bg-adm-info/20' : 'bg-adm-warn/10'}`}
+                >
                   {temaGlobal === 'dark' ? (
-                    <Moon className="w-5 h-5 text-brand-amatista" />
+                    <Moon className="w-5 h-5 text-adm-info" />
                   ) : (
-                    <Sun className="w-5 h-5 text-amber-500" />
+                    <Sun className="w-5 h-5 text-adm-warn" />
                   )}
                 </div>
                 <div className="text-left">
-                  <span className="font-black text-slate-800 dark:text-brand-nacar block">
+                  <span className="font-black text-adm-ink block">
                     Modo visual
                   </span>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest">
-                    {temaGlobal === 'dark' ? 'Nocturno activado' : 'Claro activado'}
+                  <span className="text-[10px] font-bold text-adm-muted uppercase tracking-widest">
+                    {temaGlobal === 'dark'
+                      ? 'Nocturno activado'
+                      : 'Claro activado'}
                   </span>
                 </div>
               </div>
-              <div className={`w-12 h-7 rounded-full relative transition-colors ${temaGlobal === 'dark' ? 'bg-brand-amatista' : 'bg-slate-200'}`}>
-                <div className={`absolute top-1 bg-white w-5 h-5 rounded-full transition-all shadow-sm ${temaGlobal === 'dark' ? 'left-6' : 'left-1'}`} />
+              <div
+                className={`w-12 h-7 rounded-full relative transition-colors ${temaGlobal === 'dark' ? 'bg-adm-info' : 'bg-adm-chip'}`}
+              >
+                <div
+                  className={`absolute top-1 bg-white w-5 h-5 rounded-full transition-all shadow-sm ${temaGlobal === 'dark' ? 'left-6' : 'left-1'}`}
+                />
               </div>
             </button>
 
@@ -341,24 +416,22 @@ export default function PerfilScreen() {
             {esElevado ? (
               <button
                 onClick={() => setModalPass(true)}
-                className="bg-white dark:bg-ui-humo border-2 border-slate-100 dark:border-ui-border p-6 rounded-[2rem] flex items-center gap-4 hover:border-indigo-200 dark:hover:border-brand-amatista/40 transition-all group"
+                className="bg-white dark:bg-adm-panel border-2 border-adm-border p-6 rounded-ui-lg flex items-center gap-4 hover:border-adm-info/30 dark:hover:border-adm-info/40 transition-all group"
               >
-                <div className="bg-indigo-50 dark:bg-brand-amatista/10 p-2.5 rounded-xl group-hover:bg-indigo-100 dark:group-hover:bg-brand-amatista/20 transition-colors">
-                  <Key className="w-5 h-5 text-indigo-600 dark:text-brand-amatista" />
+                <div className="bg-adm-info/10 p-2.5 rounded-ui group-hover:bg-adm-info/15 dark:group-hover:bg-adm-info/20 transition-colors">
+                  <Key className="w-5 h-5 text-adm-info" />
                 </div>
                 <div className="text-left">
-                  <p className="font-black text-slate-800 dark:text-brand-nacar">
-                    Contraseña
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                  <p className="font-black text-adm-ink">Contraseña</p>
+                  <p className="text-[10px] font-bold text-adm-muted uppercase tracking-widest">
                     Cambiar mi acceso
                   </p>
                 </div>
               </button>
             ) : (
-              <div className="bg-slate-50 dark:bg-ui-obsidiana border-2 border-dashed border-slate-200 dark:border-ui-border p-6 rounded-[2rem] flex items-center gap-4">
-                <Key className="w-5 h-5 text-slate-300 dark:text-ui-muted shrink-0" />
-                <p className="text-xs font-bold text-slate-400 dark:text-ui-muted">
+              <div className="bg-adm-bg border-2 border-dashed border-adm-border p-6 rounded-ui-lg flex items-center gap-4">
+                <Key className="w-5 h-5 text-adm-muted shrink-0" />
+                <p className="text-xs font-bold text-adm-muted">
                   Tu acceso es por PIN. Si necesitas cambiarlo, pídelo a un
                   Admin en la pantalla de Staff.
                 </p>
@@ -368,12 +441,10 @@ export default function PerfilScreen() {
             {/* Logout (candado de jornada incluido) */}
             <button
               onClick={intentarLogout}
-              className="md:col-span-2 bg-rose-50 dark:bg-brand-arrecife/10 border-2 border-rose-100 dark:border-brand-arrecife/20 p-6 rounded-[2rem] flex items-center justify-center gap-3 hover:bg-rose-100 dark:hover:bg-brand-arrecife/20 transition-all"
+              className="md:col-span-2 bg-adm-danger/10 border-2 border-adm-danger/30 p-6 rounded-ui-lg flex items-center justify-center gap-3 hover:bg-adm-danger/15 dark:hover:bg-adm-danger/20 transition-all"
             >
-              <LogOut className="w-5 h-5 text-rose-500 dark:text-brand-arrecife" />
-              <span className="font-black text-rose-700 dark:text-brand-arrecife">
-                Cerrar sesión
-              </span>
+              <LogOut className="w-5 h-5 text-adm-danger" />
+              <span className="font-black text-adm-danger">Cerrar sesión</span>
             </button>
           </div>
         </div>
@@ -381,15 +452,15 @@ export default function PerfilScreen() {
 
       {/* MODAL: cambiar contraseña */}
       {modalPass && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 max-w-sm w-full shadow-2xl border-2 border-adm-border animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-black font-syne text-slate-900 dark:text-brand-nacar">
+              <h2 className="text-xl font-black font-syne text-adm-ink">
                 Cambiar contraseña
               </h2>
               <button
                 onClick={() => setModalPass(false)}
-                className="p-2 text-slate-400 hover:text-brand-arrecife"
+                className="p-2 text-adm-muted hover:text-adm-danger"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -401,7 +472,7 @@ export default function PerfilScreen() {
                 placeholder="Nueva contraseña (mín. 8)"
                 value={pass1}
                 onChange={(e) => setPass1(e.target.value)}
-                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista transition-all"
+                className="w-full px-5 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
               />
               <input
                 type="password"
@@ -411,12 +482,12 @@ export default function PerfilScreen() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') cambiarPassword();
                 }}
-                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista transition-all"
+                className="w-full px-5 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
               />
               <button
                 onClick={cambiarPassword}
                 disabled={guardandoPass || pass1.length < 8 || pass1 !== pass2}
-                className="w-full py-4 rounded-2xl font-black uppercase tracking-widest bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all"
+                className="w-full py-4 rounded-ui font-black uppercase tracking-widest bg-adm-info text-adm-info-fg disabled:opacity-40 active:scale-95 transition-all"
               >
                 {guardandoPass ? 'Guardando...' : 'Actualizar'}
               </button>
@@ -427,15 +498,15 @@ export default function PerfilScreen() {
 
       {/* MODAL: jornada abierta (candado) */}
       {modalJornada && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
-            <div className="w-16 h-16 bg-indigo-100 dark:bg-brand-amatista/20 rounded-full flex items-center justify-center mx-auto mb-5">
-              <BookMarked className="w-8 h-8 text-indigo-500 dark:text-brand-amatista" />
+        <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 max-w-sm w-full shadow-2xl text-center border-2 border-adm-border animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-adm-info/15 rounded-full flex items-center justify-center mx-auto mb-5">
+              <BookMarked className="w-8 h-8 text-adm-info" />
             </div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
+            <h2 className="text-2xl font-black font-syne text-adm-ink mb-2">
               Tu jornada sigue abierta
             </h2>
-            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
+            <p className="text-adm-muted font-bold text-sm mb-8">
               Registra tu salida en el checador antes de cerrar sesión.
             </p>
             <div className="flex flex-col gap-3">
@@ -444,13 +515,13 @@ export default function PerfilScreen() {
                   setModalJornada(false);
                   navigate('/checador');
                 }}
-                className="w-full bg-indigo-500 dark:bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
+                className="w-full bg-adm-info hover:bg-adm-info text-adm-info-fg py-4 rounded-ui font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
               >
                 Ir al checador
               </button>
               <button
                 onClick={() => setModalJornada(false)}
-                className="w-full bg-slate-100 dark:bg-ui-obsidiana text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+                className="w-full bg-adm-chip dark:bg-adm-bg text-adm-muted dark:text-adm-ink py-4 rounded-ui font-bold transition-colors"
               >
                 Seguir trabajando
               </button>
@@ -461,27 +532,27 @@ export default function PerfilScreen() {
 
       {/* MODAL: confirmar logout */}
       {confirmLogout && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
-            <div className="w-16 h-16 bg-rose-100 dark:bg-brand-arrecife/20 rounded-full flex items-center justify-center mx-auto mb-5">
-              <LogOut className="w-8 h-8 text-rose-500 dark:text-brand-arrecife" />
+        <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 max-w-sm w-full shadow-2xl text-center border-2 border-adm-border animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-adm-danger/15 rounded-full flex items-center justify-center mx-auto mb-5">
+              <LogOut className="w-8 h-8 text-adm-danger" />
             </div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
+            <h2 className="text-2xl font-black font-syne text-adm-ink mb-2">
               ¿Cerrar sesión?
             </h2>
-            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
+            <p className="text-adm-muted font-bold text-sm mb-8">
               Se cerrará tu sesión en esta terminal.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmLogout(false)}
-                className="flex-1 bg-slate-100 dark:bg-ui-obsidiana text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+                className="flex-1 bg-adm-chip dark:bg-adm-bg text-adm-muted dark:text-adm-ink py-4 rounded-ui font-bold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={ejecutarLogout}
-                className="flex-1 bg-rose-500 dark:bg-brand-arrecife hover:bg-rose-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
+                className="flex-1 bg-adm-danger text-adm-danger-fg py-4 rounded-ui font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
               >
                 Salir
               </button>
@@ -489,6 +560,6 @@ export default function PerfilScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -18,3 +18,43 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# ─── Hub LAN ────────────────────────────────────────────────────────────────
+# axum embebido en el propio proceso, NO un sidecar Node/Go: un solo binario,
+# sin runtime extra que instalar ni proceso huérfano que siga vivo si la app
+# cierra mal. La caja ya es un proceso; el servidor vive dentro de él.
+axum = { version = "0.8", features = ["json"] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "time",
+    "sync",
+    "fs",
+    "io-util",
+] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+
+[target.'cfg(windows)'.dependencies]
+# Impresión RAW por el spooler de Windows. Es la vía correcta para una térmica
+# USB genérica: Windows la instala como impresora, no como puerto serie, así
+# que no existe un COMx al que escribir — hay que entregarle los bytes al
+# spooler con el tipo de dato "RAW" para que no intente maquetarlos como si
+# fueran un documento.
+#
+# Sobre las features: `Win32_Graphics_Printing` NO basta. En el crate `windows`
+# 0.58, `OpenPrinterW` y `PRINTER_DEFAULTSW` están detrás de
+# `Win32_Graphics_Gdi`, y `PRINTER_INFO_2W` además detrás de `Win32_Security`
+# (la estructura incluye un descriptor de seguridad). Sin ellas el error no dice
+# "falta una feature" a primera vista: dice "no existe `OpenPrinterW` en
+# Win32::Graphics::Printing" y sugiere `GetPrinterW`, que no es lo que se busca.
+#
+# El resto de la API de impresión —StartDocPrinterW, WritePrinter, EnumPrintersW,
+# ClosePrinter, DOC_INFO_1W— no está gateada.
+#
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Printing",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+] }

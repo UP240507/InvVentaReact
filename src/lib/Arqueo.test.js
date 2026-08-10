@@ -1,6 +1,6 @@
 // src/lib/Arqueo.test.js
 import { describe, it, expect } from 'vitest';
-import { calcularTotalesTurno } from './arqueo';
+import { calcularTotalesTurno } from './Arqueo';
 
 const turno = { id: 7, fecha_apertura: '2026-06-12T08:00:00Z' };
 

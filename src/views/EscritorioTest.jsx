@@ -86,13 +86,13 @@ export default function EscritorioTest() {
           <main className="flex-1 overflow-y-auto p-6 flex flex-col bg-ui-obsidiana">
             {/* Action Ribbon Contextual de Piso */}
             <div className="flex items-center gap-2 mb-6 shrink-0">
-              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-xl text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
+              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-ui text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
                 [ + Nueva Orden ]
               </button>
-              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-xl text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
+              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-ui text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
                 [ Juntar Mesas ]
               </button>
-              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-xl text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
+              <button className="px-4 py-2 text-xs font-bold bg-ui-humo border border-ui-border rounded-ui text-ui-text hover:border-brand-cesped hover:text-brand-cesped transition-all">
                 [ Transferir Comanda ]
               </button>
             </div>
@@ -118,7 +118,7 @@ export default function EscritorioTest() {
                   <button
                     key={m.id}
                     onClick={() => setMesaSeleccionada(isSelected ? null : m)}
-                    className={`aspect-square relative p-4 rounded-2xl flex flex-col items-center justify-center transition-all duration-150 border-2 text-center
+                    className={`aspect-square relative p-4 rounded-ui flex flex-col items-center justify-center transition-all duration-150 border-2 text-center
                       ${
                         isSelected
                           ? 'border-brand-cesped bg-ui-border/30 shadow-[0_0_20px_rgba(0,229,160,0.1)] scale-[1.02] z-10'
@@ -137,7 +137,7 @@ export default function EscritorioTest() {
 
                     {/* Badge de Mesas Combinadas (+N) */}
                     {satelites > 0 && (
-                      <span className="absolute top-2.5 right-3 px-1.5 py-0.5 rounded bg-brand-ambar/10 border border-brand-ambar/30 text-[9px] font-bold text-brand-ambar font-mono">
+                      <span className="absolute top-2.5 right-3 px-1.5 py-0.5 rounded-ui bg-brand-ambar/10 border border-brand-ambar/30 text-[9px] font-bold text-brand-ambar font-mono">
                         +{satelites}
                       </span>
                     )}
@@ -179,7 +179,7 @@ export default function EscritorioTest() {
                     <h3 className="text-xl font-bold font-syne text-ui-text">
                       Mesa {mesaSeleccionada.numero}
                     </h3>
-                    <span className="px-2 py-0.5 bg-brand-cesped/10 text-brand-cesped text-[9px] font-bold tracking-widest uppercase rounded border border-brand-cesped/20">
+                    <span className="px-2 py-0.5 bg-brand-cesped/10 text-brand-cesped text-[9px] font-bold tracking-widest uppercase rounded-ui border border-brand-cesped/20">
                       {mesaSeleccionada.estado}
                     </span>
                   </div>
@@ -197,11 +197,11 @@ export default function EscritorioTest() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 mt-4">
-                    <div className="flex items-center gap-1.5 text-[11px] text-ui-text bg-ui-obsidiana px-2.5 py-1 rounded-xl border border-ui-border font-mono">
+                    <div className="flex items-center gap-1.5 text-[11px] text-ui-text bg-ui-obsidiana px-2.5 py-1 rounded-ui border border-ui-border font-mono">
                       <Clock className="h-3 w-3 text-brand-ambar" />{' '}
                       {mesaSeleccionada.tiempo}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-ui-text bg-ui-obsidiana px-2.5 py-1 rounded-xl border border-ui-border">
+                    <div className="flex items-center gap-1.5 text-[11px] text-ui-text bg-ui-obsidiana px-2.5 py-1 rounded-ui border border-ui-border">
                       <Users className="h-3 w-3 text-brand-amatista" />{' '}
                       {mesaSeleccionada.pax} PAX
                     </div>
@@ -209,7 +209,7 @@ export default function EscritorioTest() {
 
                   {/* Warning Crítico de Rondas del Sprint 5 */}
                   {mesaSeleccionada.tieneRondasPendientes && (
-                    <div className="mt-4 flex items-center gap-2 p-2.5 bg-brand-arrecife/10 border border-brand-arrecife/20 rounded-xl text-brand-arrecife text-xs">
+                    <div className="mt-4 flex items-center gap-2 p-2.5 bg-brand-arrecife/10 border border-brand-arrecife/20 rounded-ui text-brand-arrecife text-xs">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
                       <span>Hay comandas listas sin entregar en cocina</span>
                     </div>
@@ -218,15 +218,15 @@ export default function EscritorioTest() {
 
                 {/* Bloque de Acciones Operativas de Flujo */}
                 <div className="p-4 space-y-2 flex-1 overflow-y-auto">
-                  <button className="w-full py-2.5 text-xs font-bold bg-ui-obsidiana border border-ui-border rounded-xl hover:border-ui-muted text-ui-text transition-colors font-syne uppercase tracking-wider">
+                  <button className="w-full py-2.5 text-xs font-bold bg-ui-obsidiana border border-ui-border rounded-ui hover:border-ui-muted text-ui-text transition-colors font-syne uppercase tracking-wider">
                     [ Abrir Comanda / Carrito ]
                   </button>
-                  <button className="w-full py-2.5 text-xs font-bold bg-ui-obsidiana border border-ui-border rounded-xl hover:border-ui-muted text-ui-text transition-colors font-syne uppercase tracking-wider">
+                  <button className="w-full py-2.5 text-xs font-bold bg-ui-obsidiana border border-ui-border rounded-ui hover:border-ui-muted text-ui-text transition-colors font-syne uppercase tracking-wider">
                     [ Administrar Rondas ]
                   </button>
 
                   {mesaSeleccionada.total > 0 && (
-                    <button className="w-full py-3 mt-4 text-xs font-bold bg-brand-arrecife text-ui-obsidiana rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-1 font-syne uppercase tracking-widest shadow-[0_4px_12px_rgba(255,95,40,0.15)]">
+                    <button className="w-full py-3 mt-4 text-xs font-bold bg-brand-arrecife text-ui-obsidiana rounded-ui hover:opacity-90 transition-all flex items-center justify-center gap-1 font-syne uppercase tracking-widest shadow-[0_4px_12px_rgba(255,95,40,0.15)]">
                       [ Proceder al Cobro ] <ChevronRight className="h-4 w-4" />
                     </button>
                   )}
@@ -251,19 +251,19 @@ export default function EscritorioTest() {
               <ul className="space-y-1.5 text-xs font-mono text-ui-muted">
                 <li className="flex items-center justify-between">
                   <span>Nueva orden</span>{' '}
-                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded text-ui-text text-[10px]">
+                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded-ui text-ui-text text-[10px]">
                     F2
                   </kbd>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>Cobrar mesa</span>{' '}
-                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded text-ui-text text-[10px]">
+                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded-ui text-ui-text text-[10px]">
                     F4
                   </kbd>
                 </li>
                 <li className="flex items-center justify-between">
                   <span>Cerrar inspector</span>{' '}
-                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded text-ui-text text-[10px]">
+                  <kbd className="bg-ui-border px-1.5 py-0.5 rounded-ui text-ui-text text-[10px]">
                     ESC
                   </kbd>
                 </li>

@@ -19,6 +19,8 @@ import { useAppStore } from '../../../store/useAppStore';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
+import { importeDeLinea } from '../../../lib/Fiscal';
+import { useAcoplado } from '../../../hooks/useAcoplado';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -55,6 +57,15 @@ export default function ModalCobro({
   onClose,
   onProcesarPago,
 }) {
+  // ¿Caben las dos columnas del modal, o hay que apilarlas? Mismo umbral y
+  // mismo hook que el resto de la app.
+  //
+  // Antes el modal cambiaba de figura en `md` (768) y todo lo demás en 1024:
+  // dos números que mantener, y entre ellos una franja donde el modal se ponía
+  // a dos columnas mientras el mapa que hay detrás seguía en una. `useAcoplado`
+  // existe justamente para que ese número esté escrito en un sitio.
+  const acoplado = useAcoplado();
+
   // ─── LÓGICA ORIGINAL INTACTA ───
   const totalSanitizado = round2(safePriceString(total));
   const comensalesSanitizado = safeNumber(comensales, 1);
@@ -163,7 +174,10 @@ export default function ModalCobro({
   const [clienteBusqueda, setClienteBusqueda] = useState('');
   const [clienteSel, setClienteSel] = useState(null);
   const [altaExpres, setAltaExpres] = useState(false);
-  const [nuevoCliente, setNuevoCliente] = useState({ nombre: '', telefono: '' });
+  const [nuevoCliente, setNuevoCliente] = useState({
+    nombre: '',
+    telefono: '',
+  });
 
   const clientesMatch = useMemo(() => {
     const term = clienteBusqueda.trim().toLowerCase();
@@ -239,9 +253,14 @@ export default function ModalCobro({
     Object.entries(seleccionPlatillos).reduce((acc, [id, qty]) => {
       const item = carritoSanitizado.find((i) => String(i.id) === String(id));
       if (!item) return acc;
-      const precio = getPrecio(item);
-      const cantidad = safeNumber(qty, 0);
-      return acc + precio * cantidad;
+      // importeDeLinea aplica el descuento de producto: cobrar una selección
+      // parcial debe respetarlo igual que el cobro completo.
+      const { neto } = importeDeLinea({
+        precio: getPrecio(item),
+        cantidad: safeNumber(qty, 0),
+        descuento: item.descuento,
+      });
+      return acc + neto;
     }, 0),
   );
 
@@ -388,239 +407,414 @@ export default function ModalCobro({
 
   const montoPorPersona = round2(granTotal / safeNumber(divisorPersonas, 1));
 
+  // ─── EL PIE DEL COBRO, EXTRAÍDO ──────────────────────────────────────────
+  // Saldo, cambio y el botón de confirmar. Se saca a una constante porque las
+  // dos figuras lo colocan en sitios DISTINTOS del árbol —dentro de la columna
+  // derecha con sitio, como pie del modal entero sin él— y la alternativa era
+  // escribirlo dos veces. Dos copias de un botón que cobra es exactamente el
+  // tipo de duplicado que se desincroniza: se arregla una y la otra sigue
+  // cobrando mal durante meses.
+  //
+  // Definido una vez, colocado una vez: abajo sólo una de las dos ramas lo
+  // pinta.
+  const pieDeCobro = (
+    <div className="shrink-0 p-5 lg:p-8 bg-white dark:bg-ops-panel border-t-2 border-ops-border shadow-[0_-10px_20px_rgba(0,0,0,0.02)] transition-colors z-10">
+      <div className="flex justify-between items-center mb-3">
+        <span className="font-black text-ops-muted uppercase tracking-widest text-xs">
+          Saldo Pendiente
+        </span>
+        <span
+          className={`font-black text-2xl ${saldoPendiente > 0 ? 'text-ops-danger' : 'text-ops-ok'}`}
+        >
+          $
+          {Math.max(0, saldoPendiente).toLocaleString('es-MX', {
+            minimumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+      {cambio > 0 && (
+        <div className="flex justify-between items-center mb-4 p-4 bg-ops-ok/10 rounded-ui border-2 border-ops-ok/30">
+          <span className="font-black text-ops-ok uppercase tracking-widest text-xs">
+            Cambio a entregar
+          </span>
+          <span className="font-black text-3xl text-ops-ok">
+            ${cambio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+      )}
+
+      <button
+        onClick={() =>
+          onProcesarPago({
+            pagosDetalle: pagos,
+            totalPagado,
+            cambio,
+            propina: propinaTotal,
+            totalConPropina: granTotal,
+            isCobroParcial,
+            seleccion: seleccionPlatillos,
+            // % EFECTIVO total (descuento autorizado + canje): el motor
+            // fiscal escala base e IVA con este único porcentaje.
+            descuentoPct:
+              totalBase > 0
+                ? ((montoDescuento + canjeDescuento) / totalBase) * 100
+                : 0,
+            descuentoMonto: round2(montoDescuento + canjeDescuento),
+            descuentoAutorizadoPor: descuentoAplicado?.autorizadoPor || null,
+            // CRM: null = venta de mostrador sin cliente (default).
+            clienteId: clienteSel?.id ?? null,
+            clienteNombre: clienteSel?.nombre ?? null,
+            // Lealtad: canje elegido con su monto aplicado (PosScreen
+            // encola canjear_puntos y audita).
+            canje: canjeSel ? { ...canjeSel, monto: canjeDescuento } : null,
+          })
+        }
+        disabled={!estaPagado}
+        // `py-4 text-base` sin ancho: a `text-xl` la frase «Confirmar y Cerrar
+        // Cuenta» pide ~250 px y el botón tiene ~276, así que con el `gap-3` de
+        // por medio se salía por la derecha. `text-center` y sin `truncate`
+        // aposta: si algún día no cupiera, que se parta en dos líneas antes que
+        // esconder mitad de la palabra «Cuenta».
+        className={`w-full mt-4 font-black py-4 lg:py-6 rounded-ui shadow-xl transition-all text-base lg:text-xl flex justify-center items-center text-center gap-2 lg:gap-3 ${
+          isCobroParcial
+            ? 'bg-ops-accent text-ops-accent-fg shadow-ops-accent/30'
+            : 'bg-ops-ok text-ops-ok-fg shadow-ops-ok/30'
+        } disabled:bg-ops-panel-2 disabled:dark:bg-ops-border disabled:text-ops-muted disabled:dark:text-ops-muted disabled:shadow-none hover:scale-[1.02] active:scale-95`}
+      >
+        {isCobroParcial
+          ? 'Cobrar Selección (Mesa Abierta)'
+          : 'Confirmar y Cerrar Cuenta'}
+      </button>
+    </div>
+  );
+
   // ─── INTERFAZ REDISEÑADA (TEMA DÍA/NOCHE) ───
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md animate-in fade-in">
-      <div className="bg-white dark:bg-ui-humo rounded-[3rem] w-full max-w-5xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh] border-2 border-slate-100 dark:border-ui-border">
-        {/* LADO IZQUIERDO: CONTROLES DE PAGO */}
-        <div className="w-full md:w-1/2 bg-slate-50 dark:bg-ui-obsidiana/50 p-6 md:p-8 flex flex-col border-r border-slate-200 dark:border-ui-border overflow-y-auto custom-scrollbar transition-colors">
-          <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-6 flex items-center gap-2">
-            <Calculator className="w-6 h-6 text-indigo-500 dark:text-brand-amatista" />{' '}
-            Opciones de Cobro
-          </h2>
+    // Sin margen en estrecho: el modal ocupa la pantalla. Los 16 px de `p-4` a
+    // cada lado se comen 32 de 390, y aquí dentro hay filas de etiqueta+cifra
+    // que ya iban justas — es de donde salía que «Total Final» y «$40.00» se
+    // montaran uno encima del otro.
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 lg:p-4 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md animate-in fade-in">
+      <div className="bg-white dark:bg-ops-panel rounded-none lg:rounded-ui-lg w-full lg:max-w-5xl shadow-2xl flex flex-col overflow-hidden h-full lg:h-auto lg:max-h-[90vh] border-0 lg:border-2 border-ops-border">
+        {/* ─── CABECERA · sólo en estrecho ───
+            Con sitio, cada columna trae su propio encabezado y el aspa vive en
+            la esquina del panel derecho. Apiladas, esa aspa `absolute` aterriza
+            sobre el cuerpo del ticket —encima de «Desglose de la cuenta»— y el
+            título de la columna izquierda se va con el scroll. Una barra fija
+            resuelve las dos: dice dónde estás y ofrece la salida sin depender
+            de que algo esté a la vista. */}
+        {!acoplado && (
+          <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b-2 border-ops-border bg-ops-panel-2 dark:bg-ops-bg/50">
+            <h2 className="text-xl font-black font-syne text-ops-ink flex items-center gap-2 min-w-0">
+              <Calculator className="w-5 h-5 text-ops-accent shrink-0" />
+              <span className="truncate">Cobro</span>
+            </h2>
+            <button
+              onClick={onClose}
+              aria-label="Cerrar"
+              className="shrink-0 p-2 -mr-1 bg-ops-panel-2 dark:bg-ops-bg text-ops-muted hover:text-ops-ink rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
 
-          {/* SECCIÓN DE DESCUENTO (autorizado) */}
-          <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted flex items-center gap-2">
-                <Percent className="w-4 h-4 text-indigo-500 dark:text-brand-amatista" />{' '}
-                Descuento
+        {/* ─── BANNER DEL TOTAL · sólo en estrecho ───
+            La cifra sale del scroll y se ancla. Es lo que corrigió la maqueta
+            de teléfono y tenía razón: el total estaba puesto donde PERTENECE
+            —cerrando el desglose, que es su sitio semántico— y no donde hace
+            falta mirarlo. Cambia cada vez que se toca la propina o el
+            descuento, o sea justo mientras estás desplazado por las opciones y
+            el desglose te queda debajo del pliegue.
+
+            Con sitio no hace falta: ahí el desglose entero está siempre a la
+            vista en la columna de al lado, y un segundo total sería el mismo
+            número dos veces en la misma pantalla.
+
+            El total aparece igualmente al pie del desglose, y es deliberado: no
+            son repeticiones sino dos papeles. Aquí es la cifra viva que se está
+            componiendo; allí, la conclusión de la suma. Por eso la de allí se
+            queda pequeña cuando ésta existe. */}
+        {!acoplado && (
+          <div className="shrink-0 flex items-center justify-between gap-4 px-5 py-3 border-b-2 border-ops-border bg-ops-panel-2/60 dark:bg-ops-bg/40">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-ops-muted">
+                Total Final
               </p>
-              {!descuentoAplicado && (
-                <button
-                  onClick={() => setMostrarDescuento((v) => !v)}
-                  className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-brand-amatista hover:underline"
-                >
-                  {mostrarDescuento ? 'Cancelar' : 'Agregar'}
-                </button>
-              )}
+              <p className="text-4xl font-black font-syne text-ops-ink leading-none tabular-nums">
+                $
+                {granTotal.toLocaleString('es-MX', {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
             </div>
-
-            {descuentoAplicado ? (
-              <div className="flex items-center justify-between bg-indigo-50 dark:bg-brand-amatista/10 border border-indigo-200 dark:border-brand-amatista/30 rounded-xl px-4 py-3 mt-2">
-                <div>
-                  <p className="font-black text-indigo-600 dark:text-brand-amatista">
-                    −$
-                    {montoDescuento.toLocaleString('es-MX', {
-                      minimumFractionDigits: 2,
-                    })}{' '}
-                    ({round2(pctDescuento)}%)
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted flex items-center gap-1 mt-0.5">
-                    <ShieldCheck className="w-3 h-3" /> Autorizó:{' '}
-                    {descuentoAplicado.autorizadoPor}
-                  </p>
-                </div>
-                <button
-                  onClick={quitarDescuento}
-                  className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg"
-                  title="Quitar descuento"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {propinaTotal > 0 && (
+              <div className="text-right shrink-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-ops-muted">
+                  Propina
+                </p>
+                <p className="text-sm font-black text-ops-ok tabular-nums">
+                  +$
+                  {propinaTotal.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}
+                </p>
               </div>
-            ) : (
-              mostrarDescuento && (
-                <div className="mt-3 space-y-3">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setDescTipo('pct')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold border-2 transition-all ${descTipo === 'pct' ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista' : 'border-slate-100 bg-slate-50 text-slate-500 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'}`}
-                    >
-                      %
-                    </button>
-                    <button
-                      onClick={() => setDescTipo('monto')}
-                      className={`flex-1 py-2.5 rounded-xl font-bold border-2 transition-all ${descTipo === 'monto' ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista' : 'border-slate-100 bg-slate-50 text-slate-500 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'}`}
-                    >
-                      $
-                    </button>
-                  </div>
-                  <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
-                    <span className="text-slate-400 dark:text-ui-muted font-black px-3 text-lg">
-                      {descTipo === 'pct' ? '%' : '$'}
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder={
-                        descTipo === 'pct' ? 'Porcentaje...' : 'Monto...'
-                      }
-                      value={descValor}
-                      onChange={(e) => setDescValor(e.target.value)}
-                      className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none text-lg"
-                    />
-                  </div>
-                  <button
-                    onClick={intentarAplicarDescuento}
-                    disabled={safeNumber(descValor, 0) <= 0}
-                    className="w-full py-3 rounded-xl font-black bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    {sesionAutoriza
-                      ? 'Aplicar descuento'
-                      : 'Solicitar autorización'}
-                  </button>
-                </div>
-              )
             )}
           </div>
+        )}
 
-          {/* SECCIÓN DE CLIENTE (CRM, opcional — un tap para ignorarla) */}
-          <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
-            <div className="flex justify-between items-center">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted flex items-center gap-2">
-                <UserRound className="w-4 h-4 text-pink-500 dark:text-pink-400" />{' '}
-                Cliente (opcional)
-              </p>
-              {!clienteSel && (
-                <button
-                  onClick={() => setMostrarCliente((v) => !v)}
-                  className="text-[10px] font-black uppercase tracking-widest text-pink-500 dark:text-pink-400 hover:underline"
-                >
-                  {mostrarCliente ? 'Cancelar' : 'Asociar'}
-                </button>
+        {/* ─── CUERPO ───
+            Con sitio, dos columnas con su scroll cada una. Sin él, UN SOLO
+            scroll: dos regiones que se desplazan por separado dentro de una
+            pantalla de teléfono son dos sitios donde perderse, y el síntoma era
+            que la cabecera de una se cortaba mientras leías la otra.
+
+            El orden apilado ya era el bueno y no se toca: primero lo que se
+            hace —descuento, cliente, propina, división, método— y después lo
+            que se comprueba —desglose y pagos registrados—. */}
+        <div
+          className={
+            acoplado
+              ? 'flex flex-row flex-1 min-h-0 overflow-hidden'
+              : 'flex flex-col flex-1 min-h-0 overflow-y-auto custom-scrollbar'
+          }
+        >
+          {/* LADO IZQUIERDO: CONTROLES DE PAGO */}
+          <div className="w-full lg:w-1/2 bg-ops-panel-2 dark:bg-ops-bg/50 p-5 lg:p-8 flex flex-col border-b-2 lg:border-b-0 lg:border-r border-ops-border lg:overflow-y-auto custom-scrollbar transition-colors">
+            <h2 className="hidden lg:flex text-2xl font-black font-syne text-ops-ink mb-6 items-center gap-2">
+              <Calculator className="w-6 h-6 text-ops-accent" /> Opciones de
+              Cobro
+            </h2>
+
+            {/* SECCIÓN DE DESCUENTO (autorizado)
+                Cerrada es una FILA, no una tarjeta: `p-3` y sin margen inferior
+                bajo el encabezado. La maqueta de teléfono las dibuja así y el
+                cálculo le da la razón — descuento y cliente son las dos que
+                menos se usan y estaban primeras, gastando ~80 px de alto entre
+                las dos antes de llegar a propina y método, que se tocan en cada
+                cobro. Abierta recupera su aire: el margen lo pone el contenido
+                desplegado, no el envoltorio. */}
+            <div className="mb-3 lg:mb-6 bg-white dark:bg-ops-panel p-3 lg:p-5 rounded-ui border border-ops-border shadow-sm transition-colors">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted flex items-center gap-2">
+                  <Percent className="w-4 h-4 text-ops-accent" /> Descuento
+                </p>
+                {!descuentoAplicado && (
+                  <button
+                    onClick={() => setMostrarDescuento((v) => !v)}
+                    className="text-[10px] font-black uppercase tracking-widest text-ops-accent hover:underline"
+                  >
+                    {mostrarDescuento ? 'Cancelar' : 'Agregar'}
+                  </button>
+                )}
+              </div>
+
+              {descuentoAplicado ? (
+                <div className="flex items-center justify-between bg-ops-accent/10 border border-ops-accent/30 rounded-ui px-4 py-3 mt-2">
+                  <div>
+                    <p className="font-black text-ops-accent">
+                      −$
+                      {montoDescuento.toLocaleString('es-MX', {
+                        minimumFractionDigits: 2,
+                      })}{' '}
+                      ({round2(pctDescuento)}%)
+                    </p>
+                    <p className="text-[10px] font-bold text-ops-muted flex items-center gap-1 mt-0.5">
+                      <ShieldCheck className="w-3 h-3" /> Autorizó:{' '}
+                      {descuentoAplicado.autorizadoPor}
+                    </p>
+                  </div>
+                  <button
+                    onClick={quitarDescuento}
+                    className="p-2 text-ops-muted hover:text-ops-danger dark:hover:text-ops-danger rounded-ui"
+                    title="Quitar descuento"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                mostrarDescuento && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setDescTipo('pct')}
+                        className={`flex-1 py-2.5 rounded-ui font-bold border-2 transition-all ${descTipo === 'pct' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent' : 'border-ops-border bg-ops-panel-2 text-ops-muted dark:bg-ops-bg'}`}
+                      >
+                        %
+                      </button>
+                      <button
+                        onClick={() => setDescTipo('monto')}
+                        className={`flex-1 py-2.5 rounded-ui font-bold border-2 transition-all ${descTipo === 'monto' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent' : 'border-ops-border bg-ops-panel-2 text-ops-muted dark:bg-ops-bg'}`}
+                      >
+                        $
+                      </button>
+                    </div>
+                    <div className="flex items-center bg-ops-panel-2 dark:bg-ops-bg p-3 rounded-ui border border-ops-border">
+                      <span className="text-ops-muted font-black px-3 text-lg">
+                        {descTipo === 'pct' ? '%' : '$'}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder={
+                          descTipo === 'pct' ? 'Porcentaje...' : 'Monto...'
+                        }
+                        value={descValor}
+                        onChange={(e) => setDescValor(e.target.value)}
+                        className="w-full bg-transparent font-black text-ops-ink outline-none text-lg"
+                      />
+                    </div>
+                    <button
+                      onClick={intentarAplicarDescuento}
+                      disabled={safeNumber(descValor, 0) <= 0}
+                      className="w-full py-3 rounded-ui font-black bg-ops-accent text-ops-accent-fg disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      {sesionAutoriza
+                        ? 'Aplicar descuento'
+                        : 'Solicitar autorización'}
+                    </button>
+                  </div>
+                )
               )}
             </div>
 
-            {clienteSel ? (
-              <div className="flex items-center justify-between bg-pink-50 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/30 rounded-xl px-4 py-3 mt-2">
-                <div className="min-w-0">
-                  <p className="font-black text-pink-600 dark:text-pink-400 truncate">
-                    {clienteSel.nombre}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
-                    {clienteSel.telefono || 'Sin teléfono'} ·{' '}
-                    {Number(clienteSel.visitas) || 0} visitas ·{' '}
-                    {Number(clienteSel.puntos_lealtad) || 0} pts
-                  </p>
-                </div>
-                <button
-                  onClick={quitarCliente}
-                  className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg shrink-0"
-                  title="Quitar cliente"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              mostrarCliente && null
-            )}
-            {clienteSel && recompensasActivas.length > 0 && (
-              <div className="mt-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-2 flex items-center gap-1.5">
-                  <Star className="w-3.5 h-3.5" /> Recompensas ·{' '}
-                  {puntosCliente} pts disponibles
+            {/* SECCIÓN DE CLIENTE (CRM, opcional — un tap para ignorarla)
+                Misma fila compacta que descuento, y por la misma razón. */}
+            <div className="mb-3 lg:mb-6 bg-white dark:bg-ops-panel p-3 lg:p-5 rounded-ui border border-ops-border shadow-sm transition-colors">
+              <div className="flex justify-between items-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted flex items-center gap-2">
+                  <UserRound className="w-4 h-4 text-ops-info dark:text-ops-info" />{' '}
+                  Cliente (opcional)
                 </p>
-                {canjeSel ? (
-                  <div className="flex items-center justify-between bg-amber-50 dark:bg-brand-ambar/10 border border-amber-200 dark:border-brand-ambar/30 rounded-xl px-4 py-3">
-                    <div>
-                      <p className="font-black text-amber-600 dark:text-brand-ambar">
-                        {canjeSel.nombre}
-                        {canjeDescuento > 0 && (
-                          <span className="ml-2 text-emerald-600 dark:text-brand-cesped">
-                            −$
-                            {canjeDescuento.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
-                        −{canjeSel.puntos} pts al confirmar el cobro
-                        {canjeSel.tipo === 'cortesia'
-                          ? ' · cortesía: se entrega, no descuenta'
-                          : ''}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setCanjeSel(null)}
-                      className="p-2 text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife rounded-lg"
-                      title="Cancelar canje"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {recompensasActivas.map((r) => {
-                      const costo = Number(r.costo_puntos) || 0;
-                      const alcanza = puntosCliente >= costo;
-                      return (
-                        <button
-                          key={r.id}
-                          disabled={!alcanza}
-                          onClick={() =>
-                            setCanjeSel({
-                              nombre: r.nombre,
-                              puntos: costo,
-                              tipo: r.tipo || 'cortesia',
-                              valor: Number(r.valor) || 0,
-                            })
-                          }
-                          className={`w-full flex justify-between items-center rounded-xl px-4 py-2.5 border transition-colors text-left ${
-                            alcanza
-                              ? 'bg-slate-50 dark:bg-ui-obsidiana hover:bg-amber-50 dark:hover:bg-brand-ambar/10 border-slate-100 dark:border-ui-border'
-                              : 'bg-slate-50/50 dark:bg-ui-obsidiana/50 border-slate-100 dark:border-ui-border opacity-45 cursor-not-allowed'
-                          }`}
-                        >
-                          <span className="font-black text-slate-800 dark:text-brand-nacar truncate">
-                            {r.nombre}
-                          </span>
-                          <span className="text-[10px] font-black text-amber-500 shrink-0 ml-2 flex items-center gap-1">
-                            {r.tipo === 'descuento_pct' && (
-                              <span className="text-emerald-600 dark:text-brand-cesped">
-                                −{Number(r.valor) || 0}%
-                              </span>
-                            )}
-                            {r.tipo === 'descuento_monto' && (
-                              <span className="text-emerald-600 dark:text-brand-cesped">
-                                −${Number(r.valor) || 0}
-                              </span>
-                            )}
-                            <Star className="w-3 h-3" /> {costo} pts
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                {!clienteSel && (
+                  <button
+                    onClick={() => setMostrarCliente((v) => !v)}
+                    className="text-[10px] font-black uppercase tracking-widest text-ops-info dark:text-ops-info hover:underline"
+                  >
+                    {mostrarCliente ? 'Cancelar' : 'Asociar'}
+                  </button>
                 )}
               </div>
-            )}
-            {!clienteSel && (
-              mostrarCliente && (
+
+              {clienteSel ? (
+                <div className="flex items-center justify-between bg-ops-info/10 dark:bg-ops-info/10 border border-ops-info/30 dark:border-ops-info/30 rounded-ui px-4 py-3 mt-2">
+                  <div className="min-w-0">
+                    <p className="font-black text-ops-info dark:text-ops-info truncate">
+                      {clienteSel.nombre}
+                    </p>
+                    <p className="text-[10px] font-bold text-ops-muted mt-0.5">
+                      {clienteSel.telefono || 'Sin teléfono'} ·{' '}
+                      {Number(clienteSel.visitas) || 0} visitas ·{' '}
+                      {Number(clienteSel.puntos_lealtad) || 0} pts
+                    </p>
+                  </div>
+                  <button
+                    onClick={quitarCliente}
+                    className="p-2 text-ops-muted hover:text-ops-danger dark:hover:text-ops-danger rounded-ui shrink-0"
+                    title="Quitar cliente"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                mostrarCliente && null
+              )}
+              {clienteSel && recompensasActivas.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-ops-warn mb-2 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5" /> Recompensas ·{' '}
+                    {puntosCliente} pts disponibles
+                  </p>
+                  {canjeSel ? (
+                    <div className="flex items-center justify-between bg-ops-warn/10 border border-ops-warn/30 rounded-ui px-4 py-3">
+                      <div>
+                        <p className="font-black text-ops-warn">
+                          {canjeSel.nombre}
+                          {canjeDescuento > 0 && (
+                            <span className="ml-2 text-ops-ok">
+                              −$
+                              {canjeDescuento.toLocaleString('es-MX', {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] font-bold text-ops-muted mt-0.5">
+                          −{canjeSel.puntos} pts al confirmar el cobro
+                          {canjeSel.tipo === 'cortesia'
+                            ? ' · cortesía: se entrega, no descuenta'
+                            : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setCanjeSel(null)}
+                        className="p-2 text-ops-muted hover:text-ops-danger dark:hover:text-ops-danger rounded-ui"
+                        title="Cancelar canje"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {recompensasActivas.map((r) => {
+                        const costo = Number(r.costo_puntos) || 0;
+                        const alcanza = puntosCliente >= costo;
+                        return (
+                          <button
+                            key={r.id}
+                            disabled={!alcanza}
+                            onClick={() =>
+                              setCanjeSel({
+                                nombre: r.nombre,
+                                puntos: costo,
+                                tipo: r.tipo || 'cortesia',
+                                valor: Number(r.valor) || 0,
+                              })
+                            }
+                            className={`w-full flex justify-between items-center rounded-ui px-4 py-2.5 border transition-colors text-left ${
+                              alcanza
+                                ? 'bg-ops-panel-2 dark:bg-ops-bg hover:bg-ops-warn/10 dark:hover:bg-ops-warn/10 border-ops-border'
+                                : 'bg-ops-panel-2/50 dark:bg-ops-bg/50 border-ops-border opacity-45 cursor-not-allowed'
+                            }`}
+                          >
+                            <span className="font-black text-ops-ink truncate">
+                              {r.nombre}
+                            </span>
+                            <span className="text-[10px] font-black text-ops-warn shrink-0 ml-2 flex items-center gap-1">
+                              {r.tipo === 'descuento_pct' && (
+                                <span className="text-ops-ok">
+                                  −{Number(r.valor) || 0}%
+                                </span>
+                              )}
+                              {r.tipo === 'descuento_monto' && (
+                                <span className="text-ops-ok">
+                                  −${Number(r.valor) || 0}
+                                </span>
+                              )}
+                              <Star className="w-3 h-3" /> {costo} pts
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {!clienteSel && mostrarCliente && (
                 <div className="mt-3 space-y-3">
                   {!altaExpres ? (
                     <>
-                      <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border">
-                        <Search className="w-4 h-4 text-slate-400 dark:text-ui-muted mx-2 shrink-0" />
+                      <div className="flex items-center bg-ops-panel-2 dark:bg-ops-bg p-3 rounded-ui border border-ops-border">
+                        <Search className="w-4 h-4 text-ops-muted mx-2 shrink-0" />
                         <input
                           type="text"
                           autoFocus
                           placeholder="Nombre o teléfono..."
                           value={clienteBusqueda}
                           onChange={(e) => setClienteBusqueda(e.target.value)}
-                          className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none"
+                          className="w-full bg-transparent font-black text-ops-ink outline-none"
                         />
                       </div>
                       {clientesMatch.length > 0 && (
@@ -629,13 +823,14 @@ export default function ModalCobro({
                             <button
                               key={c.id}
                               onClick={() => seleccionarCliente(c)}
-                              className="w-full flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana hover:bg-pink-50 dark:hover:bg-pink-500/10 border border-slate-100 dark:border-ui-border rounded-xl px-4 py-2.5 transition-colors text-left"
+                              className="w-full flex justify-between items-center bg-ops-panel-2 dark:bg-ops-bg hover:bg-ops-info/10 dark:hover:bg-ops-info/10 border border-ops-border rounded-ui px-4 py-2.5 transition-colors text-left"
                             >
-                              <span className="font-black text-slate-800 dark:text-brand-nacar truncate">
+                              <span className="font-black text-ops-ink truncate">
                                 {c.nombre}
                               </span>
-                              <span className="text-[10px] font-bold text-slate-400 dark:text-ui-muted shrink-0 ml-2">
-                                {c.telefono || `${Number(c.visitas) || 0} visitas`}
+                              <span className="text-[10px] font-bold text-ops-muted shrink-0 ml-2">
+                                {c.telefono ||
+                                  `${Number(c.visitas) || 0} visitas`}
                               </span>
                             </button>
                           ))}
@@ -643,7 +838,7 @@ export default function ModalCobro({
                       )}
                       {clienteBusqueda.trim().length >= 2 &&
                         clientesMatch.length === 0 && (
-                          <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted text-center">
+                          <p className="text-[11px] font-bold text-ops-muted text-center">
                             Sin coincidencias.
                           </p>
                         )}
@@ -655,7 +850,7 @@ export default function ModalCobro({
                             telefono: '',
                           });
                         }}
-                        className="w-full py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest text-pink-500 dark:text-pink-400 border-2 border-dashed border-pink-200 dark:border-pink-500/30 hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2.5 rounded-ui font-black text-[11px] uppercase tracking-widest text-ops-info dark:text-ops-info border-2 border-dashed border-ops-info/30 dark:border-ops-info/30 hover:bg-ops-info/10 dark:hover:bg-ops-info/10 transition-colors flex items-center justify-center gap-2"
                       >
                         <UserPlus className="w-4 h-4" /> Cliente nuevo
                       </button>
@@ -673,7 +868,7 @@ export default function ModalCobro({
                             nombre: e.target.value,
                           }))
                         }
-                        className="w-full bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border font-black text-slate-900 dark:text-brand-nacar outline-none focus:border-pink-400"
+                        className="w-full bg-ops-panel-2 dark:bg-ops-bg p-3 rounded-ui border border-ops-field font-black text-ops-ink outline-none focus:border-ops-info"
                       />
                       <input
                         type="tel"
@@ -688,19 +883,19 @@ export default function ModalCobro({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') registrarClienteExpres();
                         }}
-                        className="w-full bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-pink-400"
+                        className="w-full bg-ops-panel-2 dark:bg-ops-bg p-3 rounded-ui border border-ops-field font-bold text-ops-ink outline-none focus:border-ops-info"
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={() => setAltaExpres(false)}
-                          className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-slate-100 dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted"
+                          className="flex-1 py-2.5 rounded-ui font-black text-[11px] uppercase tracking-widest bg-ops-panel-2 dark:bg-ops-bg text-ops-muted"
                         >
                           Volver
                         </button>
                         <button
                           onClick={registrarClienteExpres}
                           disabled={!nuevoCliente.nombre.trim()}
-                          className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-pink-500 text-white dark:text-ui-obsidiana disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          className="flex-1 py-2.5 rounded-ui font-black text-[11px] uppercase tracking-widest bg-ops-info text-ops-accent-fg disabled:opacity-40 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                           <UserPlus className="w-4 h-4" /> Registrar y asociar
                         </button>
@@ -708,492 +903,459 @@ export default function ModalCobro({
                     </>
                   )}
                 </div>
-              )
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* SECCIÓN DE PROPINA */}
-          <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm transition-colors">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted mb-3 flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-orange-500 dark:text-brand-arrecife" />{' '}
-              Servicio / Propina
-            </p>
-            <div className="flex gap-2 mb-2">
-              {[0, 10, 15, 20].map((pct) => (
+            {/* SECCIÓN DE PROPINA */}
+            <div className="mb-6 bg-white dark:bg-ops-panel p-5 rounded-ui border border-ops-border shadow-sm transition-colors">
+              <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-3 flex items-center gap-2">
+                <HeartHandshake className="w-4 h-4 text-ops-danger" /> Servicio
+                / Propina
+              </p>
+              <div className="flex gap-2 mb-2">
+                {[0, 10, 15, 20].map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => {
+                      setPropinaSeleccionada(pct);
+                      setPropinaManual('');
+                    }}
+                    className={`flex-1 py-3 rounded-ui font-bold border-2 transition-all ${propinaSeleccionada === pct ? 'border-ops-danger bg-ops-danger/10 text-ops-danger shadow-sm' : 'border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border dark:bg-ops-bg dark:hover:border-ops-muted'}`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
                 <button
-                  key={pct}
-                  onClick={() => {
-                    setPropinaSeleccionada(pct);
-                    setPropinaManual('');
-                  }}
-                  className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${propinaSeleccionada === pct ? 'border-orange-500 bg-orange-50 text-orange-600 dark:bg-brand-arrecife/10 dark:border-brand-arrecife dark:text-brand-arrecife shadow-sm' : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted dark:hover:border-ui-muted'}`}
+                  onClick={() => setPropinaSeleccionada('manual')}
+                  className={`flex-1 py-3 rounded-ui font-bold border-2 transition-all ${propinaSeleccionada === 'manual' ? 'border-ops-danger bg-ops-danger/10 text-ops-danger shadow-sm' : 'border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border dark:bg-ops-bg dark:hover:border-ops-muted'}`}
                 >
-                  {pct}%
+                  Otro
                 </button>
-              ))}
+              </div>
+              {propinaSeleccionada === 'manual' && (
+                <div className="flex items-center bg-ops-panel-2 dark:bg-ops-bg p-3 rounded-ui border border-ops-border mt-3 transition-colors">
+                  <span className="text-ops-muted font-black px-3 text-lg">
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    placeholder="Monto exacto..."
+                    value={propinaManual}
+                    onChange={(e) => setPropinaManual(e.target.value)}
+                    className="w-full bg-transparent font-black text-ops-ink outline-none text-lg"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Selector de División */}
+            <div className="flex bg-ops-panel-2/50 dark:bg-ops-bg p-1.5 rounded-ui mb-6 shrink-0 transition-colors">
               <button
-                onClick={() => setPropinaSeleccionada('manual')}
-                className={`flex-1 py-3 rounded-xl font-bold border-2 transition-all ${propinaSeleccionada === 'manual' ? 'border-orange-500 bg-orange-50 text-orange-600 dark:bg-brand-arrecife/10 dark:border-brand-arrecife dark:text-brand-arrecife shadow-sm' : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted dark:hover:border-ui-muted'}`}
+                onClick={() => {
+                  setTipoDivision('monto');
+                  setSeleccionPlatillos({});
+                }}
+                className={`flex-1 py-3 font-bold text-sm rounded-ui transition-all ${tipoDivision === 'monto' ? 'bg-white dark:bg-ops-panel shadow-sm text-ops-ink' : 'text-ops-muted hover:text-ops-ink dark:hover:text-ops-ink'}`}
               >
-                Otro
+                Total
+              </button>
+              <button
+                onClick={() => {
+                  setTipoDivision('personas');
+                  setSeleccionPlatillos({});
+                }}
+                className={`flex-1 py-3 font-bold text-sm rounded-ui transition-all ${tipoDivision === 'personas' ? 'bg-white dark:bg-ops-panel shadow-sm text-ops-ink' : 'text-ops-muted hover:text-ops-ink dark:hover:text-ops-ink'}`}
+              >
+                Personas
+              </button>
+              <button
+                onClick={() => setTipoDivision('platillos')}
+                className={`flex-1 py-3 font-bold text-sm rounded-ui transition-all flex items-center justify-center gap-2 ${tipoDivision === 'platillos' ? 'bg-white dark:bg-ops-panel shadow-sm text-ops-accent' : 'text-ops-muted hover:text-ops-ink dark:hover:text-ops-ink'}`}
+              >
+                <Receipt className="w-4 h-4" /> Platillos
               </button>
             </div>
-            {propinaSeleccionada === 'manual' && (
-              <div className="flex items-center bg-slate-50 dark:bg-ui-obsidiana p-3 rounded-xl border border-slate-200 dark:border-ui-border mt-3 transition-colors">
-                <span className="text-slate-400 dark:text-ui-muted font-black px-3 text-lg">
+
+            {/* PANEL: POR PLATILLOS */}
+            {tipoDivision === 'platillos' && (
+              <div className="mb-6 bg-white dark:bg-ops-panel p-5 rounded-ui border border-ops-border shadow-sm animate-in slide-in-from-left-2 transition-colors">
+                <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-4">
+                  1. Selecciona qué se va a cobrar ahorita:
+                </p>
+
+                <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2 mb-4">
+                  {carritoSanitizado.map((item) => {
+                    const maxQty = safeNumber(item?.cantidad, 0);
+                    const selQty = safeNumber(seleccionPlatillos[item.id], 0);
+                    const precioDisplay = getPrecio(item);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex justify-between items-center p-3 rounded-ui border-2 transition-colors ${selQty > 0 ? 'bg-ops-accent/10 border-ops-accent/30' : 'bg-ops-panel-2 border-ops-border dark:bg-ops-bg'}`}
+                      >
+                        <div className="flex-1">
+                          <p
+                            className={`font-bold text-sm leading-tight ${selQty > 0 ? 'text-ops-accent dark:text-ops-ink' : 'text-ops-ink'}`}
+                          >
+                            {item.nombre || 'Sin nombre'}
+                          </p>
+                          <p className="text-xs font-black text-ops-accent mt-0.5">
+                            $
+                            {precioDisplay.toLocaleString('es-MX', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white dark:bg-ops-panel rounded-ui border border-ops-border p-1 shadow-sm">
+                          <button
+                            onClick={() =>
+                              setSeleccionPlatillos((prev) => ({
+                                ...prev,
+                                [item.id]: Math.max(
+                                  0,
+                                  safeNumber(prev[item.id], 0) - 1,
+                                ),
+                              }))
+                            }
+                            className="w-7 h-7 bg-ops-panel-2 dark:bg-ops-bg rounded-ui text-ops-muted dark:text-ops-ink font-black hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors"
+                          >
+                            -
+                          </button>
+                          <span className="font-black text-ops-ink w-5 text-center text-sm">
+                            {selQty}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setSeleccionPlatillos((prev) => ({
+                                ...prev,
+                                [item.id]: Math.min(
+                                  maxQty,
+                                  safeNumber(prev[item.id], 0) + 1,
+                                ),
+                              }))
+                            }
+                            className="w-7 h-7 bg-ops-panel-2 dark:bg-ops-bg rounded-ui text-ops-muted dark:text-ops-ink font-black hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t-2 border-ops-border pt-4 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
+                      Subtotal seleccionado
+                    </span>
+                    <span className="font-black text-ops-accent text-xl">
+                      $
+                      {subtotalSeleccion.toLocaleString('es-MX', {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PANEL: POR PERSONAS */}
+            {tipoDivision === 'personas' && (
+              <div className="mb-6 bg-white dark:bg-ops-panel p-6 rounded-ui border border-ops-border shadow-sm text-center animate-in slide-in-from-left-2 transition-colors">
+                <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-4">
+                  Dividir $
+                  {granTotal.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}{' '}
+                  entre:
+                </p>
+                <div className="flex items-center justify-center gap-6 mb-6">
+                  <button
+                    onClick={() =>
+                      setDivisorPersonas(
+                        Math.max(2, safeNumber(divisorPersonas, 2) - 1),
+                      )
+                    }
+                    className="w-14 h-14 bg-ops-panel-2 dark:bg-ops-bg rounded-ui font-black text-2xl text-ops-ink hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors"
+                  >
+                    -
+                  </button>
+                  <div className="text-5xl font-black font-syne text-ops-ink w-24">
+                    <Users className="w-8 h-8 inline mr-2 text-ops-accent opacity-50" />
+                    {divisorPersonas}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setDivisorPersonas(safeNumber(divisorPersonas, 2) + 1)
+                    }
+                    className="w-14 h-14 bg-ops-panel-2 dark:bg-ops-bg rounded-ui font-black text-2xl text-ops-ink hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-xl font-black text-ops-accent mb-6">
+                  Toca de $
+                  {montoPorPersona.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}
+                </p>
+                <button
+                  onClick={() => agregarPago(montoPorPersona)}
+                  disabled={estaPagado}
+                  className="w-full py-4 bg-ops-accent/10 hover:bg-ops-accent/15 dark:hover:bg-ops-accent/20 text-ops-accent font-black rounded-ui transition-colors disabled:opacity-50"
+                >
+                  Cobrar Parte (1/{divisorPersonas})
+                </button>
+              </div>
+            )}
+
+            {/* PANEL BASE: METODO DE PAGO */}
+            <div className="flex-1 flex flex-col pt-2 border-t border-ops-border">
+              <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-3 mt-4">
+                Método de Ingreso
+              </p>
+              <div className="grid grid-cols-3 gap-2 mb-5">
+                <button
+                  onClick={() => setMetodoActivo('Efectivo')}
+                  className={`py-4 rounded-ui border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Efectivo' ? 'border-ops-ok bg-ops-ok/10 text-ops-ok shadow-sm' : 'border-ops-border bg-white dark:bg-ops-panel text-ops-muted hover:border-ops-border dark:hover:border-ops-muted'}`}
+                >
+                  <Banknote className="w-5 h-5" />{' '}
+                  <span className="text-xs">Efectivo</span>
+                </button>
+                <button
+                  onClick={() => setMetodoActivo('Tarjeta')}
+                  className={`py-4 rounded-ui border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Tarjeta' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent dark:bg-ops-danger/10 dark:border-ops-danger dark:text-ops-danger shadow-sm' : 'border-ops-border bg-white dark:bg-ops-panel text-ops-muted hover:border-ops-border dark:hover:border-ops-muted'}`}
+                >
+                  <CreditCard className="w-5 h-5" />{' '}
+                  <span className="text-xs">Tarjeta</span>
+                </button>
+                <button
+                  onClick={() => setMetodoActivo('Transferencia')}
+                  className={`py-4 rounded-ui border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Transferencia' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm' : 'border-ops-border bg-white dark:bg-ops-panel text-ops-muted hover:border-ops-border dark:hover:border-ops-muted'}`}
+                >
+                  <Landmark className="w-5 h-5" />{' '}
+                  <span className="text-xs">Transfer.</span>
+                </button>
+              </div>
+
+              <div className="bg-white dark:bg-ops-panel p-3 rounded-ui border-2 border-ops-border shadow-sm flex items-center mb-4 transition-colors focus-within:border-ops-ok dark:focus-within:border-ops-ok">
+                <span className="text-ops-muted font-black text-2xl pl-4">
                   $
                 </span>
                 <input
                   type="number"
-                  placeholder="Monto exacto..."
-                  value={propinaManual}
-                  onChange={(e) => setPropinaManual(e.target.value)}
-                  className="w-full bg-transparent font-black text-slate-900 dark:text-brand-nacar outline-none text-lg"
+                  value={montoInput}
+                  onChange={(e) => setMontoInput(e.target.value)}
+                  placeholder={
+                    saldoPendiente > 0 ? saldoPendiente.toFixed(2) : '0.00'
+                  }
+                  className="w-full bg-transparent text-3xl font-black text-ops-ink p-2 outline-none"
                 />
               </div>
-            )}
-          </div>
 
-          {/* Selector de División */}
-          <div className="flex bg-slate-200/50 dark:bg-ui-obsidiana p-1.5 rounded-2xl mb-6 shrink-0 transition-colors">
-            <button
-              onClick={() => {
-                setTipoDivision('monto');
-                setSeleccionPlatillos({});
-              }}
-              className={`flex-1 py-3 font-bold text-sm rounded-xl transition-all ${tipoDivision === 'monto' ? 'bg-white dark:bg-ui-humo shadow-sm text-slate-900 dark:text-brand-nacar' : 'text-slate-500 dark:text-ui-muted hover:text-slate-700 dark:hover:text-brand-nacar'}`}
-            >
-              Total
-            </button>
-            <button
-              onClick={() => {
-                setTipoDivision('personas');
-                setSeleccionPlatillos({});
-              }}
-              className={`flex-1 py-3 font-bold text-sm rounded-xl transition-all ${tipoDivision === 'personas' ? 'bg-white dark:bg-ui-humo shadow-sm text-slate-900 dark:text-brand-nacar' : 'text-slate-500 dark:text-ui-muted hover:text-slate-700 dark:hover:text-brand-nacar'}`}
-            >
-              Personas
-            </button>
-            <button
-              onClick={() => setTipoDivision('platillos')}
-              className={`flex-1 py-3 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${tipoDivision === 'platillos' ? 'bg-white dark:bg-ui-humo shadow-sm text-indigo-600 dark:text-brand-amatista' : 'text-slate-500 dark:text-ui-muted hover:text-slate-700 dark:hover:text-brand-nacar'}`}
-            >
-              <Receipt className="w-4 h-4" /> Platillos
-            </button>
-          </div>
-
-          {/* PANEL: POR PLATILLOS */}
-          {tipoDivision === 'platillos' && (
-            <div className="mb-6 bg-white dark:bg-ui-humo p-5 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm animate-in slide-in-from-left-2 transition-colors">
-              <p className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest mb-4">
-                1. Selecciona qué se va a cobrar ahorita:
-              </p>
-
-              <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2 mb-4">
-                {carritoSanitizado.map((item) => {
-                  const maxQty = safeNumber(item?.cantidad, 0);
-                  const selQty = safeNumber(seleccionPlatillos[item.id], 0);
-                  const precioDisplay = getPrecio(item);
-
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex justify-between items-center p-3 rounded-xl border-2 transition-colors ${selQty > 0 ? 'bg-indigo-50 border-indigo-200 dark:bg-brand-amatista/10 dark:border-brand-amatista/30' : 'bg-slate-50 border-slate-100 dark:bg-ui-obsidiana dark:border-ui-border'}`}
-                    >
-                      <div className="flex-1">
-                        <p
-                          className={`font-bold text-sm leading-tight ${selQty > 0 ? 'text-indigo-900 dark:text-brand-nacar' : 'text-slate-700 dark:text-ui-text'}`}
-                        >
-                          {item.nombre || 'Sin nombre'}
-                        </p>
-                        <p className="text-xs font-black text-indigo-500 dark:text-brand-amatista mt-0.5">
-                          $
-                          {precioDisplay.toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 bg-white dark:bg-ui-humo rounded-lg border border-slate-200 dark:border-ui-border p-1 shadow-sm">
-                        <button
-                          onClick={() =>
-                            setSeleccionPlatillos((prev) => ({
-                              ...prev,
-                              [item.id]: Math.max(
-                                0,
-                                safeNumber(prev[item.id], 0) - 1,
-                              ),
-                            }))
-                          }
-                          className="w-7 h-7 bg-slate-100 dark:bg-ui-obsidiana rounded text-slate-600 dark:text-brand-nacar font-black hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
-                        >
-                          -
-                        </button>
-                        <span className="font-black text-slate-900 dark:text-brand-nacar w-5 text-center text-sm">
-                          {selQty}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setSeleccionPlatillos((prev) => ({
-                              ...prev,
-                              [item.id]: Math.min(
-                                maxQty,
-                                safeNumber(prev[item.id], 0) + 1,
-                              ),
-                            }))
-                          }
-                          className="w-7 h-7 bg-slate-100 dark:bg-ui-obsidiana rounded text-slate-600 dark:text-brand-nacar font-black hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-4 gap-2 mb-6">
+                {sugerencias.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSugerencia(s)}
+                    className="py-3 bg-white dark:bg-ops-bg border-2 border-ops-border rounded-ui font-black text-ops-muted dark:text-ops-ink hover:border-ops-ok/30 hover:text-ops-ok dark:hover:border-ops-ok/50 dark:hover:text-ops-ok transition-colors"
+                  >
+                    +${s}
+                  </button>
+                ))}
               </div>
 
-              <div className="border-t-2 border-slate-100 dark:border-ui-border pt-4 mt-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
-                    Subtotal seleccionado
-                  </span>
-                  <span className="font-black text-indigo-600 dark:text-brand-amatista text-xl">
-                    $
-                    {subtotalSeleccion.toLocaleString('es-MX', {
+              <div className="grid grid-cols-2 gap-3 mt-auto">
+                <button
+                  onClick={() =>
+                    agregarPago(saldoPendiente > 0 ? saldoPendiente : 0)
+                  }
+                  disabled={estaPagado}
+                  className="py-4 bg-ops-panel-2 dark:bg-ops-bg hover:bg-ops-panel-2 dark:hover:bg-ops-border border border-transparent dark:border-ops-border text-ops-ink font-black rounded-ui transition-colors disabled:opacity-50"
+                >
+                  Pagar Restante
+                </button>
+                <button
+                  onClick={() => agregarPago()}
+                  disabled={!montoInput || estaPagado}
+                  className="py-4 bg-ops-ink hover:bg-ops-ink dark:bg-ops-accent text-ops-accent-fg font-black rounded-ui shadow-lg transition-colors disabled:opacity-50"
+                >
+                  Añadir Pago
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* LADO DERECHO: TICKET Y TOTALES */}
+          <div className="w-full lg:w-1/2 bg-white dark:bg-ops-panel flex flex-col relative transition-colors">
+            {/* El aspa flotante sólo tiene esquina propia cuando esto es una
+                columna. Apilado, la cabecera de arriba ya lleva la suya. */}
+            {acoplado && (
+              <button
+                onClick={onClose}
+                aria-label="Cerrar"
+                className="absolute top-4 right-4 p-2 bg-ops-panel-2 dark:bg-ops-bg hover:bg-ops-panel-2 dark:hover:bg-ops-border text-ops-muted rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+
+            <div className="p-5 lg:p-8 pb-6 border-b-2 border-ops-border">
+              <p className="text-[10px] font-black text-ops-muted uppercase tracking-[0.2em] mb-4">
+                {isCobroParcial
+                  ? 'Desglose Parcial (Separado)'
+                  : 'Desglose de la Cuenta'}
+              </p>
+              <div className="flex justify-between items-center text-ops-muted font-bold mb-3">
+                <span>Subtotal (Consumo)</span>
+                <span>
+                  $
+                  {totalBase.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              {montoDescuento > 0 && (
+                <div className="flex justify-between items-center text-ops-accent font-bold mb-3">
+                  <span>Descuento ({round2(pctDescuento)}%)</span>
+                  <span>
+                    −$
+                    {montoDescuento.toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
                     })}
                   </span>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* PANEL: POR PERSONAS */}
-          {tipoDivision === 'personas' && (
-            <div className="mb-6 bg-white dark:bg-ui-humo p-6 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm text-center animate-in slide-in-from-left-2 transition-colors">
-              <p className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest mb-4">
-                Dividir $
-                {granTotal.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                })}{' '}
-                entre:
-              </p>
-              <div className="flex items-center justify-center gap-6 mb-6">
-                <button
-                  onClick={() =>
-                    setDivisorPersonas(
-                      Math.max(2, safeNumber(divisorPersonas, 2) - 1),
-                    )
-                  }
-                  className="w-14 h-14 bg-slate-100 dark:bg-ui-obsidiana rounded-2xl font-black text-2xl text-slate-700 dark:text-brand-nacar hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
-                >
-                  -
-                </button>
-                <div className="text-5xl font-black font-syne text-slate-900 dark:text-brand-nacar w-24">
-                  <Users className="w-8 h-8 inline mr-2 text-indigo-500 dark:text-brand-amatista opacity-50" />
-                  {divisorPersonas}
+              )}
+              {propinaTotal > 0 && (
+                <div className="flex justify-between items-center text-ops-danger font-bold mb-3">
+                  <span>
+                    Propina{propinaExtra > 0 ? ' (incl. excedente)' : ''}
+                  </span>
+                  <span>
+                    $
+                    {propinaTotal.toLocaleString('es-MX', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
                 </div>
-                <button
-                  onClick={() =>
-                    setDivisorPersonas(safeNumber(divisorPersonas, 2) + 1)
-                  }
-                  className="w-14 h-14 bg-slate-100 dark:bg-ui-obsidiana rounded-2xl font-black text-2xl text-slate-700 dark:text-brand-nacar hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
-                >
-                  +
-                </button>
+              )}
+              {/* El solape original —«Total Final» y «$40.00» montados— salía
+                de pedirle a una fila de ~300 px que alojara una etiqueta de 20
+                px y una cifra de 48 en Syne 800, sin `gap` ni `min-w-0`. No se
+                truncaban: se pisaban, que es peor, porque la cifra que el
+                cliente comprueba acababa ilegible.
+
+                La salida NO es encoger la cifra —la identidad pide números
+                grandes en Syne y encogerla sería perder justo lo que se quiere
+                conservar— sino no pedirle a ESTA fila que la lleve. Con el
+                banner anclado arriba, la cifra grande ya existe y además está
+                siempre a la vista; aquí basta con cerrar la suma, y a
+                `text-lg` la fila cabe de sobra.
+
+                Con sitio no hay banner, así que aquí se conserva a `text-5xl`:
+                es el remate del desglose y no compite con nada. */}
+              <div className="mt-6 pt-6 border-t-2 border-ops-border border-dashed flex justify-between items-center lg:items-end gap-4">
+                <span className="text-ops-ink font-black text-sm lg:text-xl shrink-0">
+                  Total Final
+                </span>
+                <h2 className="text-lg lg:text-5xl font-black font-syne text-ops-ink tabular-nums leading-none min-w-0">
+                  $
+                  {granTotal.toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                  })}
+                </h2>
               </div>
-              <p className="text-xl font-black text-indigo-600 dark:text-brand-amatista mb-6">
-                Toca de $
-                {montoPorPersona.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                })}
-              </p>
-              <button
-                onClick={() => agregarPago(montoPorPersona)}
-                disabled={estaPagado}
-                className="w-full py-4 bg-indigo-50 dark:bg-brand-amatista/10 hover:bg-indigo-100 dark:hover:bg-brand-amatista/20 text-indigo-600 dark:text-brand-amatista font-black rounded-xl transition-colors disabled:opacity-50"
-              >
-                Cobrar Parte (1/{divisorPersonas})
-              </button>
-            </div>
-          )}
-
-          {/* PANEL BASE: METODO DE PAGO */}
-          <div className="flex-1 flex flex-col pt-2 border-t border-slate-200 dark:border-ui-border">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted mb-3 mt-4">
-              Método de Ingreso
-            </p>
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              <button
-                onClick={() => setMetodoActivo('Efectivo')}
-                className={`py-4 rounded-2xl border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Efectivo' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-brand-cesped/10 dark:border-brand-cesped dark:text-brand-cesped shadow-sm' : 'border-slate-200 bg-white dark:bg-ui-humo dark:border-ui-border text-slate-500 dark:text-ui-muted hover:border-slate-300 dark:hover:border-ui-muted'}`}
-              >
-                <Banknote className="w-5 h-5" />{' '}
-                <span className="text-xs">Efectivo</span>
-              </button>
-              <button
-                onClick={() => setMetodoActivo('Tarjeta')}
-                className={`py-4 rounded-2xl border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Tarjeta' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-brand-arrecife/10 dark:border-brand-arrecife dark:text-brand-arrecife shadow-sm' : 'border-slate-200 bg-white dark:bg-ui-humo dark:border-ui-border text-slate-500 dark:text-ui-muted hover:border-slate-300 dark:hover:border-ui-muted'}`}
-              >
-                <CreditCard className="w-5 h-5" />{' '}
-                <span className="text-xs">Tarjeta</span>
-              </button>
-              <button
-                onClick={() => setMetodoActivo('Transferencia')}
-                className={`py-4 rounded-2xl border-2 font-black flex flex-col justify-center items-center gap-1 transition-all active:scale-95 ${metodoActivo === 'Transferencia' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista shadow-sm' : 'border-slate-200 bg-white dark:bg-ui-humo dark:border-ui-border text-slate-500 dark:text-ui-muted hover:border-slate-300 dark:hover:border-ui-muted'}`}
-              >
-                <Landmark className="w-5 h-5" />{' '}
-                <span className="text-xs">Transfer.</span>
-              </button>
             </div>
 
-            <div className="bg-white dark:bg-ui-humo p-3 rounded-2xl border-2 border-slate-200 dark:border-ui-border shadow-sm flex items-center mb-4 transition-colors focus-within:border-emerald-500 dark:focus-within:border-brand-cesped">
-              <span className="text-slate-400 dark:text-ui-muted font-black text-2xl pl-4">
-                $
-              </span>
-              <input
-                type="number"
-                value={montoInput}
-                onChange={(e) => setMontoInput(e.target.value)}
-                placeholder={
-                  saldoPendiente > 0 ? saldoPendiente.toFixed(2) : '0.00'
-                }
-                className="w-full bg-transparent text-3xl font-black text-slate-900 dark:text-brand-nacar p-2 outline-none"
-              />
+            {/* El scroll propio sólo con sitio. Apilado lo lleva el cuerpo
+                entero, y una región que se desplaza dentro de otra que también
+                se desplaza es la forma más rápida de que el dedo mueva lo que
+                no quería. */}
+            <div className="p-5 lg:p-8 lg:flex-1 lg:overflow-y-auto custom-scrollbar bg-ops-panel-2/50 dark:bg-ops-bg/30">
+              <h3 className="font-black text-ops-ink mb-4 text-sm uppercase tracking-widest">
+                Pagos Registrados
+              </h3>
+              {pagos.length === 0 ? (
+                <div className="text-center py-10 border-2 border-dashed border-ops-border rounded-ui">
+                  <p className="text-ops-muted font-bold text-sm">
+                    Aún no se han registrado pagos.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pagos.map((pago, idx) => (
+                    <div
+                      key={pago.id}
+                      className="flex justify-between items-center bg-white dark:bg-ops-bg p-4 rounded-ui border border-ops-border shadow-sm animate-in slide-in-from-right-4 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`p-3 rounded-ui ${pago.metodo === 'Efectivo' ? 'bg-ops-ok/10 text-ops-ok' : pago.metodo === 'Transferencia' ? 'bg-ops-accent/10 text-ops-accent' : 'bg-ops-accent/10 text-ops-accent dark:bg-ops-danger/10 dark:text-ops-danger'}`}
+                        >
+                          {pago.metodo === 'Efectivo' ? (
+                            <Banknote className="w-6 h-6" />
+                          ) : pago.metodo === 'Transferencia' ? (
+                            <Landmark className="w-6 h-6" />
+                          ) : (
+                            <CreditCard className="w-6 h-6" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-black text-ops-ink">
+                            Abono {idx + 1}
+                          </p>
+                          <p className="text-[10px] font-bold text-ops-muted uppercase tracking-widest">
+                            {pago.metodo}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-black text-xl text-ops-ink">
+                          $
+                          {safeNumber(pago.monto).toLocaleString('es-MX', {
+                            minimumFractionDigits: 2,
+                          })}
+                        </span>
+                        <button
+                          onClick={() => removerPago(pago.id)}
+                          className="text-ops-muted hover:text-ops-danger dark:text-ops-border dark:hover:text-ops-danger transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-4 gap-2 mb-6">
-              {sugerencias.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleSugerencia(s)}
-                  className="py-3 bg-white dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-xl font-black text-slate-600 dark:text-brand-nacar hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-brand-cesped/50 dark:hover:text-brand-cesped transition-colors"
-                >
-                  +${s}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mt-auto">
-              <button
-                onClick={() =>
-                  agregarPago(saldoPendiente > 0 ? saldoPendiente : 0)
-                }
-                disabled={estaPagado}
-                className="py-4 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border border border-transparent dark:border-ui-border text-slate-700 dark:text-brand-nacar font-black rounded-xl transition-colors disabled:opacity-50"
-              >
-                Pagar Restante
-              </button>
-              <button
-                onClick={() => agregarPago()}
-                disabled={!montoInput || estaPagado}
-                className="py-4 bg-slate-900 hover:bg-slate-800 dark:bg-brand-amatista dark:hover:bg-indigo-600 text-white dark:text-brand-nacar font-black rounded-xl shadow-lg transition-colors disabled:opacity-50"
-              >
-                Añadir Pago
-              </button>
-            </div>
+            {acoplado && pieDeCobro}
           </div>
         </div>
 
-        {/* LADO DERECHO: TICKET Y TOTALES */}
-        <div className="w-full md:w-1/2 bg-white dark:bg-ui-humo flex flex-col relative transition-colors">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-500 dark:text-ui-muted rounded-full transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-
-          <div className="p-8 pb-6 border-b-2 border-slate-100 dark:border-ui-border">
-            <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.2em] mb-4">
-              {isCobroParcial
-                ? 'Desglose Parcial (Separado)'
-                : 'Desglose de la Cuenta'}
-            </p>
-            <div className="flex justify-between items-center text-slate-500 dark:text-ui-muted font-bold mb-3">
-              <span>Subtotal (Consumo)</span>
-              <span>
-                $
-                {totalBase.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-            {montoDescuento > 0 && (
-              <div className="flex justify-between items-center text-indigo-500 dark:text-brand-amatista font-bold mb-3">
-                <span>Descuento ({round2(pctDescuento)}%)</span>
-                <span>
-                  −$
-                  {montoDescuento.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-            )}
-            {propinaTotal > 0 && (
-              <div className="flex justify-between items-center text-orange-500 dark:text-brand-arrecife font-bold mb-3">
-                <span>
-                  Propina{propinaExtra > 0 ? ' (incl. excedente)' : ''}
-                </span>
-                <span>
-                  $
-                  {propinaTotal.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between items-end mt-6 pt-6 border-t-2 border-slate-100 dark:border-ui-border border-dashed">
-              <span className="text-slate-900 dark:text-brand-nacar font-black text-xl">
-                Total Final
-              </span>
-              <h2 className="text-5xl font-black font-syne text-slate-900 dark:text-brand-nacar">
-                $
-                {granTotal.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                })}
-              </h2>
-            </div>
-          </div>
-
-          <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-ui-obsidiana/30">
-            <h3 className="font-black text-slate-800 dark:text-brand-nacar mb-4 text-sm uppercase tracking-widest">
-              Pagos Registrados
-            </h3>
-            {pagos.length === 0 ? (
-              <div className="text-center py-10 border-2 border-dashed border-slate-200 dark:border-ui-border rounded-2xl">
-                <p className="text-slate-400 dark:text-ui-muted font-bold text-sm">
-                  Aún no se han registrado pagos.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pagos.map((pago, idx) => (
-                  <div
-                    key={pago.id}
-                    className="flex justify-between items-center bg-white dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm animate-in slide-in-from-right-4 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`p-3 rounded-xl ${pago.metodo === 'Efectivo' ? 'bg-emerald-50 text-emerald-600 dark:bg-brand-cesped/10 dark:text-brand-cesped' : pago.metodo === 'Transferencia' ? 'bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:text-brand-amatista' : 'bg-blue-50 text-blue-600 dark:bg-brand-arrecife/10 dark:text-brand-arrecife'}`}
-                      >
-                        {pago.metodo === 'Efectivo' ? (
-                          <Banknote className="w-6 h-6" />
-                        ) : pago.metodo === 'Transferencia' ? (
-                          <Landmark className="w-6 h-6" />
-                        ) : (
-                          <CreditCard className="w-6 h-6" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-black text-slate-800 dark:text-brand-nacar">
-                          Abono {idx + 1}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest">
-                          {pago.metodo}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-black text-xl text-slate-900 dark:text-brand-nacar">
-                        $
-                        {safeNumber(pago.monto).toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                        })}
-                      </span>
-                      <button
-                        onClick={() => removerPago(pago.id)}
-                        className="text-slate-300 hover:text-rose-500 dark:text-ui-border dark:hover:text-brand-arrecife transition-colors"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="p-8 bg-white dark:bg-ui-humo border-t-2 border-slate-100 dark:border-ui-border shadow-[0_-10px_20px_rgba(0,0,0,0.02)] transition-colors z-10">
-            <div className="flex justify-between items-center mb-3">
-              <span className="font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest text-xs">
-                Saldo Pendiente
-              </span>
-              <span
-                className={`font-black text-2xl ${saldoPendiente > 0 ? 'text-rose-500 dark:text-brand-arrecife' : 'text-emerald-500 dark:text-brand-cesped'}`}
-              >
-                $
-                {Math.max(0, saldoPendiente).toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-            {cambio > 0 && (
-              <div className="flex justify-between items-center mb-4 p-4 bg-emerald-50 dark:bg-brand-cesped/10 rounded-2xl border-2 border-emerald-100 dark:border-brand-cesped/30">
-                <span className="font-black text-emerald-700 dark:text-brand-cesped uppercase tracking-widest text-xs">
-                  Cambio a entregar
-                </span>
-                <span className="font-black text-3xl text-emerald-600 dark:text-brand-cesped">
-                  $
-                  {cambio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            )}
-
-            <button
-              onClick={() =>
-                onProcesarPago({
-                  pagosDetalle: pagos,
-                  totalPagado,
-                  cambio,
-                  propina: propinaTotal,
-                  totalConPropina: granTotal,
-                  isCobroParcial,
-                  seleccion: seleccionPlatillos,
-                  // % EFECTIVO total (descuento autorizado + canje): el motor
-                  // fiscal escala base e IVA con este único porcentaje.
-                  descuentoPct:
-                    totalBase > 0
-                      ? ((montoDescuento + canjeDescuento) / totalBase) * 100
-                      : 0,
-                  descuentoMonto: round2(montoDescuento + canjeDescuento),
-                  descuentoAutorizadoPor:
-                    descuentoAplicado?.autorizadoPor || null,
-                  // CRM: null = venta de mostrador sin cliente (default).
-                  clienteId: clienteSel?.id ?? null,
-                  clienteNombre: clienteSel?.nombre ?? null,
-                  // Lealtad: canje elegido con su monto aplicado (PosScreen
-                  // encola canjear_puntos y audita).
-                  canje: canjeSel
-                    ? { ...canjeSel, monto: canjeDescuento }
-                    : null,
-                })
-              }
-              disabled={!estaPagado}
-              className={`w-full mt-4 text-white dark:text-ui-obsidiana font-black py-6 rounded-2xl shadow-xl transition-all text-xl flex justify-center items-center gap-3 ${
-                isCobroParcial
-                  ? 'bg-blue-600 hover:bg-blue-700 dark:bg-brand-amatista dark:hover:bg-indigo-600 shadow-blue-500/30 dark:shadow-brand-amatista/30'
-                  : 'bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] shadow-emerald-500/30 dark:shadow-brand-cesped/30'
-              } disabled:bg-slate-200 disabled:dark:bg-ui-border disabled:text-slate-400 disabled:dark:text-ui-muted disabled:shadow-none hover:scale-[1.02] active:scale-95`}
-            >
-              {isCobroParcial
-                ? 'Cobrar Selección (Mesa Abierta)'
-                : 'Confirmar y Cerrar Cuenta'}
-            </button>
-          </div>
-        </div>
+        {/* Apilado, el pie sale del scroll y se ancla al fondo del modal.
+            Dentro del scroll quedaba al final de una columna larguísima: el
+            saldo pendiente y el botón de cobrar —las dos cosas que se miran sin
+            parar mientras se cobra— sólo aparecían después de recorrer todas
+            las opciones de pago. `sticky` no vale aquí: el pie vive dentro de
+            la mitad derecha, y mientras esa mitad esté por debajo del pliegue
+            no hay nada a lo que pegarse. */}
+        {!acoplado && pieDeCobro}
       </div>
 
       {/* PINPAD DE AUTORIZACIÓN DE DESCUENTO (Gerente/Admin) */}
       {pinAuthAbierto && (
-        <div className="fixed inset-0 bg-slate-900/70 dark:bg-ui-obsidiana/85 backdrop-blur-sm z-[130] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-7 max-w-xs w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95">
-            <div className="w-14 h-14 bg-indigo-100 dark:bg-brand-amatista/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ShieldCheck className="w-7 h-7 text-indigo-500 dark:text-brand-amatista" />
+        <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[130] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-7 max-w-xs w-full shadow-2xl border-2 border-ops-border text-center animate-in zoom-in-95">
+            <div className="w-14 h-14 bg-ops-accent/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="w-7 h-7 text-ops-accent" />
             </div>
-            <h3 className="font-black text-slate-900 dark:text-brand-nacar text-xl font-syne mb-1">
+            <h3 className="font-black text-ops-ink text-xl font-syne mb-1">
               Autorización requerida
             </h3>
-            <p className="text-slate-500 dark:text-ui-muted text-xs font-bold mb-5">
+            <p className="text-ops-muted text-xs font-bold mb-5">
               Un Gerente o Admin debe teclear su PIN para aplicar el descuento.
             </p>
             <input
@@ -1210,24 +1372,24 @@ export default function ModalCobro({
                 if (e.key === 'Enter') autorizarDescuentoConPin();
               }}
               placeholder="••••••"
-              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border focus:border-indigo-500 dark:focus:border-brand-amatista rounded-2xl py-4 outline-none text-slate-900 dark:text-brand-nacar transition-colors mb-3"
+              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-field focus:border-ops-accent dark:focus:border-ops-accent rounded-ui py-4 outline-none text-ops-ink transition-colors mb-3"
             />
             {pinAuthError && (
-              <p className="text-rose-500 dark:text-brand-arrecife text-xs font-bold mb-3">
+              <p className="text-ops-danger text-xs font-bold mb-3">
                 {pinAuthError}
               </p>
             )}
             <div className="flex gap-3">
               <button
                 onClick={() => setPinAuthAbierto(false)}
-                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-colors"
+                className="flex-1 py-3.5 rounded-ui border-2 border-ops-border font-bold text-ops-muted hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={autorizarDescuentoConPin}
                 disabled={pinAuth.length < 4}
-                className="flex-1 py-3.5 rounded-xl bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana font-black disabled:opacity-40 active:scale-95 transition-all"
+                className="flex-1 py-3.5 rounded-ui bg-ops-accent text-ops-accent-fg font-black disabled:opacity-40 active:scale-95 transition-all"
               >
                 Autorizar
               </button>
@@ -1238,18 +1400,18 @@ export default function ModalCobro({
 
       {/* MINI-DIÁLOGO: ¿el excedente es propina? (solo tarjeta/transferencia) */}
       {dialogoExcedente && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/70 dark:bg-ui-obsidiana/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] w-full max-w-md shadow-2xl border-2 border-slate-100 dark:border-ui-border overflow-hidden animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-ops-ink/70 dark:bg-ops-bg/90 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg w-full max-w-md shadow-2xl border-2 border-ops-border overflow-hidden animate-in zoom-in-95">
             <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-brand-arrecife/20 text-orange-500 dark:text-brand-arrecife rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-ops-danger/15 text-ops-danger rounded-full flex items-center justify-center mx-auto mb-4">
                 <HeartHandshake className="w-8 h-8" />
               </div>
-              <h3 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
+              <h3 className="text-2xl font-black font-syne text-ops-ink mb-2">
                 Pago mayor al total
               </h3>
-              <p className="text-slate-500 dark:text-ui-muted font-medium mb-1">
+              <p className="text-ops-muted font-medium mb-1">
                 El pago con {dialogoExcedente.metodo.toLowerCase()} de{' '}
-                <span className="font-black text-slate-700 dark:text-brand-nacar">
+                <span className="font-black text-ops-ink">
                   $
                   {dialogoExcedente.monto.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
@@ -1257,13 +1419,13 @@ export default function ModalCobro({
                 </span>{' '}
                 excede el saldo por:
               </p>
-              <p className="text-4xl font-black font-syne text-orange-500 dark:text-brand-arrecife my-3">
+              <p className="text-4xl font-black font-syne text-ops-danger my-3">
                 $
                 {dialogoExcedente.excedente.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
                 })}
               </p>
-              <p className="text-sm text-slate-400 dark:text-ui-muted font-bold">
+              <p className="text-sm text-ops-muted font-bold">
                 {propinaCalculada > 0
                   ? 'Se sumará a la propina actual.'
                   : '¿Este excedente es propina?'}
@@ -1272,13 +1434,13 @@ export default function ModalCobro({
             <div className="px-8 pb-8 grid grid-cols-2 gap-3">
               <button
                 onClick={corregirExcedente}
-                className="py-4 rounded-2xl border-2 border-slate-200 dark:border-ui-border font-black text-slate-600 dark:text-brand-nacar hover:bg-slate-50 dark:hover:bg-ui-border transition-colors active:scale-95"
+                className="py-4 rounded-ui border-2 border-ops-border font-black text-ops-muted dark:text-ops-ink hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-colors active:scale-95"
               >
                 Fue error
               </button>
               <button
                 onClick={confirmarExcedenteComoPropina}
-                className="py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 dark:bg-brand-arrecife font-black text-white shadow-lg shadow-orange-500/30 transition-transform active:scale-95"
+                className="py-4 rounded-ui bg-ops-danger font-black text-ops-danger-fg shadow-lg shadow-ops-danger/30 transition-transform active:scale-95"
               >
                 Sí, es propina
               </button>

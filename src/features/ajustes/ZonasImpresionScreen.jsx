@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { PageShell, PageHeader, Button } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import {
   Printer,
   Plus,
   X,
   Save,
-  ChefHat,
   ArrowRight,
   Tag,
   Server,
@@ -103,36 +103,23 @@ export default function ZonasImpresionScreen() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto flex flex-col h-full animate-in fade-in duration-500 text-slate-800 dark:text-ui-text">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-ui-humo p-8 rounded-[2.5rem] border-2 border-slate-100 dark:border-ui-border shadow-xl shadow-slate-200/50 dark:shadow-none mb-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-12 bg-indigo-50 dark:bg-brand-amatista/5 rounded-full -mr-12 -mt-12 opacity-50 pointer-events-none" />
-        <div className="flex items-center gap-6 relative z-10">
-          <div className="bg-indigo-600 dark:bg-brand-amatista p-4 rounded-3xl shadow-lg shadow-indigo-600/40 dark:shadow-brand-amatista/30">
-            <Printer className="w-8 h-8 text-white dark:text-ui-obsidiana" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tight">
-              Zonas de Producción
-            </h1>
-            <p className="text-slate-500 dark:text-ui-muted font-bold mt-1">
-              Enruta los platillos al KDS de cocina o barra
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={guardar}
-          className="w-full sm:w-auto bg-slate-900 dark:bg-brand-cesped hover:bg-black dark:hover:bg-[#00c98c] text-white dark:text-ui-obsidiana px-8 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-xl transition-all hover:scale-105 active:scale-95 relative z-10"
-        >
-          <Save className="w-5 h-5" /> Guardar Reglas
-        </button>
-      </div>
+    <PageShell ancho="max-w-5xl">
+      <PageHeader
+        icono={Printer}
+        titulo="Zonas de Producción"
+        descripcion="Enruta los platillos al KDS de cocina o barra"
+        acciones={
+          <Button icono={Save} onClick={guardar}>
+            Guardar reglas
+          </Button>
+        }
+      />
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1">
         {/* PANEL IZQUIERDO: ESTACIONES */}
         <div className="w-full lg:w-1/3 space-y-6">
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-[2rem] border-2 border-slate-100 dark:border-ui-border shadow-sm">
-            <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+          <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm">
+            <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-4 flex items-center gap-2">
               <Server className="w-4 h-4" /> Estaciones Activas
             </h3>
 
@@ -142,11 +129,11 @@ export default function ZonasImpresionScreen() {
                 value={nuevaZona}
                 onChange={(e) => setNuevaZona(e.target.value)}
                 placeholder="Ej. Parrilla, Postres..."
-                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-xl font-bold text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista transition-colors"
+                className="flex-1 px-4 py-3 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info dark:focus:border-adm-info transition-colors"
               />
               <button
                 type="submit"
-                className="px-4 py-3 bg-indigo-600 dark:bg-brand-amatista text-white dark:text-ui-obsidiana rounded-xl font-black hover:bg-indigo-700 transition-colors"
+                className="px-4 py-3 bg-adm-info text-adm-info-fg rounded-ui font-black hover:bg-adm-info transition-colors"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -158,15 +145,14 @@ export default function ZonasImpresionScreen() {
                 return (
                   <div
                     key={zona}
-                    className="flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border px-4 py-3 rounded-xl group"
+                    className="flex justify-between items-center bg-adm-bg border-2 border-adm-border px-4 py-3 rounded-ui group"
                   >
-                    <span className="font-black text-slate-700 dark:text-brand-nacar flex items-center gap-3">
-                      <Icon className="w-4 h-4 text-slate-400 dark:text-ui-muted" />{' '}
-                      {zona}
+                    <span className="font-black text-adm-ink flex items-center gap-3">
+                      <Icon className="w-4 h-4 text-adm-muted" /> {zona}
                     </span>
                     <button
                       onClick={() => quitarZona(zona)}
-                      className="text-slate-400 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife opacity-0 group-hover:opacity-100 transition-all"
+                      className="text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger opacity-0 group-hover:opacity-100 transition-all"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -174,7 +160,7 @@ export default function ZonasImpresionScreen() {
                 );
               })}
               {zonas.length === 0 && (
-                <p className="text-sm font-bold text-slate-400 dark:text-ui-muted text-center py-4">
+                <p className="text-sm font-bold text-adm-muted text-center py-4">
                   No hay zonas configuradas.
                 </p>
               )}
@@ -183,23 +169,23 @@ export default function ZonasImpresionScreen() {
         </div>
 
         {/* PANEL DERECHO: ENRUTAMIENTO */}
-        <div className="w-full lg:w-2/3 bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-100 dark:border-ui-border shadow-sm p-6 lg:p-8 flex flex-col h-full">
-          <h3 className="text-xl font-black text-slate-900 dark:text-brand-nacar mb-2">
+        <div className="w-full lg:w-2/3 bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-sm p-6 lg:p-8 flex flex-col h-full">
+          <h3 className="text-xl font-black text-adm-ink mb-2">
             Mapa de Enrutamiento
           </h3>
-          <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mb-8">
+          <p className="text-sm font-bold text-adm-muted mb-8">
             Cada categoría del menú se envía a la estación que elijas cuando el
             mesero toma la orden.
           </p>
 
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
             {categoriasMenu.length === 0 ? (
-              <div className="bg-slate-50 dark:bg-ui-obsidiana border-2 border-dashed border-slate-200 dark:border-ui-border rounded-2xl p-10 text-center">
-                <Tag className="w-10 h-10 text-slate-300 dark:text-ui-muted mx-auto mb-3" />
-                <h4 className="font-black text-slate-500 dark:text-brand-nacar">
+              <div className="bg-adm-bg border-2 border-dashed border-adm-border rounded-ui p-10 text-center">
+                <Tag className="w-10 h-10 text-adm-muted mx-auto mb-3" />
+                <h4 className="font-black text-adm-muted dark:text-adm-ink">
                   No hay categorías
                 </h4>
-                <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mt-1">
+                <p className="text-xs font-bold text-adm-muted mt-1">
                   Crea recetas con categorías para poder enrutarlas.
                 </p>
               </div>
@@ -209,24 +195,24 @@ export default function ZonasImpresionScreen() {
                 return (
                   <div
                     key={cat}
-                    className="flex flex-col sm:flex-row justify-between items-center p-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl gap-4 hover:border-indigo-200 dark:hover:border-brand-amatista/40 transition-colors"
+                    className="flex flex-col sm:flex-row justify-between items-center p-4 bg-adm-bg border-2 border-adm-border rounded-ui gap-4 hover:border-adm-info/30 dark:hover:border-adm-info/40 transition-colors"
                   >
                     <div className="flex items-center gap-3 w-full sm:w-1/2">
-                      <div className="bg-white dark:bg-ui-humo p-2.5 rounded-xl shadow-sm border border-slate-200 dark:border-ui-border">
-                        <Tag className="w-4 h-4 text-indigo-500 dark:text-brand-amatista" />
+                      <div className="bg-white dark:bg-adm-panel p-2.5 rounded-ui shadow-sm border border-adm-border">
+                        <Tag className="w-4 h-4 text-adm-info" />
                       </div>
-                      <span className="font-black text-slate-800 dark:text-brand-nacar text-lg">
+                      <span className="font-black text-adm-ink text-lg">
                         {cat}
                       </span>
                     </div>
 
-                    <ArrowRight className="w-5 h-5 text-slate-300 dark:text-ui-muted hidden sm:block shrink-0" />
+                    <ArrowRight className="w-5 h-5 text-adm-muted hidden sm:block shrink-0" />
 
                     <div className="w-full sm:w-1/2">
                       <select
                         value={zonaAsignada}
                         onChange={(e) => asignarCategoria(cat, e.target.value)}
-                        className="w-full px-4 py-3 bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border rounded-xl font-black text-indigo-700 dark:text-brand-amatista outline-none focus:border-indigo-500 dark:focus:border-brand-amatista cursor-pointer shadow-sm transition-all"
+                        className="w-full px-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-field rounded-ui font-black text-adm-info outline-none focus:border-adm-info dark:focus:border-adm-info cursor-pointer shadow-sm transition-all"
                       >
                         {zonas.length === 0 && (
                           <option value="">Sin Zonas</option>
@@ -245,6 +231,6 @@ export default function ZonasImpresionScreen() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

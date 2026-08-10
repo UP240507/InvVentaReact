@@ -93,46 +93,38 @@ export default function TurnoWidget() {
     <>
       {/* WIDGET */}
       <div
-        className={`bg-white dark:bg-ui-humo rounded-[2rem] border-2 p-6 shadow-sm transition-all ${
-          turnoActivo
-            ? 'border-emerald-200 dark:border-brand-cesped/40'
-            : 'border-rose-200 dark:border-brand-arrecife/40'
+        className={`bg-white dark:bg-ops-panel rounded-ui-lg border-2 p-6 shadow-sm transition-all ${
+          turnoActivo ? 'border-ops-ok/30' : 'border-ops-danger/30'
         }`}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <div
-              className={`p-3 rounded-2xl border ${
+              className={`p-3 rounded-ui border ${
                 turnoActivo
-                  ? 'bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-200 dark:border-brand-cesped/30'
-                  : 'bg-rose-50 dark:bg-brand-arrecife/10 border-rose-200 dark:border-brand-arrecife/30'
+                  ? 'bg-ops-ok/10 border-ops-ok/30'
+                  : 'bg-ops-danger/10 border-ops-danger/30'
               }`}
             >
               <Clock
                 className={`w-6 h-6 ${
-                  turnoActivo
-                    ? 'text-emerald-600 dark:text-brand-cesped'
-                    : 'text-rose-500 dark:text-brand-arrecife'
+                  turnoActivo ? 'text-ops-ok' : 'text-ops-danger'
                 }`}
               />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted">
+              <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted">
                 Turno de caja
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <div
                   className={`w-2 h-2 rounded-full ${
-                    turnoActivo
-                      ? 'bg-emerald-500 dark:bg-brand-cesped animate-pulse'
-                      : 'bg-rose-400 dark:bg-brand-arrecife'
+                    turnoActivo ? 'bg-ops-ok animate-pulse' : 'bg-ops-danger'
                   }`}
                 />
                 <p
                   className={`font-black text-lg font-syne leading-none ${
-                    turnoActivo
-                      ? 'text-emerald-600 dark:text-brand-cesped'
-                      : 'text-rose-500 dark:text-brand-arrecife'
+                    turnoActivo ? 'text-ops-ok' : 'text-ops-danger'
                   }`}
                 >
                   {turnoActivo ? 'Abierto' : 'Cerrado'}
@@ -144,14 +136,14 @@ export default function TurnoWidget() {
           {turnoActivo ? (
             <button
               onClick={() => setModalCierre(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 dark:bg-brand-arrecife/10 hover:bg-rose-100 dark:hover:bg-brand-arrecife/20 border-2 border-rose-200 dark:border-brand-arrecife/40 text-rose-600 dark:text-brand-arrecife rounded-xl font-black text-sm transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 bg-ops-danger/10 hover:bg-ops-danger/15 dark:hover:bg-ops-danger/20 border-2 border-ops-danger/30 text-ops-danger rounded-ui font-black text-sm transition-all active:scale-95"
             >
               <StopCircle className="w-4 h-4" /> Cerrar turno
             </button>
           ) : (
             <button
               onClick={() => setModalApertura(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 dark:bg-brand-cesped hover:bg-emerald-600 text-white dark:text-ui-obsidiana rounded-xl font-black text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 bg-ops-ok text-ops-ok-fg rounded-ui font-black text-sm shadow-lg shadow-ops-ok/20 transition-all active:scale-95"
             >
               <PlayCircle className="w-4 h-4" /> Abrir turno
             </button>
@@ -159,7 +151,7 @@ export default function TurnoWidget() {
         </div>
 
         {turnoActivo && (
-          <div className="mt-4 pt-4 border-t-2 border-slate-100 dark:border-ui-border grid grid-cols-3 gap-4">
+          <div className="mt-4 pt-4 border-t-2 border-ops-border grid grid-cols-3 gap-4">
             {[
               { label: 'Apertura', val: apertura },
               { label: 'Duración', val: tiempoTranscurrido() },
@@ -169,12 +161,10 @@ export default function TurnoWidget() {
               },
             ].map(({ label, val }) => (
               <div key={label}>
-                <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
                   {label}
                 </p>
-                <p className="font-black text-sm text-slate-700 dark:text-brand-nacar mt-0.5">
-                  {val}
-                </p>
+                <p className="font-black text-sm text-ops-ink mt-0.5">{val}</p>
               </div>
             ))}
           </div>
@@ -183,14 +173,14 @@ export default function TurnoWidget() {
 
       {/* MODAL APERTURA */}
       {modalApertura && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] border-2 border-slate-100 dark:border-ui-border p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-border p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-2xl font-black font-syne text-slate-800 dark:text-brand-nacar">
+                <h3 className="text-2xl font-black font-syne text-ops-ink">
                   Abrir Turno
                 </h3>
-                <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mt-0.5">
+                <p className="text-xs font-bold text-ops-muted mt-0.5">
                   {new Date().toLocaleDateString('es-MX', {
                     weekday: 'long',
                     day: 'numeric',
@@ -200,18 +190,18 @@ export default function TurnoWidget() {
               </div>
               <button
                 onClick={() => setModalApertura(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-brand-nacar rounded-xl hover:bg-slate-100 dark:hover:bg-ui-border transition-all"
+                className="p-2 text-ops-muted hover:text-ops-muted dark:hover:text-ops-ink rounded-ui hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest block mb-2">
+              <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest block mb-2">
                 Fondo de caja inicial
               </label>
               <div className="flex items-center gap-3">
-                <DollarSign className="w-5 h-5 text-slate-400 dark:text-ui-muted" />
+                <DollarSign className="w-5 h-5 text-ops-muted" />
                 <input
                   type="number"
                   min="0"
@@ -219,12 +209,12 @@ export default function TurnoWidget() {
                   onChange={(e) => setFondoCaja(e.target.value)}
                   autoFocus
                   placeholder="0.00"
-                  className="flex-1 px-4 py-3 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-black text-xl text-slate-800 dark:text-brand-nacar outline-none focus:border-emerald-500 dark:focus:border-brand-cesped transition-all"
+                  className="flex-1 px-4 py-3 bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-field rounded-ui font-black text-xl text-ops-ink outline-none focus:border-ops-ok dark:focus:border-ops-ok transition-all"
                 />
               </div>
-              <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-50 dark:bg-brand-ambar/10 border border-amber-200 dark:border-brand-ambar/30 rounded-xl">
-                <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-brand-ambar shrink-0 mt-0.5" />
-                <p className="text-xs font-bold text-amber-700 dark:text-brand-ambar">
+              <div className="flex items-start gap-2 px-3 py-2.5 bg-ops-warn/10 border border-ops-warn/30 rounded-ui">
+                <AlertTriangle className="w-4 h-4 text-ops-warn shrink-0 mt-0.5" />
+                <p className="text-xs font-bold text-ops-warn">
                   El fondo quedará registrado en la auditoría del turno.
                 </p>
               </div>
@@ -233,14 +223,14 @@ export default function TurnoWidget() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setModalApertura(false)}
-                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-all"
+                className="flex-1 py-3.5 rounded-ui border-2 border-ops-border font-bold text-ops-muted hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-all"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleAbrirTurno}
                 disabled={fondoCaja === ''}
-                className="flex-1 py-3.5 rounded-xl bg-emerald-500 dark:bg-brand-cesped hover:bg-emerald-600 font-black text-white dark:text-ui-obsidiana shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-ui bg-ops-ok font-black text-ops-ok-fg shadow-lg shadow-ops-ok/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <PlayCircle className="w-5 h-5" /> Abrir turno
               </button>
@@ -251,23 +241,23 @@ export default function TurnoWidget() {
 
       {/* MODAL CIERRE */}
       {modalCierre && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] border-2 border-slate-100 dark:border-ui-border p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-border p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-rose-100 dark:bg-brand-arrecife/20 rounded-2xl flex items-center justify-center">
-                <StopCircle className="w-6 h-6 text-rose-500 dark:text-brand-arrecife" />
+              <div className="w-12 h-12 bg-ops-danger/15 rounded-ui flex items-center justify-center">
+                <StopCircle className="w-6 h-6 text-ops-danger" />
               </div>
               <div>
-                <h3 className="text-xl font-black font-syne text-slate-800 dark:text-brand-nacar">
+                <h3 className="text-xl font-black font-syne text-ops-ink">
                   Cerrar Turno
                 </h3>
-                <p className="text-xs font-bold text-slate-400 dark:text-ui-muted">
+                <p className="text-xs font-bold text-ops-muted">
                   Esta acción bloqueará las operaciones
                 </p>
               </div>
             </div>
 
-            <div className="bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-4 mb-5 space-y-2">
+            <div className="bg-ops-panel-2 dark:bg-ops-bg rounded-ui p-4 mb-5 space-y-2">
               {[
                 { label: 'Apertura', val: apertura },
                 { label: 'Duración', val: tiempoTranscurrido() },
@@ -277,19 +267,17 @@ export default function TurnoWidget() {
                 },
               ].map(({ label, val }) => (
                 <div key={label} className="flex justify-between">
-                  <span className="text-xs font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest">
+                  <span className="text-xs font-black text-ops-muted uppercase tracking-widest">
                     {label}
                   </span>
-                  <span className="text-sm font-bold text-slate-700 dark:text-brand-nacar">
-                    {val}
-                  </span>
+                  <span className="text-sm font-bold text-ops-ink">{val}</span>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-rose-50 dark:bg-brand-arrecife/10 border border-rose-200 dark:border-brand-arrecife/30 rounded-xl mb-6">
-              <AlertTriangle className="w-4 h-4 text-rose-500 dark:text-brand-arrecife shrink-0 mt-0.5" />
-              <p className="text-xs font-bold text-rose-600 dark:text-brand-arrecife">
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-ops-danger/10 border border-ops-danger/30 rounded-ui mb-6">
+              <AlertTriangle className="w-4 h-4 text-ops-danger shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-ops-danger">
                 Los meseros activos quedarán bloqueados hasta el siguiente
                 turno.
               </p>
@@ -298,13 +286,13 @@ export default function TurnoWidget() {
             <div className="flex gap-3">
               <button
                 onClick={() => setModalCierre(false)}
-                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-all"
+                className="flex-1 py-3.5 rounded-ui border-2 border-ops-border font-bold text-ops-muted hover:bg-ops-panel-2 dark:hover:bg-ops-border transition-all"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCerrarTurno}
-                className="flex-1 py-3.5 rounded-xl bg-rose-500 dark:bg-brand-arrecife hover:bg-rose-600 font-black text-white shadow-lg shadow-rose-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                className="flex-1 py-3.5 rounded-ui bg-ops-danger font-black text-ops-danger-fg shadow-lg shadow-ops-danger/20 transition-all active:scale-95 flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-5 h-5" /> Confirmar cierre
               </button>

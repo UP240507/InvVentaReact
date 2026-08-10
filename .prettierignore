@@ -1,0 +1,13 @@
+# Generado, no fuente
+dist/
+dev-dist/
+node_modules/
+src-tauri/target/
+playwright-report/
+test-results/
+coverage/
+public/
+
+# Reservadas por Chris para pruebas: no se tocan ni para formatear.
+src/views/EscritorioTest.jsx
+src/components/AppLayout.jsx

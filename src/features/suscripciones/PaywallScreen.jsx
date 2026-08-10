@@ -1,61 +1,194 @@
-import { CreditCard, Lock, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  CreditCard,
+  Lock,
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { useAuthStore } from '../auth/useAuthStore';
+import { usePlan } from '../../hooks/usePlan';
+import { iniciarCheckout, cargarCatalogo, precioMXN } from './checkout';
+
+// ─── Fase 1: Paywall real (editorial adm-*) ──────────────────────────────────
+// Dos modos:
+//  · SIN ?modulo → suscripción no vigente (vencida/suspendida/cancelada):
+//    bloqueo total con CTA de renovación vía Stripe.
+//  · CON ?modulo=lealtad|multisucursal|cfdi → upgrade contextual: el plan no
+//    incluye ese módulo; ofrece el plan/addon que sí lo trae.
+
+const NOMBRE_MODULO = {
+  lealtad: 'Sistema de Lealtad',
+  multisucursal: 'Multi-sucursal',
+  cfdi: 'Facturación CFDI',
+};
 
 export default function PaywallScreen() {
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const { suscripcion, estado, vigente } = usePlan();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const modulo = searchParams.get('modulo');
 
-  const handlePortalPago = () => {
-    // Aquí conectarías con el portal de Stripe (Customer Portal)
-    alert('Redirigiendo al portal seguro de Stripe...');
+  const [catalogo, setCatalogo] = useState({ planes: [], addons: [] });
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    cargarCatalogo()
+      .then(setCatalogo)
+      .catch(() => {});
+  }, []);
+
+  // Si llegó por módulo pero la suscripción SÍ está vigente, esto es upgrade
+  // contextual; si no hay módulo es bloqueo por vigencia.
+  const esUpgrade = Boolean(modulo) && vigente;
+
+  // Plan más barato que incluye el módulo; si ninguno, addon disponible.
+  const planConModulo = catalogo.planes
+    .filter((p) => p.activo && (p.limites?.modulos ?? []).includes(modulo))
+    .sort((a, b) => a.precio_anual_centavos - b.precio_anual_centavos)[0];
+  const addonDelModulo = catalogo.addons.find((a) => a.id === modulo);
+
+  const handleCheckout = async (planId, addons = []) => {
+    setError('');
+    setCargando(true);
+    try {
+      await iniciarCheckout(planId, addons);
+    } catch (e) {
+      setError(e.message);
+      setCargando(false);
+    }
   };
 
+  const addonsActuales = Array.isArray(suscripcion?.addons)
+    ? suscripcion.addons
+    : [];
+
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-ui-obsidiana flex items-center justify-center p-6 transition-colors duration-500 relative overflow-hidden">
-      
-      {/* Patrón de fondo y luces */}
-      <div className="absolute inset-0 opacity-20 dark:opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-rose-500/10 dark:bg-rose-500/5 blur-[120px] rounded-full pointer-events-none"></div>
-
-      <div className="bg-white/90 dark:bg-ui-humo/90 backdrop-blur-2xl rounded-[3rem] w-full max-w-2xl shadow-2xl p-10 md:p-14 relative z-10 border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95 duration-500 transition-colors">
-        
-        <div className="w-24 h-24 bg-rose-50 dark:bg-brand-arrecife/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner border border-rose-100 dark:border-brand-arrecife/20">
-          <Lock className="w-12 h-12 text-rose-500 dark:text-brand-arrecife" />
+    <div className="min-h-screen bg-adm-bg flex items-center justify-center p-6 font-figtree text-adm-ink">
+      <div className="bg-adm-panel border border-adm-border rounded-ui w-full max-w-xl p-8 md:p-12 text-center animate-in zoom-in-95 duration-media">
+        <div className="w-16 h-16 bg-adm-accent/10 rounded-ui flex items-center justify-center mx-auto mb-6">
+          {esUpgrade ? (
+            <Sparkles className="w-8 h-8 text-adm-accent" />
+          ) : (
+            <Lock className="w-8 h-8 text-adm-accent" />
+          )}
         </div>
 
-        <h1 className="text-4xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-4 tracking-tight">Suscripción Suspendida</h1>
-        
-        <p className="text-lg text-slate-600 dark:text-ui-muted font-medium mb-10 leading-relaxed">
-          El acceso al ERP de <strong className="text-slate-900 dark:text-brand-nacar">AZUL Restaurante</strong> ha sido bloqueado temporalmente debido a un problema con el pago de tu suscripción.
-        </p>
-
-        <div className="bg-slate-50 dark:bg-ui-obsidiana p-6 rounded-3xl border border-slate-200 dark:border-ui-border mb-10 flex items-start gap-4 text-left transition-colors">
-          <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-black text-slate-800 dark:text-brand-nacar">Tus datos están a salvo</h3>
-            <p className="text-sm font-medium text-slate-500 dark:text-ui-muted mt-1">
-              Tu inventario, ventas y configuraciones no se han borrado. Actualiza tu método de pago para restablecer el servicio inmediatamente.
+        {esUpgrade ? (
+          <>
+            <h1 className="font-fraunces text-3xl mb-3">
+              {NOMBRE_MODULO[modulo] ?? modulo} no está en tu plan
+            </h1>
+            <p className="text-adm-muted mb-8 leading-relaxed">
+              Tu plan actual no incluye este módulo.
+              {planConModulo &&
+                ` Está disponible desde el plan ${planConModulo.nombre} (${precioMXN(planConModulo.precio_anual_centavos)}/año más IVA).`}
+              {!planConModulo &&
+                addonDelModulo?.disponible &&
+                ` Agrégalo como add-on por ${precioMXN(addonDelModulo.precio_anual_centavos)}/año más IVA.`}
+              {!planConModulo &&
+                addonDelModulo &&
+                !addonDelModulo.disponible &&
+                ' Estará disponible próximamente.'}
             </p>
+          </>
+        ) : (
+          <>
+            <h1 className="font-fraunces text-3xl mb-3">
+              {estado === 'moroso'
+                ? 'Pago pendiente'
+                : 'Suscripción no vigente'}
+            </h1>
+            <p className="text-adm-muted mb-6 leading-relaxed">
+              El acceso de{' '}
+              <strong className="text-adm-ink">
+                {user?.nombre_negocio || 'tu restaurante'}
+              </strong>{' '}
+              está pausado. Renueva tu anualidad para restablecer el servicio de
+              inmediato.
+            </p>
+            <div className="bg-adm-bg border border-adm-border rounded-ui p-4 mb-8 flex items-start gap-3 text-left">
+              <ShieldCheck className="w-5 h-5 text-adm-ok shrink-0 mt-0.5" />
+              <p className="text-sm text-adm-muted">
+                <strong className="text-adm-ink">
+                  Tus datos están a salvo.
+                </strong>{' '}
+                Inventario, ventas y configuración siguen intactos; nada se
+                borra al vencer el plan.
+              </p>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-3 bg-adm-danger/5 border border-adm-danger/40 rounded-ui mb-6 text-adm-danger text-sm font-semibold text-left">
+            <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
           </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          {esUpgrade ? (
+            <>
+              <button
+                onClick={() => navigate(-1)}
+                className="flex-1 py-3.5 rounded-ui font-bold text-adm-muted border border-adm-border hover:bg-adm-bg transition-colors"
+              >
+                Volver
+              </button>
+              {(planConModulo || addonDelModulo?.disponible) && (
+                <button
+                  onClick={() =>
+                    planConModulo
+                      ? handleCheckout(planConModulo.id, addonsActuales)
+                      : handleCheckout(suscripcion?.plan ?? 'basico', [
+                          ...addonsActuales,
+                          modulo,
+                        ])
+                  }
+                  disabled={cargando}
+                  className="flex-[2] py-3.5 rounded-ui font-bold bg-adm-accent text-adm-accent-fg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  {cargando
+                    ? 'Abriendo Stripe…'
+                    : planConModulo
+                      ? `Mejorar a ${planConModulo.nombre}`
+                      : 'Agregar add-on'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={logout}
+                className="flex-1 py-3.5 rounded-ui font-bold text-adm-muted border border-adm-border hover:bg-adm-bg transition-colors"
+              >
+                Cerrar sesión
+              </button>
+              <button
+                onClick={() =>
+                  handleCheckout(suscripcion?.plan ?? 'basico', addonsActuales)
+                }
+                disabled={cargando}
+                className="flex-[2] py-3.5 rounded-ui font-bold bg-adm-accent text-adm-accent-fg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+              >
+                <CreditCard className="w-4 h-4" />
+                {cargando ? 'Abriendo Stripe…' : 'Renovar plan'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <button 
-            onClick={logout}
-            className="flex-1 py-5 rounded-2xl font-black text-slate-500 dark:text-ui-muted bg-transparent border-2 border-slate-200 dark:border-ui-border hover:bg-slate-50 dark:hover:bg-ui-obsidiana transition-all"
-          >
-            Cerrar Sesión
-          </button>
-          <button 
-            onClick={handlePortalPago}
-            className="flex-[2] py-5 rounded-2xl font-black text-white dark:text-ui-obsidiana bg-rose-500 hover:bg-rose-600 dark:bg-brand-arrecife dark:hover:bg-orange-600 shadow-xl shadow-rose-500/30 flex items-center justify-center gap-3 transition-transform active:scale-95"
-          >
-            <CreditCard className="w-5 h-5" /> Actualizar Pago <ArrowRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-ui-border flex items-center justify-center gap-2 text-xs font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest">
-          <ShieldCheck className="w-4 h-4" /> Pagos procesados de forma segura
-        </div>
+        <p className="mt-8 pt-6 border-t border-adm-border flex items-center justify-center gap-2 text-[10px] font-bold text-adm-muted uppercase tracking-widest">
+          <ShieldCheck className="w-3.5 h-3.5" /> Pagos procesados de forma
+          segura por Stripe
+        </p>
       </div>
     </div>
   );

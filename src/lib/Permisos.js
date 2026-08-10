@@ -44,6 +44,7 @@ export const CAPACIDADES_BASE = {
       'recepcion',
       'mermas',
       'proveedores',
+      'gastos',
       'empleados',
       'asistencias',
       'nominas',
@@ -143,7 +144,10 @@ export function getCapacidades(rol, rolesPermisos) {
 export function puedeVerRuta(cap, ruta) {
   const rutas = Array.isArray(cap?.rutas) ? cap.rutas : [];
   if (rutas.includes('*')) return true;
-  const slug = String(ruta || '').replace(/^\//, '').split('/')[0] || 'dashboard';
+  const slug =
+    String(ruta || '')
+      .replace(/^\//, '')
+      .split('/')[0] || 'dashboard';
   return rutas.includes(slug);
 }
 

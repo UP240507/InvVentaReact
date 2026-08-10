@@ -1,12 +1,22 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import {
+  PageShell,
+  PageHeader,
+  Card,
+  CardBody,
+  Button,
+  Chip,
+  EmptyState,
+  SegmentedControl,
+  DataTable,
+} from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   PackageCheck,
   Download,
   CheckCircle,
-  Clock,
   ArchiveRestore,
   Truck,
   FileText,
@@ -131,117 +141,156 @@ export default function RecepcionScreen() {
     setOrdenAConfirmar(null);
   };
 
-  return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col h-full animate-in fade-in transition-colors duration-500">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-ui-humo p-6 rounded-3xl border border-slate-200 dark:border-ui-border shadow-sm mb-6 transition-colors">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-brand-nacar flex items-center gap-3">
-            <div className="bg-emerald-100 dark:bg-brand-cesped/10 p-2 rounded-xl">
-              <PackageCheck className="w-6 h-6 text-emerald-600 dark:text-brand-cesped" />
-            </div>
-            Recepción de Mercancía
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-ui-muted mt-1">
-            Dale entrada a los insumos y actualiza tu inventario y costos
-            automáticamente.
+  // ── Historial: tabla de solo lectura ────────────────────────────────────
+  // Sin onEditar ni onEliminar, igual que Mermas: una entrada de mercancía ya
+  // movió stock y costos; corregirla es otra operación, no un "editar fila".
+  const columnasHistorial = [
+    {
+      id: 'folio',
+      titulo: 'Folio / Proveedor',
+      celda: (o) => (
+        <>
+          <p className="font-bold text-adm-ink">{o.numero || o.folio}</p>
+          <p className="text-xs text-adm-muted mt-0.5">
+            {o.proveedor_nombre || o.proveedor}
           </p>
-        </div>
-      </div>
+        </>
+      ),
+    },
+    {
+      id: 'fecha',
+      titulo: 'Emisión',
+      ancho: '1%',
+      celda: (o) => (
+        <span className="text-adm-muted whitespace-nowrap">
+          {new Date(o.fecha).toLocaleDateString('es-MX')}
+        </span>
+      ),
+    },
+    {
+      id: 'items',
+      titulo: 'Insumos',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (o) => (
+        <span className="text-adm-muted">{(o.items || []).length}</span>
+      ),
+    },
+    {
+      id: 'monto',
+      titulo: 'Monto',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (o) => (
+        <span className="font-bold text-adm-ink">
+          $
+          {Number(o.total_estimado || o.total || 0).toLocaleString('es-MX', {
+            minimumFractionDigits: 2,
+          })}
+        </span>
+      ),
+    },
+    {
+      id: 'estado',
+      titulo: 'Estado',
+      alinear: 'centro',
+      ancho: '1%',
+      celda: () => <Chip tono="ok">Ingresada</Chip>,
+    },
+  ];
 
-      {/* TABS */}
-      <div className="flex gap-4 border-b border-slate-200 dark:border-ui-border mb-6 pb-0 transition-colors">
-        <button
-          onClick={() => setActiveTab('pendientes')}
-          className={`px-4 sm:px-6 py-4 font-black text-sm border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'pendientes' ? 'border-emerald-600 text-emerald-600 dark:text-brand-cesped dark:border-brand-cesped' : 'border-transparent text-slate-400 dark:text-ui-muted hover:text-slate-600 dark:hover:text-brand-nacar'}`}
-        >
-          <Download className="w-4 h-4" /> Por Recibir
-          {pendientes.length > 0 && (
-            <span className="bg-rose-500 dark:bg-brand-arrecife text-white dark:text-ui-obsidiana text-[10px] px-2 py-0.5 rounded-full">
-              {pendientes.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('historial')}
-          className={`px-4 sm:px-6 py-4 font-black text-sm border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'historial' ? 'border-slate-800 text-slate-900 dark:border-brand-nacar dark:text-brand-nacar' : 'border-transparent text-slate-400 dark:text-ui-muted hover:text-slate-600 dark:hover:text-brand-nacar'}`}
-        >
-          <Clock className="w-4 h-4" /> Historial
-        </button>
-      </div>
+  return (
+    <PageShell>
+      <PageHeader
+        icono={PackageCheck}
+        titulo="Recepción de Mercancía"
+        descripcion="Da entrada a los insumos y actualiza inventario y costos automáticamente"
+      />
+
+      {/* PESTAÑAS */}
+      <SegmentedControl
+        className="mb-4"
+        valor={activeTab}
+        onChange={setActiveTab}
+        opciones={[
+          {
+            id: 'pendientes',
+            label: pendientes.length
+              ? `Por recibir (${pendientes.length})`
+              : 'Por recibir',
+          },
+          { id: 'historial', label: 'Historial' },
+        ]}
+      />
 
       {/* TAB PENDIENTES */}
       {activeTab === 'pendientes' && (
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-8">
           {pendientes.length === 0 ? (
-            <div className="text-center py-20 bg-white dark:bg-ui-humo rounded-3xl border border-dashed border-slate-300 dark:border-ui-border transition-colors">
-              <div className="bg-emerald-50 dark:bg-ui-obsidiana w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100 dark:border-ui-border">
-                <CheckCircle className="w-12 h-12 text-emerald-400 dark:text-ui-muted opacity-50" />
-              </div>
-              <h3 className="text-xl font-black text-slate-700 dark:text-brand-nacar">
-                Almacén al día
-              </h3>
-              <p className="text-slate-500 dark:text-ui-muted mt-2 font-medium">
-                No tienes órdenes de compra pendientes por recibir.
-              </p>
-            </div>
+            <EmptyState
+              icono={CheckCircle}
+              titulo="Almacén al día"
+              descripcion="No tienes órdenes de compra pendientes por recibir."
+            />
           ) : (
-            <div className="space-y-4">
+            // Las pendientes NO son tabla: cada una es una decisión con un
+            // botón grande ("dar entrada"), no un registro que se compara con
+            // los de al lado.
+            <div className="space-y-3">
               {pendientes.map((orden) => (
-                <div
-                  key={orden.id}
-                  className="bg-white dark:bg-ui-humo p-6 rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm hover:border-emerald-300 dark:hover:border-brand-cesped transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 group"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border flex-shrink-0 group-hover:bg-emerald-50 dark:group-hover:bg-brand-cesped/10 transition-colors">
-                      <Truck className="w-8 h-8 text-slate-400 dark:text-ui-muted group-hover:text-emerald-500 dark:group-hover:text-brand-cesped transition-colors" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-xl text-slate-900 dark:text-brand-nacar flex items-center gap-2">
-                        {orden.numero || orden.folio}
-                        {orden.referencia ===
-                          'Generada automáticamente por stock bajo' && (
-                          <span className="text-[10px] font-bold text-amber-600 dark:text-brand-ambar bg-amber-50 dark:bg-brand-ambar/10 px-2 py-0.5 rounded-md border border-amber-200 dark:border-brand-ambar/30">
-                            ⚡ Auto
+                <Card key={orden.id} hover>
+                  <CardBody className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div className="bg-adm-chip text-adm-chip-fg p-3 rounded-ui shrink-0">
+                        <Truck className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-fraunces font-bold text-lg text-adm-ink flex items-center gap-2">
+                          {orden.numero || orden.folio}
+                          {orden.referencia ===
+                            'Generada automáticamente por stock bajo' && (
+                            <Chip tono="alerta">Auto</Chip>
+                          )}
+                        </h3>
+                        <p className="text-sm text-adm-muted">
+                          {orden.proveedor_nombre || orden.proveedor}
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-adm-muted">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(orden.fecha).toLocaleDateString('es-MX')}
                           </span>
-                        )}
-                      </h3>
-                      <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mt-1">
-                        {orden.proveedor_nombre || orden.proveedor}
-                      </p>
-                      <div className="flex items-center gap-4 mt-3 text-xs font-medium text-slate-400 dark:text-ui-muted">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />{' '}
-                          {new Date(orden.fecha).toLocaleDateString('es-MX')}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-3.5 h-3.5" />{' '}
-                          {(orden.items || []).length} Insumos
-                        </span>
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3.5 h-3.5" />
+                            {(orden.items || []).length} insumos
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="w-full lg:w-auto flex-shrink-0 flex items-center gap-4">
-                    <div className="text-right hidden lg:block">
-                      <p className="text-[10px] font-black uppercase text-slate-400 dark:text-ui-muted tracking-widest mb-0.5">
-                        Importe Estimado
-                      </p>
-                      <p className="text-lg font-black text-slate-900 dark:text-brand-nacar">
-                        $
-                        {Number(
-                          orden.total_estimado || orden.total || 0,
-                        ).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </p>
+                    <div className="flex items-center gap-5 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-adm-muted">
+                          Importe estimado
+                        </p>
+                        <p className="font-fraunces font-bold text-xl text-adm-ink tabular-nums">
+                          $
+                          {Number(
+                            orden.total_estimado || orden.total || 0,
+                          ).toLocaleString('es-MX', {
+                            minimumFractionDigits: 2,
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        icono={Download}
+                        onClick={() => setOrdenAConfirmar(orden)}
+                      >
+                        Dar entrada
+                      </Button>
                     </div>
-                    <button
-                      onClick={() => setOrdenAConfirmar(orden)}
-                      className="w-full lg:w-auto bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] text-white dark:text-ui-obsidiana px-8 py-4 rounded-xl font-black shadow-lg shadow-emerald-500/30 dark:shadow-brand-cesped/30 transition-transform active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-5 h-5" /> Dar Entrada
-                    </button>
-                  </div>
-                </div>
+                  </CardBody>
+                </Card>
               ))}
             </div>
           )}
@@ -250,85 +299,35 @@ export default function RecepcionScreen() {
 
       {/* TAB HISTORIAL */}
       {activeTab === 'historial' && (
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
-          {recibidas.length === 0 ? (
-            <div className="text-center py-20 bg-white dark:bg-ui-humo rounded-3xl border border-dashed border-slate-300 dark:border-ui-border transition-colors">
-              <div className="bg-slate-50 dark:bg-ui-obsidiana w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 dark:border-ui-border">
-                <ArchiveRestore className="w-12 h-12 text-slate-400 dark:text-ui-muted opacity-50" />
-              </div>
-              <h3 className="text-xl font-black text-slate-700 dark:text-brand-nacar">
-                Sin historial
-              </h3>
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-ui-humo rounded-2xl border border-slate-200 dark:border-ui-border shadow-sm overflow-hidden transition-colors">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 dark:bg-ui-obsidiana/50 text-slate-500 dark:text-ui-muted uppercase font-black text-[10px] tracking-widest border-b border-slate-200 dark:border-ui-border">
-                    <tr>
-                      <th className="p-4">Folio / Proveedor</th>
-                      <th className="p-4">Fecha de Emisión</th>
-                      <th className="p-4 text-center">Insumos Entrados</th>
-                      <th className="p-4 text-right">Monto</th>
-                      <th className="p-4 text-center">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-ui-border">
-                    {recibidas.map((orden) => (
-                      <tr
-                        key={orden.id}
-                        className="hover:bg-slate-50 dark:hover:bg-ui-obsidiana/30 transition-colors"
-                      >
-                        <td className="p-4">
-                          <p className="font-black text-slate-900 dark:text-brand-nacar">
-                            {orden.numero || orden.folio}
-                          </p>
-                          <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-0.5">
-                            {orden.proveedor_nombre || orden.proveedor}
-                          </p>
-                        </td>
-                        <td className="p-4 text-slate-600 dark:text-brand-nacar font-medium">
-                          {new Date(orden.fecha).toLocaleDateString('es-MX')}
-                        </td>
-                        <td className="p-4 text-center font-bold text-slate-600 dark:text-brand-nacar">
-                          {(orden.items || []).length} items
-                        </td>
-                        <td className="p-4 text-right font-black text-slate-900 dark:text-brand-cesped">
-                          $
-                          {Number(
-                            orden.total_estimado || orden.total || 0,
-                          ).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className="bg-emerald-50 dark:bg-brand-cesped/10 text-emerald-600 dark:text-brand-cesped border border-emerald-100 dark:border-brand-cesped/30 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                            Ingresada
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
+        <DataTable
+          scope="tabla-recepcion"
+          titulo="Historial de recepciones"
+          columnas={columnasHistorial}
+          filas={recibidas}
+          activo={!ordenAConfirmar}
+          vacio={
+            <EmptyState
+              icono={ArchiveRestore}
+              titulo="Sin historial"
+              descripcion="Aquí aparecerán las órdenes que ya diste de entrada."
+            />
+          }
+        />
       )}
 
       {/* MODAL DE CONFIRMACIÓN DE RECEPCIÓN */}
       {ordenAConfirmar && (
-        <div className="fixed inset-0 bg-slate-900/80 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] w-full max-w-md shadow-2xl p-8 border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95 transition-colors">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-brand-ambar/10 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-amber-200 dark:border-brand-ambar/30">
-              <AlertTriangle className="w-10 h-10 text-amber-500 dark:text-brand-ambar" />
+        <div className="fixed inset-0 bg-adm-ink/80 dark:bg-adm-bg/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-md shadow-2xl p-8 border-2 border-adm-border text-center animate-in zoom-in-95 transition-colors">
+            <div className="w-20 h-20 bg-adm-warn/15 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-adm-warn/30">
+              <AlertTriangle className="w-10 h-10 text-adm-warn" />
             </div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-brand-nacar mb-2">
+            <h2 className="text-2xl font-black text-adm-ink mb-2">
               ¿Confirmar Recepción?
             </h2>
-            <p className="text-slate-500 dark:text-ui-muted font-medium mb-6">
+            <p className="text-adm-muted font-medium mb-6">
               ¿Confirmas que recibiste físicamente los insumos de la orden{' '}
-              <strong className="text-slate-700 dark:text-brand-nacar">
+              <strong className="text-adm-ink">
                 {ordenAConfirmar.numero || ordenAConfirmar.folio}
               </strong>
               ? Esto sumará el inventario y recalculará los costos promedio.
@@ -337,13 +336,13 @@ export default function RecepcionScreen() {
             <div className="flex gap-3 mt-4">
               <button
                 onClick={() => setOrdenAConfirmar(null)}
-                className="flex-1 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-700 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
+                className="flex-1 bg-adm-chip dark:bg-adm-bg hover:bg-adm-chip dark:hover:bg-adm-border text-adm-ink py-4 rounded-ui font-bold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={recibirMercancia}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] text-white dark:text-ui-obsidiana py-4 rounded-xl font-black transition-transform active:scale-95 shadow-lg shadow-emerald-500/30 dark:shadow-brand-cesped/30"
+                className="flex-1 bg-adm-ok dark:hover:bg-[#00c98c] text-adm-ok-fg py-4 rounded-ui font-black transition-transform active:scale-95 shadow-lg shadow-adm-ok/30"
               >
                 Sí, Ingresar
               </button>
@@ -351,6 +350,6 @@ export default function RecepcionScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

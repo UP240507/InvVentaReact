@@ -59,7 +59,7 @@ export default function EsperaScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-ui-obsidiana flex flex-col items-center justify-center p-6 transition-colors duration-500 relative">
+    <div className="min-h-screen bg-ops-panel-2 dark:bg-ops-bg flex flex-col items-center justify-center p-6 transition-colors duration-lenta relative">
       {/* Dot grid */}
       <div
         className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none"
@@ -74,47 +74,47 @@ export default function EsperaScreen() {
         {/* Ícono animado */}
         <div className="flex justify-center">
           <div className="relative">
-            <div className="w-32 h-32 bg-amber-100 dark:bg-brand-ambar/10 rounded-full flex items-center justify-center border-2 border-amber-200 dark:border-brand-ambar/30">
-              <ShieldOff className="w-16 h-16 text-amber-500 dark:text-brand-ambar" />
+            <div className="w-32 h-32 bg-ops-warn/15 rounded-full flex items-center justify-center border-2 border-ops-warn/30">
+              <ShieldOff className="w-16 h-16 text-ops-warn" />
             </div>
             {/* Pulso */}
-            <div className="absolute inset-0 rounded-full border-2 border-amber-300 dark:border-brand-ambar/40 animate-ping opacity-30" />
+            <div className="absolute inset-0 rounded-full border-2 border-ops-warn/30 animate-ping opacity-30" />
           </div>
         </div>
 
         {/* Saludo */}
         <div className="space-y-2">
-          <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+          <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
             Bienvenido
           </p>
-          <h1 className="text-4xl font-black font-syne text-slate-800 dark:text-brand-nacar">
+          <h1 className="text-4xl font-black font-syne text-ops-ink">
             {empleadoActivo?.nombre || 'Empleado'}
           </h1>
-          <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-indigo-100 dark:bg-brand-amatista/20 text-indigo-600 dark:text-brand-amatista rounded-full">
+          <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-ops-accent/15 text-ops-accent rounded-full">
             {empleadoActivo?.rol || 'Operativo'}
           </span>
         </div>
 
         {/* Card de estado: panel activo (puede abrir caja) o espera pasiva */}
         {puedeAbrirCaja ? (
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-emerald-200 dark:border-brand-cesped/30 p-8 shadow-xl space-y-5">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-ok/30 p-8 shadow-xl space-y-5">
             <div className="flex items-center justify-center gap-3">
-              <DoorOpen className="w-5 h-5 text-emerald-500 dark:text-brand-cesped" />
-              <p className="text-sm font-black text-emerald-600 dark:text-brand-cesped uppercase tracking-widest">
+              <DoorOpen className="w-5 h-5 text-ops-ok" />
+              <p className="text-sm font-black text-ops-ok uppercase tracking-widest">
                 Abrir turno de caja
               </p>
             </div>
-            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm leading-relaxed">
+            <p className="text-ops-muted font-bold text-sm leading-relaxed">
               No hay una caja abierta. Ingresa el fondo inicial y abre el turno
               para empezar a operar.
             </p>
 
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+              <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest px-2">
                 Fondo inicial en caja
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ops-muted" />
                 <input
                   type="number"
                   min="0"
@@ -123,7 +123,7 @@ export default function EsperaScreen() {
                   value={fondo}
                   onChange={(e) => setFondo(e.target.value)}
                   placeholder="0.00"
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-black text-slate-900 dark:text-brand-nacar outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full pl-12 pr-4 py-3.5 bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-field rounded-ui font-black text-ops-ink outline-none focus:border-ops-ok transition-colors"
                 />
               </div>
             </div>
@@ -131,7 +131,7 @@ export default function EsperaScreen() {
             <button
               onClick={handleAbrirCaja}
               disabled={abriendo}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-2xl active:scale-95 transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+              className="w-full bg-ops-ok disabled:opacity-60 disabled:cursor-not-allowed text-ops-ok-fg font-black py-4 rounded-ui active:scale-95 transition-all shadow-lg shadow-ops-ok/30 flex items-center justify-center gap-2"
             >
               {abriendo ? (
                 <>
@@ -145,19 +145,19 @@ export default function EsperaScreen() {
             </button>
           </div>
         ) : (
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-amber-200 dark:border-brand-ambar/30 p-8 shadow-xl space-y-4">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-warn/30 p-8 shadow-xl space-y-4">
             <div className="flex items-center justify-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-amber-400 dark:bg-brand-ambar animate-pulse" />
-              <p className="text-sm font-black text-amber-600 dark:text-brand-ambar uppercase tracking-widest">
+              <div className="w-3 h-3 rounded-full bg-ops-warn animate-pulse" />
+              <p className="text-sm font-black text-ops-warn uppercase tracking-widest">
                 Turno de caja cerrado
               </p>
             </div>
-            <p className="text-slate-500 dark:text-ui-muted font-bold text-base leading-relaxed">
+            <p className="text-ops-muted font-bold text-base leading-relaxed">
               El turno de caja aún no ha sido abierto. Tus pantallas se
               habilitarán automáticamente en cuanto el cajero o el gerente lo
               abra.
             </p>
-            <div className="flex items-center justify-center gap-2 text-slate-400 dark:text-ui-muted">
+            <div className="flex items-center justify-center gap-2 text-ops-muted">
               <Clock className="w-4 h-4" />
               <span className="text-xs font-bold">
                 Esperando apertura de caja...
@@ -167,7 +167,7 @@ export default function EsperaScreen() {
         )}
 
         {/* Reloj actual */}
-        <p className="text-5xl font-black font-syne text-slate-300 dark:text-ui-border tabular-nums">
+        <p className="text-5xl font-black font-syne text-ops-muted dark:text-ops-border tabular-nums">
           {new Date().toLocaleTimeString('es-MX', {
             hour: '2-digit',
             minute: '2-digit',
@@ -177,7 +177,7 @@ export default function EsperaScreen() {
         {/* Botón salir */}
         <button
           onClick={handleSalir}
-          className="flex items-center gap-2 mx-auto px-6 py-3 rounded-2xl border-2 border-slate-200 dark:border-ui-border text-slate-500 dark:text-ui-muted font-bold hover:border-rose-300 dark:hover:border-brand-arrecife hover:text-rose-500 dark:hover:text-brand-arrecife transition-all active:scale-95"
+          className="flex items-center gap-2 mx-auto px-6 py-3 rounded-ui border-2 border-ops-border text-ops-muted font-bold hover:border-ops-danger/30 dark:hover:border-ops-danger hover:text-ops-danger dark:hover:text-ops-danger transition-all active:scale-95"
         >
           <LogOut className="w-4 h-4" />
           No soy yo — volver al checador

@@ -1,8 +1,19 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import {
+  PageShell,
+  PageHeader,
+  Button,
+  Chip,
+  EmptyState,
+  SearchField,
+  IconButton,
+  DataTable,
+} from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
+import { derivarPlan } from '../../hooks/usePlan';
 import { supabase } from '../../api/supabase';
 import {
   Users,
@@ -10,9 +21,6 @@ import {
   Search,
   Edit2,
   Trash2,
-  Shield,
-  Mail,
-  Smartphone,
   Key,
   Lock,
   DollarSign,
@@ -103,6 +111,22 @@ export default function EmpleadosScreen() {
   // ─── LÓGICA DE GUARDADO (CON SYNC, AUTH Y AUDITORÍA) ─────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Fase 1 (enforcement): el ALTA respeta el límite de empleados del plan.
+    // Solo cuenta staff ACTIVO (desactivar libera cupo). La EF valida de nuevo
+    // server-side — esto es UX, no la barrera.
+    if (!isEditing) {
+      const activos = (staff || []).filter((s) => s.activo !== false).length;
+      const { limiteEmpleados, planNombre } = derivarPlan(
+        useAuthStore.getState().suscripcion,
+      );
+      if (activos >= limiteEmpleados) {
+        return showToast(
+          `Tu plan ${planNombre ?? ''} permite hasta ${limiteEmpleados} empleados activos. Desactiva uno o mejora tu plan en Mi Plan.`,
+          'error',
+        );
+      }
+    }
 
     const pin = formData.pin || '';
     // PIN: el ALTA exige 6 dígitos (mitigación interina anti-fuerza-bruta, handoff).
@@ -373,136 +397,154 @@ export default function EmpleadosScreen() {
     );
   };
 
-  return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full animate-in fade-in duration-500 flex flex-col transition-colors">
-      {/* ─── HEADER ─── */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-brand-nacar tracking-tight flex items-center gap-3">
-            <Users className="w-8 h-8 text-indigo-500" /> Plantilla de Personal
-          </h1>
-          <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mt-1 uppercase tracking-widest">
-            Gestiona accesos, roles y pines operativos
-          </p>
-        </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"
-        >
-          <Plus className="w-5 h-5" /> Nuevo Empleado
-        </button>
-      </div>
-
-      {/* ─── BUSCADOR ─── */}
-      <div className="bg-white dark:bg-ui-humo p-4 rounded-2xl border-2 border-slate-100 dark:border-ui-border shadow-sm mb-6 flex items-center gap-3 transition-colors">
-        <Search className="w-5 h-5 text-slate-400 dark:text-ui-muted" />
-        <input
-          type="text"
-          placeholder="Buscar por nombre o rol..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-transparent border-none outline-none font-bold text-slate-800 dark:text-brand-nacar placeholder:text-slate-400 dark:placeholder:text-ui-muted"
-        />
-      </div>
-
-      {/* ─── GRID DE EMPLEADOS ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 flex-1 overflow-y-auto custom-scrollbar pb-10">
-        {empleadosFiltrados.length === 0 ? (
-          <div className="col-span-full flex flex-col items-center justify-center text-slate-400 dark:text-ui-muted py-20">
-            <Users className="w-16 h-16 mb-4 opacity-20" />
-            <p className="font-bold text-lg">No se encontraron empleados</p>
+  // ── Plantilla en tabla ──────────────────────────────────────────────────
+  // La plantilla es una LISTA que se compara: quién está activo, con qué rol y
+  // con qué contacto. En rejilla de tarjetas, "¿cuántos meseros tengo?" obliga
+  // a contar a ojo por toda la pantalla.
+  //
+  // El PIN nunca se muestra, ni enmascarado con una longitud real: la tarjeta
+  // vieja pintaba "••••" fijo, que ya era correcto, pero aquí ni siquiera se
+  // insinúa. Se cambia desde el modal.
+  const columnas = [
+    {
+      id: 'empleado',
+      titulo: 'Empleado',
+      celda: (emp) => (
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`w-9 h-9 rounded-ui flex items-center justify-center font-bold shrink-0 ${
+              emp.activo !== false
+                ? 'bg-adm-info text-adm-info-fg'
+                : 'bg-adm-chip text-adm-chip-fg'
+            }`}
+          >
+            {(emp.nombre || '?').charAt(0).toUpperCase()}
           </div>
-        ) : (
-          empleadosFiltrados.map((emp) => (
-            <div
-              key={emp.id}
-              className={`bg-white dark:bg-ui-humo rounded-3xl p-6 border-2 border-slate-100 dark:border-ui-border shadow-sm hover:border-indigo-300 dark:hover:border-brand-amatista transition-colors group ${emp.activo === false ? 'opacity-75' : ''}`}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-inner ${emp.activo !== false ? 'bg-indigo-500' : 'bg-slate-400 dark:bg-ui-obsidiana'}`}
-                  >
-                    {(emp.nombre || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-brand-nacar text-lg leading-tight line-clamp-1">
-                      {emp.nombre}
-                    </h3>
-                    <span className="text-xs font-bold uppercase tracking-widest text-indigo-500 dark:text-brand-amatista flex items-center gap-1 mt-1">
-                      <Shield className="w-3 h-3" /> {emp.rol}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          <div className="min-w-0">
+            <p className="font-bold text-adm-ink truncate">{emp.nombre}</p>
+            {emp.activo === false && (
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-adm-danger">
+                dado de baja
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'rol',
+      titulo: 'Rol',
+      ancho: '1%',
+      celda: (emp) => <Chip tono="neutro">{emp.rol}</Chip>,
+    },
+    {
+      id: 'contacto',
+      titulo: 'Contacto',
+      celda: (emp) => (
+        <div className="text-xs text-adm-muted">
+          {emp.telefono && <p>{emp.telefono}</p>}
+          {emp.email && <p className="truncate">{emp.email}</p>}
+          {!emp.telefono && !emp.email && <p>—</p>}
+        </div>
+      ),
+    },
+    {
+      id: 'acciones',
+      titulo: '',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (emp) => (
+        <div className="flex justify-end gap-1">
+          <IconButton
+            icono={Edit2}
+            titulo="Editar"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenModal(emp);
+            }}
+          />
+          <IconButton
+            icono={emp.activo !== false ? Trash2 : CheckCircle}
+            titulo={emp.activo !== false ? 'Dar de baja' : 'Reactivar'}
+            className={
+              emp.activo !== false
+                ? 'hover:text-adm-danger'
+                : 'hover:text-adm-ok'
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleEstado(emp);
+            }}
+          />
+        </div>
+      ),
+    },
+  ];
 
-              <div className="space-y-3 mb-6 bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border transition-colors">
-                <div className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-brand-nacar">
-                  <Key className="w-4 h-4 text-slate-400 dark:text-ui-muted" />{' '}
-                  PIN:{' '}
-                  <span className="text-slate-900 dark:text-brand-nacar tracking-widest bg-white dark:bg-ui-humo px-2 py-0.5 rounded-md border border-slate-200 dark:border-ui-border">
-                    ••••
-                  </span>
-                </div>
-                {emp.telefono && (
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-brand-nacar">
-                    <Smartphone className="w-4 h-4 text-slate-400 dark:text-ui-muted" />{' '}
-                    {emp.telefono}
-                  </div>
-                )}
-                {emp.email && (
-                  <div className="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-brand-nacar line-clamp-1">
-                    <Mail className="w-4 h-4 text-slate-400 dark:text-ui-muted" />{' '}
-                    {emp.email}
-                  </div>
-                )}
-              </div>
+  return (
+    <PageShell>
+      <PageHeader
+        icono={Users}
+        titulo="Plantilla de Personal"
+        descripcion="Accesos, roles y pines operativos"
+        scopeAtajos="tabla-empleados"
+        acciones={
+          <Button icono={Plus} onClick={() => handleOpenModal()}>
+            Nuevo empleado
+          </Button>
+        }
+      />
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleOpenModal(emp)}
-                  className="flex-1 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-700 dark:text-brand-nacar font-black py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" /> Editar
-                </button>
-                <button
-                  onClick={() => handleToggleEstado(emp)}
-                  className={`flex-1 font-black py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors border-2 ${
-                    emp.activo !== false
-                      ? 'border-rose-100 dark:border-brand-arrecife/30 text-rose-500 hover:bg-rose-50 dark:hover:bg-brand-arrecife/10'
-                      : 'border-emerald-100 dark:border-brand-cesped/30 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-brand-cesped/10'
-                  }`}
-                >
-                  {emp.activo !== false ? (
-                    <Trash2 className="w-4 h-4" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {emp.activo !== false ? 'Baja' : 'Reactivar'}
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <SearchField
+        icono={Search}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="Buscar por nombre o rol…"
+        className="mb-4 max-w-md"
+      />
+
+      <DataTable
+        scope="tabla-empleados"
+        titulo="Plantilla"
+        columnas={columnas}
+        filas={empleadosFiltrados}
+        onEditar={handleOpenModal}
+        onNuevo={() => handleOpenModal()}
+        // Sin onEliminar: aquí no se borra, se da de BAJA (y la baja libera
+        // cupo del plan). Un Supr que diera de baja empleados sin confirmar
+        // sería un accidente esperando a pasar.
+        activo={!showModal}
+        vacio={
+          <EmptyState
+            icono={Users}
+            titulo="No se encontraron empleados"
+            descripcion="Ajusta la búsqueda o da de alta al primero."
+            accion={
+              <Button icono={Plus} onClick={() => handleOpenModal()}>
+                Nuevo empleado
+              </Button>
+            }
+          />
+        }
+      />
 
       {/* ─── MODAL ALTA/EDICIÓN ─── */}
       {showModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors">
-            <div className="p-6 border-b border-slate-100 dark:border-ui-border flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana transition-colors">
-              <h2 className="text-xl font-black text-slate-900 dark:text-brand-nacar flex items-center gap-2">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel w-full max-w-2xl rounded-ui-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+            <div className="p-6 border-b border-adm-border flex justify-between items-center bg-adm-bg transition-colors">
+              <h2 className="text-xl font-black text-adm-ink flex items-center gap-2">
                 {isEditing ? (
-                  <Edit2 className="w-5 h-5 text-indigo-500" />
+                  <Edit2 className="w-5 h-5 text-adm-info" />
                 ) : (
-                  <Plus className="w-5 h-5 text-indigo-500" />
+                  <Plus className="w-5 h-5 text-adm-info" />
                 )}
                 {isEditing ? 'Editar Empleado' : 'Nuevo Empleado'}
               </h2>
               <button
                 onClick={handleCloseModal}
                 disabled={saving}
-                className="p-2 bg-white dark:bg-ui-humo rounded-full hover:bg-rose-50 dark:hover:bg-ui-border text-slate-400 dark:text-ui-muted transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 bg-white dark:bg-adm-panel rounded-full hover:bg-adm-danger/10 dark:hover:bg-adm-border text-adm-muted transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -514,7 +556,7 @@ export default function EmpleadosScreen() {
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                     Nombre Completo *
                   </label>
                   <input
@@ -524,13 +566,13 @@ export default function EmpleadosScreen() {
                     onChange={(e) =>
                       setFormData({ ...formData, nombre: e.target.value })
                     }
-                    className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors"
                     placeholder="Ej. Carlos Muñoz"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                     Rol Operativo *
                   </label>
                   <select
@@ -538,7 +580,7 @@ export default function EmpleadosScreen() {
                     onChange={(e) =>
                       setFormData({ ...formData, rol: e.target.value })
                     }
-                    className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                    className="w-full px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors cursor-pointer"
                   >
                     {(roles_permisos?.length
                       ? [...roles_permisos].sort((a, b) =>
@@ -561,14 +603,14 @@ export default function EmpleadosScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2 flex justify-between">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2 flex justify-between">
                     <span>PIN Acceso (Caja/Reloj) *</span>
-                    <span className="text-indigo-500 dark:text-brand-amatista">
+                    <span className="text-adm-info">
                       {isEditing ? '4 a 6 dígitos' : '6 dígitos'}
                     </span>
                   </label>
                   <div className="relative">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-adm-muted" />
                     <input
                       type="password"
                       required
@@ -580,14 +622,14 @@ export default function EmpleadosScreen() {
                           pin: e.target.value.replace(/\D/g, ''),
                         })
                       }
-                      className="w-full pl-12 pr-4 py-3.5 bg-indigo-50/50 dark:bg-brand-amatista/10 border-2 border-indigo-100 dark:border-brand-amatista/30 rounded-2xl font-black text-indigo-700 dark:text-brand-amatista outline-none focus:border-indigo-500 transition-colors tracking-widest"
+                      className="w-full pl-12 pr-4 py-3.5 bg-adm-info/50 border-2 border-adm-info/30 rounded-ui font-black text-adm-info outline-none focus:border-adm-info transition-colors tracking-widest"
                       placeholder={isEditing ? 'Ej. 1234' : 'Ej. 123456'}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                     Sueldo Base * (
                     {formData.tipo_sueldo === 'hora'
                       ? 'por hora'
@@ -597,7 +639,7 @@ export default function EmpleadosScreen() {
                     )
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-adm-muted" />
                     <input
                       type="number"
                       min="0"
@@ -609,7 +651,7 @@ export default function EmpleadosScreen() {
                           salario_base: e.target.value,
                         })
                       }
-                      className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full pl-12 pr-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors"
                       placeholder="0.00"
                     />
                   </div>
@@ -625,10 +667,10 @@ export default function EmpleadosScreen() {
                         onClick={() =>
                           setFormData({ ...formData, tipo_sueldo: val })
                         }
-                        className={`flex-1 py-2 rounded-xl text-xs font-black border-2 transition-all ${
+                        className={`flex-1 py-2 rounded-ui text-xs font-black border-2 transition-all ${
                           formData.tipo_sueldo === val
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-brand-amatista/10 dark:border-brand-amatista dark:text-brand-amatista'
-                            : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-ui-border dark:bg-ui-obsidiana dark:text-ui-muted'
+                            ? 'border-adm-info bg-adm-info/10 text-adm-info'
+                            : 'border-adm-border bg-adm-bg text-adm-muted'
                         }`}
                       >
                         {label}
@@ -638,7 +680,7 @@ export default function EmpleadosScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                     Teléfono
                   </label>
                   <input
@@ -647,13 +689,13 @@ export default function EmpleadosScreen() {
                     onChange={(e) =>
                       setFormData({ ...formData, telefono: e.target.value })
                     }
-                    className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors"
                     placeholder="10 dígitos"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2">
                     {esElevado
                       ? 'Correo * (con él inicia sesión)'
                       : 'Correo (Opcional)'}
@@ -664,7 +706,7 @@ export default function EmpleadosScreen() {
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors"
                     placeholder="correo@ejemplo.com"
                   />
                 </div>
@@ -675,18 +717,18 @@ export default function EmpleadosScreen() {
                 {/* llena, se re-sincroniza la cuenta de Auth vía EF. */}
                 {esElevado && (
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2 flex justify-between">
+                    <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-2 flex justify-between">
                       <span>
                         {isEditing
                           ? 'Nueva Contraseña (Admin/Gerente)'
                           : 'Contraseña de Acceso (Admin/Gerente) *'}
                       </span>
-                      <span className="text-indigo-500 dark:text-brand-amatista">
+                      <span className="text-adm-info">
                         {isEditing ? 'vacío = no cambiar' : 'mín. 8 caracteres'}
                       </span>
                     </label>
                     <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-ui-muted" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-adm-muted" />
                       <input
                         type="password"
                         required={!isEditing}
@@ -696,7 +738,7 @@ export default function EmpleadosScreen() {
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
                         }
-                        className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+                        className="w-full pl-12 pr-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-info transition-colors"
                         placeholder={
                           isEditing
                             ? 'Deja vacío para conservar la actual'
@@ -704,7 +746,7 @@ export default function EmpleadosScreen() {
                         }
                       />
                     </div>
-                    <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted px-2 leading-relaxed">
+                    <p className="text-[11px] font-bold text-adm-muted px-2 leading-relaxed">
                       Admin y Gerente inician sesión con esta contraseña (no por
                       PIN). El PIN lo usan para operar dentro de la sesión ya
                       iniciada.
@@ -713,19 +755,19 @@ export default function EmpleadosScreen() {
                 )}
               </div>
 
-              <div className="pt-6 border-t border-slate-100 dark:border-ui-border flex gap-3 transition-colors">
+              <div className="pt-6 border-t border-adm-border flex gap-3 transition-colors">
                 <button
                   type="button"
                   onClick={handleCloseModal}
                   disabled={saving}
-                  className="flex-1 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-700 dark:text-brand-nacar font-black py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-adm-chip dark:bg-adm-bg hover:bg-adm-chip dark:hover:bg-adm-border text-adm-ink font-black py-4 rounded-ui transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl active:scale-95 transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+                  className="flex-1 bg-adm-info hover:bg-adm-info disabled:opacity-60 disabled:cursor-not-allowed text-adm-info-fg font-black py-4 rounded-ui active:scale-95 transition-all shadow-lg shadow-adm-info/30 flex items-center justify-center gap-2"
                 >
                   {saving ? (
                     <>
@@ -741,6 +783,6 @@ export default function EmpleadosScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

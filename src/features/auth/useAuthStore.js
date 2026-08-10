@@ -34,6 +34,31 @@ const esErrorDeRed = (err) =>
     err?.message || '',
   );
 
+/**
+ * Reloj para las llamadas de red del arranque.
+ *
+ * **Por qué hace falta aunque exista el atajo de `navigator.onLine`.**
+ * `navigator.onLine` dice si hay ENLACE, no si hay INTERNET. Con el cable WAN
+ * desenchufado del router, el wifi sigue arriba y el navegador reporta `true`
+ * con toda tranquilidad. Es exactamente el escenario de un restaurante al que
+ * se le cayó el proveedor: hay red local, no hay nube.
+ *
+ * En ese estado las consultas de identidad no fallan rápido —en el WebView de
+ * Tauri se quedan colgadas—, así que el arranque no llegaba nunca a apagar la
+ * pantalla de «Cargando contenido…». La caja se quedaba ahí, y con ella todos
+ * los dispositivos que cargan la app desde la caja.
+ *
+ * El mensaje dice "timeout" a propósito: `esErrorDeRed` lo reconoce, así que
+ * el fallo cae al camino de caché en vez de cerrar la sesión.
+ */
+const conTimeout = (promesa, ms = 8000) =>
+  Promise.race([
+    promesa,
+    new Promise((_, rechazar) =>
+      setTimeout(() => rechazar(new Error('timeout-red')), ms),
+    ),
+  ]);
+
 // 🔑 Propaga el JWT de la sesión al canal de realtime. Sin esto, el WebSocket
 // escucha con la anon key → get_restaurante_id() = null → RLS descarta los
 // eventos en silencio (HTTP funciona, realtime mudo). Se llama al cargar y
@@ -210,10 +235,12 @@ export const useAuthStore = create((set, get) => ({
     // toda la app (idempotente si se llama de nuevo).
     get().iniciarVigilanciaSesion();
     try {
+      // Con reloj: `getSession` lee de localStorage, pero si el token está
+      // vencido intenta refrescarlo por red — y sin internet eso se cuelga.
       const {
         data: { session },
         error: sessionError,
-      } = await supabase.auth.getSession();
+      } = await conTimeout(supabase.auth.getSession(), 6000);
       if (sessionError) throw sessionError;
 
       if (session) {
@@ -292,6 +319,44 @@ export const useAuthStore = create((set, get) => ({
       let susData = null;
       let esEmpleado = false;
 
+      // ── ATAJO OFFLINE ────────────────────────────────────────────────────
+      // Si NO hay red, ni se intentan las consultas de identidad. No es una
+      // optimización: es lo que impide que la app se quede en «Cargando
+      // contenido…» para siempre.
+      //
+      // Estas tres consultas no tienen timeout, y en el WebView de Tauri una
+      // petición sin ruta a internet no falla rápido como en Chrome: se queda
+      // colgada. Con la caja sin internet, el arranque no llegaba nunca al
+      // `set({ isLoading: false })` de más abajo y la pantalla de carga se
+      // quedaba puesta — en la caja Y, por lo tanto, en todo dispositivo que
+      // cargara la app desde ella.
+      //
+      // `fetchInitialData` ya usaba exactamente este patrón (Dexie primero,
+      // red solo si `navigator.onLine`). Aquí faltaba.
+      const cacheOffline = leerCacheCtx();
+      if (!navigator.onLine && cacheOffline?.user) {
+        console.warn(
+          '⚠️ [Auth] Sin red al arrancar: contexto desde cache, sin tocar Supabase.',
+        );
+        await sincronizarEmpleadoActivo(
+          !!cacheOffline.esEmpleado,
+          cacheOffline.user,
+        );
+        set({
+          session,
+          user: cacheOffline.user,
+          restauranteId:
+            cacheOffline.restauranteId || cacheOffline.user.restaurante_id,
+          suscripcion: cacheOffline.suscripcion || null,
+          error: null,
+          isLoading: true, // hasta que fetchInitialData hidrate desde Dexie
+        });
+        const { useAppStore } = await import('../../store/useAppStore');
+        await useAppStore.getState().fetchInitialData();
+        set({ isLoading: false });
+        return;
+      }
+
       try {
         // Resolver identidad por auth_id (clave fiable). Orden:
         //   1) usuarios por auth_id        → admin/tenant
@@ -300,28 +365,34 @@ export const useAuthStore = create((set, get) => ({
         // maybeSingle(): 0 filas devuelve null y NO lanza. Antes .single() tiraba
         // 406 ("Cannot coerce the result to a single JSON object") y como un
         // empleado vive en staff (no en usuarios), se le cerraba la sesión al instante.
-        let { data: u, error: uErr } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('auth_id', authId)
-          .maybeSingle();
+        let { data: u, error: uErr } = await conTimeout(
+          supabase
+            .from('usuarios')
+            .select('*')
+            .eq('auth_id', authId)
+            .maybeSingle(),
+        );
         if (uErr) throw uErr;
 
         if (!u && emailPrefix) {
-          const { data: uByName } = await supabase
-            .from('usuarios')
-            .select('*')
-            .ilike('username', emailPrefix)
-            .maybeSingle();
+          const { data: uByName } = await conTimeout(
+            supabase
+              .from('usuarios')
+              .select('*')
+              .ilike('username', emailPrefix)
+              .maybeSingle(),
+          );
           u = uByName || null;
         }
 
         if (!u) {
-          const { data: s, error: sErr } = await supabase
-            .from('staff')
-            .select('*')
-            .eq('auth_id', authId)
-            .maybeSingle();
+          const { data: s, error: sErr } = await conTimeout(
+            supabase
+              .from('staff')
+              .select('*')
+              .eq('auth_id', authId)
+              .maybeSingle(),
+          );
           if (sErr) throw sErr;
           if (s) {
             esEmpleado = true;
@@ -333,13 +404,15 @@ export const useAuthStore = create((set, get) => ({
         if (!u) throw new Error('Usuario no encontrado en el sistema.');
         userData = u;
 
-        const hoy = new Date().toISOString().split('T')[0];
+        // Fase 1: se trae la suscripción con el plan EMBEBIDO (planes.limites)
+        // para que usePlan/derivarPlan tengan límites aún offline (van al cache).
+        // La VIGENCIA ya no se filtra aquí: la decide derivarPlan en el cliente
+        // (trial→trial_hasta; activo/moroso→fecha_vencimiento+dias_gracia).
         const { data: s } = await supabase
           .from('suscripciones')
-          .select('*')
+          .select('*, planes(id, nombre, limites)')
           .eq('restaurante_id', userData.restaurante_id)
-          .eq('estado', 'activo')
-          .gte('fecha_vencimiento', hoy)
+          .in('estado', ['trial', 'activo', 'moroso'])
           .maybeSingle();
         susData = s || null;
 

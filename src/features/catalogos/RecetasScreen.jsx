@@ -1,5 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import {
+  PageShell,
+  PageHeader,
+  Button,
+  Chip,
+  EmptyState,
+  SearchField,
+  SegmentedControl,
+  IconButton,
+  DataTable,
+} from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import {
   ChefHat,
@@ -8,17 +19,13 @@ import {
   Edit3,
   Trash2,
   X,
-  AlertTriangle,
   UtensilsCrossed,
   Calculator,
-  Tags,
   PackageMinus,
-  FolderOpen,
   TrendingDown,
   TrendingUp,
   ArchiveRestore,
   ListPlus,
-  Info,
   PlusCircle,
   Coins,
   EyeOff,
@@ -81,16 +88,6 @@ export default function RecetasScreen() {
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [recetas, busqueda, filtroEstado]);
-
-  const recetasPorCategoria = useMemo(() => {
-    const grupos = {};
-    recetasFiltradas.forEach((r) => {
-      const cat = r.categoria || 'Sin categoría';
-      if (!grupos[cat]) grupos[cat] = [];
-      grupos[cat].push(r);
-    });
-    return grupos;
-  }, [recetasFiltradas]);
 
   const calcularCostoReceta = (ingredientesList = []) => {
     if (!ingredientesList) return 0;
@@ -220,7 +217,8 @@ export default function RecetasScreen() {
     setForm((prev) => ({
       ...prev,
       componentes: (prev.componentes || []).filter(
-        (c) => Array.isArray(c?.opciones) || String(c.recetaId) !== String(recetaId),
+        (c) =>
+          Array.isArray(c?.opciones) || String(c.recetaId) !== String(recetaId),
       ),
     }));
 
@@ -243,7 +241,10 @@ export default function RecetasScreen() {
     if (!nombre)
       return showToast('Ponle nombre al grupo (ej. Bebida caliente).', 'error');
     if (grupoOpciones.length < 2)
-      return showToast('Un grupo de elección necesita al menos 2 opciones.', 'error');
+      return showToast(
+        'Un grupo de elección necesita al menos 2 opciones.',
+        'error',
+      );
     if (
       (form.componentes || []).some(
         (c) => Array.isArray(c?.opciones) && c.grupo === nombre,
@@ -388,259 +389,247 @@ export default function RecetasScreen() {
     setMermaInsumo(0);
   };
 
-  return (
-    <div className="p-6 md:p-10 max-w-7xl mx-auto flex flex-col h-full animate-in fade-in duration-500 overflow-y-auto custom-scrollbar">
-      {/* ─── HEADER ─── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-white dark:bg-ui-humo p-8 rounded-brand border-2 border-slate-100 dark:border-ui-border shadow-xl shadow-slate-200/50 dark:shadow-none mb-8 relative overflow-hidden transition-colors duration-500">
-        <div className="absolute top-0 right-0 p-12 bg-brand-arrecife/10 rounded-full -mr-12 -mt-12 opacity-50" />
-        <div className="flex items-center gap-6 relative z-10">
-          <div className="bg-brand-arrecife p-4 rounded-3xl shadow-lg shadow-brand-arrecife/40">
-            <ChefHat className="w-8 h-8 text-white dark:text-ui-obsidiana" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tight">
-              Menú Maestro
-            </h1>
-            <p className="text-slate-500 dark:text-ui-muted font-bold mt-1 flex items-center gap-2">
-              <UtensilsCrossed className="w-4 h-4" /> Ingeniería de Menú y
-              Costos
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            setForm({
-              nombre: '',
-              codigo_pos: '',
-              categoria: categoriasExistentes[0] || 'Platos Fuertes',
-              precio_venta: '',
-              insumos: [],
-              grupos_modificadores: [],
-              es_paquete: false,
-              componentes: [],
-            });
-            setEditId(null);
-            setModalTab('general');
-            setShowModal(true);
-          }}
-          className="w-full sm:w-auto bg-slate-900 dark:bg-brand-arrecife hover:bg-slate-800 dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana px-8 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-xl transition-all hover:scale-105 active:scale-95 group"
-        >
-          <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />{' '}
-          Nuevo Platillo
-        </button>
-      </div>
+  // ── Nueva receta: mismo estado inicial para el botón y para el atajo N ──
+  const abrirNuevo = () => {
+    setForm({
+      nombre: '',
+      codigo_pos: '',
+      categoria: categoriasExistentes[0] || 'Platos Fuertes',
+      precio_venta: '',
+      insumos: [],
+      grupos_modificadores: [],
+      es_paquete: false,
+      componentes: [],
+    });
+    setEditId(null);
+    setModalTab('general');
+    setShowModal(true);
+  };
 
-      {/* ─── FILTROS ─── */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1 max-w-md group">
-          <Search className="w-5 h-5 text-slate-400 dark:text-ui-muted absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-brand-arrecife transition-colors" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o código POS..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white dark:bg-ui-humo border-2 border-slate-100 dark:border-ui-border rounded-2xl text-slate-800 dark:text-brand-nacar font-bold outline-none focus:border-brand-arrecife shadow-sm transition-all"
+  // ── Columnas ────────────────────────────────────────────────────────────
+  // Aquí SÍ manda la tabla, al revés que en Modificadores: "ingeniería de menú"
+  // es comparar costo, precio y margen ENTRE platillos, y eso en una rejilla de
+  // tarjetas obliga a recorrer la pantalla en zigzag. En tabla, la columna de
+  // rentabilidad se lee de arriba abajo de un vistazo.
+  const filas = useMemo(
+    () =>
+      recetasFiltradas.map((r) => {
+        const costo = calcularCostoReceta(r.insumos || r.ingredientes || []);
+        const precio = Number(r.precio_venta) || 0;
+        const margen = precio > 0 ? ((precio - costo) / precio) * 100 : 0;
+        return { ...r, _costo: costo, _precio: precio, _margen: margen };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recetasFiltradas, productos],
+  );
+
+  const columnas = [
+    {
+      id: 'platillo',
+      titulo: 'Platillo',
+      celda: (r) => (
+        <div className="min-w-0">
+          <p className="font-bold text-adm-ink leading-tight truncate">
+            {r.nombre}
+            {r.activo === false && (
+              <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.14em] text-adm-danger">
+                oculto
+              </span>
+            )}
+          </p>
+          <p className="text-[10px] font-mono text-adm-muted mt-0.5">
+            {r.codigo_pos || 'NO-POS'}
+            {Array.isArray(r.componentes) && r.componentes.length > 0 && (
+              <span className="ml-2 text-adm-info">
+                paquete · {r.componentes.length}
+              </span>
+            )}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'categoria',
+      titulo: 'Categoría',
+      ancho: '1%',
+      celda: (r) => <Chip>{r.categoria}</Chip>,
+    },
+    {
+      id: 'composicion',
+      titulo: 'Composición',
+      ancho: '1%',
+      celda: (r) => (
+        <span className="text-xs text-adm-muted whitespace-nowrap">
+          {(r.insumos || r.ingredientes || []).length} insumos ·{' '}
+          {(r.grupos_modificadores || []).length} mods
+        </span>
+      ),
+    },
+    {
+      id: 'costo',
+      titulo: 'Costo',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (r) => (
+        <span className="text-adm-muted">
+          ${r._costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      id: 'precio',
+      titulo: 'Venta',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (r) => (
+        <span className="font-bold text-adm-ink">
+          ${r._precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      id: 'margen',
+      titulo: 'Rentabilidad',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (r) => {
+        // Umbral de 30%: por debajo el platillo no paga su parte de los costos
+        // fijos. Es el mismo criterio que usaba la barra de la tarjeta vieja.
+        const tono =
+          r._margen <= 0
+            ? 'text-adm-danger'
+            : r._margen < 30
+              ? 'text-adm-warn'
+              : 'text-adm-ok';
+        return (
+          <span className={`font-bold tabular-nums ${tono}`}>
+            {r._margen.toFixed(1)}%
+          </span>
+        );
+      },
+    },
+    {
+      id: 'acciones',
+      titulo: '',
+      alinear: 'der',
+      ancho: '1%',
+      celda: (r) => (
+        <div className="flex justify-end gap-1">
+          {r.activo === false ? (
+            <IconButton
+              icono={ArchiveRestore}
+              titulo="Reactivar"
+              onClick={(e) => {
+                e.stopPropagation();
+                reactivarReceta(r);
+              }}
+            />
+          ) : (
+            <>
+              <IconButton
+                icono={EyeOff}
+                titulo="Ocultar del menú"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  desactivarReceta(r);
+                }}
+              />
+              <IconButton
+                icono={Edit3}
+                titulo="Editar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  abrirEditar(r);
+                }}
+              />
+            </>
+          )}
+          <IconButton
+            icono={Trash2}
+            titulo="Eliminar permanentemente"
+            className="hover:text-adm-danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRecetaAEliminar(r);
+            }}
           />
         </div>
-        <div className="flex bg-slate-100 dark:bg-ui-humo p-1.5 rounded-2xl border border-slate-200 dark:border-ui-border">
-          {['Activos', 'Inactivos'].map((estado) => (
-            <button
-              key={estado}
-              onClick={() => setFiltroEstado(estado)}
-              className={`px-8 py-2.5 rounded-xl text-sm font-black transition-all ${filtroEstado === estado ? 'bg-white dark:bg-ui-obsidiana text-brand-arrecife shadow-md scale-100' : 'text-slate-500 dark:text-ui-muted hover:text-slate-800 dark:hover:text-brand-nacar hover:scale-95'}`}
-            >
-              {estado}
-            </button>
-          ))}
-        </div>
+      ),
+    },
+  ];
+
+  return (
+    <PageShell className="overflow-y-auto">
+      <PageHeader
+        icono={ChefHat}
+        titulo="Menú Maestro"
+        descripcion="Ingeniería de menú y costos"
+        scopeAtajos="tabla-recetas"
+        acciones={
+          <Button icono={Plus} onClick={abrirNuevo}>
+            Nuevo platillo
+          </Button>
+        }
+      />
+
+      {/* ─── FILTROS ─── */}
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <SearchField
+          icono={Search}
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre o código POS…"
+          className="flex-1 max-w-md"
+        />
+        <SegmentedControl
+          opciones={['Activos', 'Inactivos']}
+          valor={filtroEstado}
+          onChange={setFiltroEstado}
+        />
       </div>
 
-      {/* ─── GRID DE PLATILLOS ─── */}
-      <div className="flex-1 space-y-12 pb-10">
-        {Object.keys(recetasPorCategoria).map((cat) => (
-          <div key={cat} className="animate-in fade-in slide-in-from-bottom-4">
-            <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-              <FolderOpen className="w-4 h-4" /> {cat}
-              <div className="h-px flex-1 bg-slate-200 dark:bg-ui-border" />
-              <span className="bg-slate-100 dark:bg-ui-humo border border-slate-200 dark:border-ui-border text-slate-500 dark:text-ui-muted px-3 py-1 rounded-full text-[10px] font-bold">
-                {recetasPorCategoria[cat].length} items
-              </span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-              {recetasPorCategoria[cat].map((r) => {
-                const costo = calcularCostoReceta(
-                  r.insumos || r.ingredientes || [],
-                );
-                const precio = Number(r.precio_venta) || 0;
-                const ganancia = precio - costo;
-                const margen = precio > 0 ? (ganancia / precio) * 100 : 0;
-                const inactivo = r.activo === false;
-                const margenColor =
-                  margen <= 0
-                    ? 'bg-rose-500 dark:bg-brand-arrecife'
-                    : margen < 30
-                      ? 'bg-amber-400 dark:bg-brand-ambar'
-                      : 'bg-emerald-500 dark:bg-brand-cesped';
-
-                return (
-                  <div
-                    key={r.id}
-                    className={`bg-white dark:bg-ui-humo rounded-brand border-2 shadow-sm transition-all relative overflow-hidden group hover:shadow-2xl hover:-translate-y-1 ${inactivo ? 'border-rose-100 dark:border-brand-arrecife/30 opacity-75' : 'border-slate-100 dark:border-ui-border'}`}
-                  >
-                    <div
-                      className={`absolute top-0 left-0 w-1.5 h-full ${margenColor}`}
-                    />
-                    <div className="p-6">
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`${inactivo ? 'bg-rose-50 dark:bg-brand-arrecife/10 text-rose-500 dark:text-brand-arrecife' : 'bg-brand-arrecife/10 text-brand-arrecife'} p-4 rounded-2xl`}
-                          >
-                            <UtensilsCrossed className="w-6 h-6" />
-                          </div>
-                          <div className="min-w-0 pr-4">
-                            <h4 className="font-black font-syne text-xl text-slate-900 dark:text-brand-nacar truncate leading-tight">
-                              {r.nombre}
-                            </h4>
-                            <span className="text-[10px] font-mono font-black text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana px-2 py-0.5 rounded-md mt-1.5 inline-block border border-slate-200 dark:border-ui-border">
-                              {r.codigo_pos || 'NO-POS'}
-                            </span>
-                            {Array.isArray(r.componentes) &&
-                              r.componentes.length > 0 && (
-                                <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-brand-amatista bg-violet-50 dark:bg-brand-amatista/10 border border-violet-200 dark:border-brand-amatista/30 px-2 py-0.5 rounded-md mt-1.5 ml-1.5 inline-block">
-                                  Paquete · {r.componentes.length}
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {inactivo ? (
-                            <button
-                              onClick={() => reactivarReceta(r)}
-                              className="p-2 bg-emerald-50 dark:bg-brand-cesped/10 text-emerald-600 dark:text-brand-cesped hover:bg-emerald-500 dark:hover:bg-brand-cesped hover:text-white dark:hover:text-ui-obsidiana rounded-xl transition-all"
-                              title="Reactivar"
-                            >
-                              <ArchiveRestore className="w-5 h-5" />
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => desactivarReceta(r)}
-                                className="p-2 bg-slate-50 dark:bg-ui-obsidiana text-slate-400 dark:text-ui-muted hover:bg-rose-500 dark:hover:bg-brand-arrecife hover:text-white dark:hover:text-ui-obsidiana rounded-xl transition-all"
-                                title="Ocultar del Menú"
-                              >
-                                <EyeOff className="w-5 h-5" />
-                              </button>
-                              <button
-                                onClick={() => abrirEditar(r)}
-                                className="p-2 bg-slate-50 dark:bg-ui-obsidiana text-slate-400 dark:text-ui-muted hover:bg-brand-arrecife hover:text-white dark:hover:text-ui-obsidiana rounded-xl transition-all"
-                                title="Editar"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div className="bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl border border-slate-100 dark:border-ui-border">
-                          <p className="text-[9px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-wider mb-1">
-                            Costo Producción
-                          </p>
-                          <p className="text-lg font-black text-slate-800 dark:text-brand-nacar">
-                            $
-                            {costo.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </p>
-                        </div>
-                        <div className="bg-emerald-50/50 dark:bg-brand-cesped/10 p-4 rounded-2xl border border-emerald-100/50 dark:border-brand-cesped/20">
-                          <p className="text-[9px] font-black text-emerald-600 dark:text-brand-cesped uppercase tracking-wider mb-1">
-                            Venta Público
-                          </p>
-                          <p className="text-lg font-black text-emerald-700 dark:text-brand-cesped">
-                            $
-                            {precio.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase flex items-center gap-1">
-                            {margen < 30 ? (
-                              <TrendingDown className="w-3 h-3 text-rose-500 dark:text-brand-arrecife" />
-                            ) : (
-                              <TrendingUp className="w-3 h-3 text-emerald-500 dark:text-brand-cesped" />
-                            )}
-                            Rentabilidad
-                          </p>
-                          <p
-                            className={`text-xs font-black ${margen < 30 ? 'text-rose-500 dark:text-brand-arrecife' : 'text-emerald-500 dark:text-brand-cesped'}`}
-                          >
-                            {margen.toFixed(1)}%
-                          </p>
-                        </div>
-                        <div className="w-full h-2 bg-slate-100 dark:bg-ui-obsidiana rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${margenColor}`}
-                            style={{
-                              width: `${Math.min(100, Math.max(0, margen))}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 dark:bg-ui-obsidiana/50 p-4 flex justify-between items-center border-t border-slate-100 dark:border-ui-border">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-ui-muted bg-white dark:bg-ui-humo px-2 py-1 rounded-lg border border-slate-200 dark:border-ui-border">
-                          <PackageMinus className="w-3 h-3" />{' '}
-                          {(r.insumos || r.ingredientes || []).length} Insumos
-                        </span>
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-ui-muted bg-white dark:bg-ui-humo px-2 py-1 rounded-lg border border-slate-200 dark:border-ui-border">
-                          <Tags className="w-3 h-3" />{' '}
-                          {(r.grupos_modificadores || []).length} Mods
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => setRecetaAEliminar(r)}
-                        className="p-2 text-slate-300 dark:text-ui-border hover:text-rose-600 dark:hover:text-brand-arrecife transition-colors"
-                        title="Eliminar Permanentemente"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* ─── TABLA DE PLATILLOS ─── */}
+      <DataTable
+        scope="tabla-recetas"
+        titulo="Menú maestro"
+        columnas={columnas}
+        filas={filas}
+        onEditar={abrirEditar}
+        onNuevo={abrirNuevo}
+        onEliminar={setRecetaAEliminar}
+        activo={!showModal && !recetaAEliminar}
+        vacio={
+          <EmptyState
+            icono={UtensilsCrossed}
+            titulo={`Sin platillos ${filtroEstado.toLowerCase()}`}
+            descripcion="No hay recetas que coincidan con tu búsqueda."
+            accion={
+              filtroEstado === 'Activos' ? (
+                <Button icono={Plus} onClick={abrirNuevo}>
+                  Crear el primero
+                </Button>
+              ) : null
+            }
+          />
+        }
+      />
 
       {/* ─── MODAL EXPLOSIÓN DE RECETA ─── */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 dark:bg-ui-obsidiana/90 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[3rem] border-2 border-slate-100 dark:border-ui-border p-8 md:p-10 max-w-5xl w-full shadow-2xl flex flex-col h-[90vh] animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-adm-ink/80 dark:bg-adm-bg/90 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border p-8 md:p-10 max-w-5xl w-full shadow-2xl flex flex-col h-[90vh] animate-in zoom-in-95 duration-media">
             {/* HEADER MODAL */}
             <div className="flex justify-between items-start mb-6 shrink-0">
               <div>
-                <h2 className="text-3xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tight">
+                <h2 className="text-3xl font-black font-syne text-adm-ink tracking-tight">
                   {editId ? 'Ajustar Platillo' : 'Nuevo en el Menú'}
                 </h2>
                 <div className="flex items-center gap-4 mt-3">
-                  <span className="text-xs font-black text-emerald-500 dark:text-brand-cesped flex items-center gap-1 bg-emerald-50 dark:bg-brand-cesped/10 px-3 py-1 rounded-lg">
+                  <span className="text-xs font-black text-adm-ok flex items-center gap-1 bg-adm-ok/10 px-3 py-1 rounded-ui">
                     <Calculator className="w-3.5 h-3.5" /> Costo: $
                     {costoActual.toFixed(2)}
                   </span>
-                  <span className="text-xs font-black text-brand-arrecife flex items-center gap-1 bg-rose-50 dark:bg-brand-arrecife/10 px-3 py-1 rounded-lg">
+                  <span className="text-xs font-black text-adm-danger flex items-center gap-1 bg-adm-danger/10 px-3 py-1 rounded-ui">
                     <PackageMinus className="w-3.5 h-3.5" /> Insumos:{' '}
                     {(form.insumos || []).length}
                   </span>
@@ -648,19 +637,19 @@ export default function RecetasScreen() {
               </div>
               <button
                 onClick={cerrarModal}
-                className="p-2 bg-slate-100 dark:bg-ui-obsidiana rounded-full text-slate-400 dark:text-ui-muted hover:text-brand-arrecife dark:hover:text-brand-arrecife transition-colors"
+                className="p-2 bg-adm-chip dark:bg-adm-bg rounded-full text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             {/* TABS */}
-            <div className="flex gap-6 mb-6 border-b-2 border-slate-100 dark:border-ui-border shrink-0">
+            <div className="flex gap-6 mb-6 border-b-2 border-adm-border shrink-0">
               {['general', 'ingredientes', 'modificadores'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setModalTab(tab)}
-                  className={`pb-4 text-xs font-black uppercase tracking-widest border-b-4 transition-all ${modalTab === tab ? 'border-brand-arrecife text-brand-arrecife' : 'border-transparent text-slate-400 dark:text-ui-muted hover:text-slate-700 dark:hover:text-brand-nacar'}`}
+                  className={`pb-4 text-xs font-black uppercase tracking-widest border-b-4 transition-all ${modalTab === tab ? 'border-adm-danger text-adm-danger' : 'border-transparent text-adm-muted hover:text-adm-ink dark:hover:text-adm-ink'}`}
                 >
                   {tab === 'general'
                     ? 'Información Base'
@@ -678,9 +667,9 @@ export default function RecetasScreen() {
               <form id="formReceta" onSubmit={guardar}>
                 {/* TAB: GENERAL */}
                 {modalTab === 'general' && (
-                  <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 max-w-2xl">
+                  <div className="space-y-8 animate-in slide-in-from-right-4 duration-media max-w-2xl">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase px-2 tracking-widest">
+                      <label className="text-[10px] font-black text-adm-muted uppercase px-2 tracking-widest">
                         Nombre Público *
                       </label>
                       <input
@@ -690,13 +679,13 @@ export default function RecetasScreen() {
                         onChange={(e) =>
                           setForm({ ...form, nombre: e.target.value })
                         }
-                        className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-black text-slate-800 dark:text-brand-nacar focus:border-brand-arrecife outline-none"
+                        className="w-full px-6 py-4 bg-adm-bg border-2 border-adm-field rounded-ui font-black text-adm-ink focus:border-adm-danger outline-none"
                         placeholder="Ej: Hamburguesa Azul"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase px-2 tracking-widest">
+                        <label className="text-[10px] font-black text-adm-muted uppercase px-2 tracking-widest">
                           Código KDS/POS
                         </label>
                         <input
@@ -709,11 +698,11 @@ export default function RecetasScreen() {
                             })
                           }
                           placeholder="HAM-01"
-                          className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-mono font-black text-slate-800 dark:text-brand-nacar focus:border-brand-arrecife outline-none"
+                          className="w-full px-6 py-4 bg-adm-bg border-2 border-adm-field rounded-ui font-mono font-black text-adm-ink focus:border-adm-danger outline-none"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase px-2 tracking-widest">
+                        <label className="text-[10px] font-black text-adm-muted uppercase px-2 tracking-widest">
                           Categoría Menú *
                         </label>
                         <select
@@ -721,7 +710,7 @@ export default function RecetasScreen() {
                           onChange={(e) =>
                             setForm({ ...form, categoria: e.target.value })
                           }
-                          className="w-full px-6 py-4 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-black text-slate-800 dark:text-brand-nacar focus:border-brand-arrecife outline-none"
+                          className="w-full px-6 py-4 bg-adm-bg border-2 border-adm-field rounded-ui font-black text-adm-ink focus:border-adm-danger outline-none"
                         >
                           {categoriasExistentes.map((cat) => (
                             <option key={cat} value={cat}>
@@ -746,24 +735,24 @@ export default function RecetasScreen() {
                         value={inputNuevaCat}
                         onChange={(e) => setInputNuevaCat(e.target.value)}
                         placeholder="Nombre de categoría"
-                        className="w-full border-2 border-brand-arrecife bg-slate-50 dark:bg-ui-obsidiana p-4 rounded-2xl font-black text-slate-800 dark:text-brand-nacar outline-none"
+                        className="w-full border-2 border-adm-danger bg-adm-bg p-4 rounded-ui font-black text-adm-ink outline-none"
                         autoFocus
                       />
                     )}
 
                     {/* PAQUETE: combo fijo a precio de paquete */}
                     <div
-                      className={`p-5 rounded-2xl border-2 transition-colors ${form.es_paquete ? 'bg-violet-50 dark:bg-brand-amatista/10 border-violet-300 dark:border-brand-amatista/40' : 'bg-slate-50 dark:bg-ui-obsidiana border-slate-100 dark:border-ui-border'}`}
+                      className={`p-5 rounded-ui border-2 transition-colors ${form.es_paquete ? 'bg-adm-info/10 border-adm-info/30' : 'bg-adm-bg border-adm-border'}`}
                     >
                       <label className="flex items-center justify-between cursor-pointer select-none">
                         <div>
-                          <p className="font-black text-slate-800 dark:text-brand-nacar text-sm">
+                          <p className="font-black text-adm-ink text-sm">
                             Este platillo es un PAQUETE
                           </p>
-                          <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mt-0.5">
+                          <p className="text-xs font-bold text-adm-muted mt-0.5">
                             Combo de recetas existentes a precio fijo. El
-                            inventario se descuenta por cada componente y
-                            cocina ve el desglose en el KDS.
+                            inventario se descuenta por cada componente y cocina
+                            ve el desglose en el KDS.
                           </p>
                         </div>
                         <button
@@ -774,7 +763,7 @@ export default function RecetasScreen() {
                               es_paquete: !p.es_paquete,
                             }))
                           }
-                          className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ml-4 ${form.es_paquete ? 'bg-violet-500 dark:bg-brand-amatista' : 'bg-slate-300 dark:bg-ui-border'}`}
+                          className={`relative w-14 h-8 rounded-full transition-colors shrink-0 ml-4 ${form.es_paquete ? 'bg-adm-info' : 'bg-adm-bg dark:bg-adm-border'}`}
                         >
                           <span
                             className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-all ${form.es_paquete ? 'left-7' : 'left-1'}`}
@@ -787,9 +776,9 @@ export default function RecetasScreen() {
 
                 {/* TAB: RECETAS DEL PAQUETE (solo paquetes) */}
                 {modalTab === 'ingredientes' && form.es_paquete && (
-                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="p-6 bg-slate-900 dark:bg-ui-obsidiana border-2 border-slate-800 dark:border-ui-border rounded-3xl shadow-xl">
-                      <label className="text-xs font-black text-brand-amatista uppercase mb-4 flex items-center gap-2">
+                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-media">
+                    <div className="p-6 bg-adm-ink dark:bg-adm-bg border-2 border-adm-border rounded-ui-lg shadow-xl">
+                      <label className="text-xs font-black text-adm-info uppercase mb-4 flex items-center gap-2">
                         <PlusCircle className="w-4 h-4" /> Añadir Receta al
                         Paquete
                       </label>
@@ -797,7 +786,7 @@ export default function RecetasScreen() {
                         <select
                           value={componenteSel}
                           onChange={(e) => setComponenteSel(e.target.value)}
-                          className="flex-1 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border text-white dark:text-brand-nacar font-black px-6 py-4 rounded-2xl outline-none focus:border-brand-amatista transition-colors"
+                          className="flex-1 bg-adm-ink dark:bg-adm-panel border border-adm-field text-adm-bg font-black px-6 py-4 rounded-ui outline-none focus:border-adm-info transition-colors"
                         >
                           <option value="">Buscar platillo del menú...</option>
                           {(recetas || [])
@@ -826,18 +815,18 @@ export default function RecetasScreen() {
                               setCantidadComponente(e.target.value)
                             }
                             placeholder="Cant."
-                            className="w-24 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border text-white dark:text-brand-nacar font-black px-4 py-4 rounded-2xl outline-none text-center focus:border-brand-amatista transition-colors"
+                            className="w-24 bg-adm-ink dark:bg-adm-panel border border-adm-field text-adm-bg font-black px-4 py-4 rounded-ui outline-none text-center focus:border-adm-info transition-colors"
                           />
                           <button
                             type="button"
                             onClick={agregarComponente}
-                            className="bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana font-black px-6 py-4 rounded-2xl active:scale-95 transition-all"
+                            className="bg-adm-info hover:bg-adm-info text-adm-info-fg font-black px-6 py-4 rounded-ui active:scale-95 transition-all"
                           >
                             Agregar
                           </button>
                         </div>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-400 mt-3">
+                      <p className="text-[10px] font-bold text-adm-muted mt-3">
                         Los paquetes no pueden contener otros paquetes. El
                         inventario se descuenta expandiendo cada receta al
                         momento de la venta.
@@ -846,8 +835,8 @@ export default function RecetasScreen() {
 
                     {/* GRUPO DE ELECCIÓN: "elige 1 de N" (ej. café de olla o
                         americano). El POS pregunta la elección al vender. */}
-                    <div className="p-6 bg-violet-50 dark:bg-brand-amatista/10 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-3xl">
-                      <label className="text-xs font-black text-violet-600 dark:text-brand-amatista uppercase mb-4 flex items-center gap-2">
+                    <div className="p-6 bg-adm-info/10 border-2 border-adm-info/30 rounded-ui-lg">
+                      <label className="text-xs font-black text-adm-info uppercase mb-4 flex items-center gap-2">
                         <PlusCircle className="w-4 h-4" /> Añadir Grupo de
                         Elección (elige 1 de N)
                       </label>
@@ -857,13 +846,13 @@ export default function RecetasScreen() {
                           value={grupoNombre}
                           onChange={(e) => setGrupoNombre(e.target.value)}
                           placeholder='Nombre del grupo, ej. "Bebida caliente"'
-                          className="w-full bg-white dark:bg-ui-obsidiana border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5 font-black text-slate-800 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                          className="w-full bg-white dark:bg-adm-bg border-2 border-adm-info/30 rounded-ui px-5 py-3.5 font-black text-adm-ink outline-none focus:border-adm-info"
                         />
                         <div className="flex flex-col lg:flex-row gap-3">
                           <select
                             value={grupoOpcionSel}
                             onChange={(e) => setGrupoOpcionSel(e.target.value)}
-                            className="flex-1 bg-white dark:bg-ui-obsidiana border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5 font-black text-slate-800 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                            className="flex-1 bg-white dark:bg-adm-bg border-2 border-adm-info/30 rounded-ui px-5 py-3.5 font-black text-adm-ink outline-none focus:border-adm-info"
                           >
                             <option value="">Agregar opción al grupo...</option>
                             {(recetas || [])
@@ -876,8 +865,7 @@ export default function RecetasScreen() {
                                     r.componentes.length > 0
                                   ) &&
                                   !grupoOpciones.some(
-                                    (o) =>
-                                      String(o.recetaId) === String(r.id),
+                                    (o) => String(o.recetaId) === String(r.id),
                                   ),
                               )
                               .map((r) => (
@@ -890,7 +878,7 @@ export default function RecetasScreen() {
                             type="button"
                             onClick={agregarOpcionAlGrupo}
                             disabled={!grupoOpcionSel}
-                            className="bg-white dark:bg-ui-obsidiana border-2 border-violet-300 dark:border-brand-amatista/40 text-violet-600 dark:text-brand-amatista font-black px-6 py-3.5 rounded-2xl active:scale-95 transition-all disabled:opacity-40"
+                            className="bg-white dark:bg-adm-bg border-2 border-adm-info/30 text-adm-info font-black px-6 py-3.5 rounded-ui active:scale-95 transition-all disabled:opacity-40"
                           >
                             + Opción
                           </button>
@@ -900,7 +888,7 @@ export default function RecetasScreen() {
                             {grupoOpciones.map((o) => (
                               <span
                                 key={o.recetaId}
-                                className="inline-flex items-center gap-2 bg-white dark:bg-ui-obsidiana border border-violet-200 dark:border-brand-amatista/30 text-slate-700 dark:text-brand-nacar font-black text-xs px-3 py-1.5 rounded-xl"
+                                className="inline-flex items-center gap-2 bg-white dark:bg-adm-bg border border-adm-info/30 text-adm-ink font-black text-xs px-3 py-1.5 rounded-ui"
                               >
                                 {o.nombre}
                                 <button
@@ -914,7 +902,7 @@ export default function RecetasScreen() {
                                       ),
                                     )
                                   }
-                                  className="text-slate-400 hover:text-rose-500"
+                                  className="text-adm-muted hover:text-adm-danger"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -928,7 +916,7 @@ export default function RecetasScreen() {
                           disabled={
                             !grupoNombre.trim() || grupoOpciones.length < 2
                           }
-                          className="bg-brand-amatista hover:bg-indigo-600 text-white dark:text-ui-obsidiana font-black px-6 py-3.5 rounded-2xl active:scale-95 transition-all disabled:opacity-40"
+                          className="bg-adm-info hover:bg-adm-info text-adm-info-fg font-black px-6 py-3.5 rounded-ui active:scale-95 transition-all disabled:opacity-40"
                         >
                           Agregar grupo al paquete
                         </button>
@@ -937,9 +925,8 @@ export default function RecetasScreen() {
 
                     <div className="space-y-2">
                       {(form.componentes || []).length === 0 ? (
-                        <p className="text-sm font-bold text-slate-400 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana border border-dashed border-slate-200 dark:border-ui-border rounded-2xl p-8 text-center">
-                          Sin recetas todavía. Un paquete necesita al menos
-                          una.
+                        <p className="text-sm font-bold text-adm-muted bg-adm-bg border border-dashed border-adm-border rounded-ui p-8 text-center">
+                          Sin recetas todavía. Un paquete necesita al menos una.
                         </p>
                       ) : (
                         (form.componentes || []).map((comp) => {
@@ -951,19 +938,19 @@ export default function RecetasScreen() {
                             return (
                               <div
                                 key={`grupo-${comp.grupo}`}
-                                className="flex items-center justify-between bg-violet-50/60 dark:bg-brand-amatista/5 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl px-5 py-3.5"
+                                className="flex items-center justify-between bg-adm-info/60 border-2 border-adm-info/30 rounded-ui px-5 py-3.5"
                               >
                                 <div className="min-w-0">
-                                  <p className="font-black text-slate-800 dark:text-brand-nacar truncate">
-                                    <span className="text-brand-amatista mr-2">
+                                  <p className="font-black text-adm-ink truncate">
+                                    <span className="text-adm-info mr-2">
                                       {comp.cantidad}x
                                     </span>
                                     {comp.grupo}
-                                    <span className="ml-2 text-[9px] font-black uppercase tracking-widest text-violet-500 dark:text-brand-amatista bg-white dark:bg-ui-obsidiana border border-violet-200 dark:border-brand-amatista/30 px-2 py-0.5 rounded-md">
+                                    <span className="ml-2 text-[9px] font-black uppercase tracking-widest text-adm-info bg-white dark:bg-adm-bg border border-adm-info/30 px-2 py-0.5 rounded-ui">
                                       Elige 1
                                     </span>
                                   </p>
-                                  <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted truncate">
+                                  <p className="text-[10px] font-bold text-adm-muted truncate">
                                     {comp.opciones
                                       .map((o) => o.nombre)
                                       .join(' · ')}
@@ -974,7 +961,7 @@ export default function RecetasScreen() {
                                   onClick={() =>
                                     quitarGrupoEleccion(comp.grupo)
                                   }
-                                  className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife shrink-0"
+                                  className="p-2 text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger shrink-0"
                                   title="Quitar grupo"
                                 >
                                   <X className="w-4 h-4" />
@@ -989,16 +976,18 @@ export default function RecetasScreen() {
                           return (
                             <div
                               key={comp.recetaId}
-                              className="flex items-center justify-between bg-white dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl px-5 py-3.5"
+                              className="flex items-center justify-between bg-white dark:bg-adm-bg border-2 border-adm-border rounded-ui px-5 py-3.5"
                             >
                               <div className="min-w-0">
-                                <p className="font-black text-slate-800 dark:text-brand-nacar truncate">
-                                  <span className="text-brand-amatista mr-2">
+                                <p className="font-black text-adm-ink truncate">
+                                  <span className="text-adm-info mr-2">
                                     {comp.cantidad}x
                                   </span>
-                                  {rComp?.nombre || comp.nombre || `#${comp.recetaId}`}
+                                  {rComp?.nombre ||
+                                    comp.nombre ||
+                                    `#${comp.recetaId}`}
                                 </p>
-                                <p className="text-[10px] font-bold text-slate-400 dark:text-ui-muted">
+                                <p className="text-[10px] font-bold text-adm-muted">
                                   Costo: $
                                   {(
                                     (Number(rComp?.costo) || 0) *
@@ -1012,7 +1001,7 @@ export default function RecetasScreen() {
                               <button
                                 type="button"
                                 onClick={() => quitarComponente(comp.recetaId)}
-                                className="p-2 text-slate-400 hover:text-rose-500 dark:hover:text-brand-arrecife shrink-0"
+                                className="p-2 text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger shrink-0"
                                 title="Quitar del paquete"
                               >
                                 <X className="w-4 h-4" />
@@ -1023,17 +1012,17 @@ export default function RecetasScreen() {
                       )}
                     </div>
 
-                    <div className="p-5 bg-violet-50 dark:bg-brand-amatista/10 border-2 border-violet-200 dark:border-brand-amatista/30 rounded-2xl flex justify-between items-center">
+                    <div className="p-5 bg-adm-info/10 border-2 border-adm-info/30 rounded-ui flex justify-between items-center">
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
                           Costo del paquete
                         </p>
-                        <p className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+                        <p className="text-2xl font-black text-adm-ink">
                           ${costoActual.toFixed(2)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
                           Precio del paquete
                         </p>
                         <input
@@ -1044,7 +1033,7 @@ export default function RecetasScreen() {
                             setForm({ ...form, precio_venta: e.target.value })
                           }
                           placeholder="0.00"
-                          className="w-32 bg-white dark:bg-ui-obsidiana border-2 border-violet-300 dark:border-brand-amatista/40 rounded-xl px-3 py-2 font-black text-right text-slate-900 dark:text-brand-nacar outline-none focus:border-brand-amatista"
+                          className="w-32 bg-white dark:bg-adm-bg border-2 border-adm-info/30 rounded-ui px-3 py-2 font-black text-right text-adm-ink outline-none focus:border-adm-info"
                         />
                       </div>
                     </div>
@@ -1053,9 +1042,9 @@ export default function RecetasScreen() {
 
                 {/* TAB: INGREDIENTES */}
                 {modalTab === 'ingredientes' && !form.es_paquete && (
-                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="p-6 bg-slate-900 dark:bg-ui-obsidiana border-2 border-slate-800 dark:border-ui-border rounded-3xl shadow-xl">
-                      <label className="text-xs font-black text-brand-ambar uppercase mb-4 flex items-center gap-2">
+                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-media">
+                    <div className="p-6 bg-adm-ink dark:bg-adm-bg border-2 border-adm-border rounded-ui-lg shadow-xl">
+                      <label className="text-xs font-black text-adm-warn uppercase mb-4 flex items-center gap-2">
                         <PlusCircle className="w-4 h-4" /> Añadir Materia Prima
                         a la Receta
                       </label>
@@ -1065,7 +1054,7 @@ export default function RecetasScreen() {
                           onChange={(e) =>
                             setInsumoSeleccionado(e.target.value)
                           }
-                          className="flex-1 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border text-white dark:text-brand-nacar font-black px-6 py-4 rounded-2xl outline-none focus:border-brand-ambar transition-colors"
+                          className="flex-1 bg-adm-ink dark:bg-adm-panel border border-adm-field text-adm-bg font-black px-6 py-4 rounded-ui outline-none focus:border-adm-warn transition-colors"
                         >
                           <option value="">Buscar insumo en almacén...</option>
                           {(productos || [])
@@ -1083,25 +1072,25 @@ export default function RecetasScreen() {
                             placeholder="Cant."
                             value={cantidadInsumo}
                             onChange={(e) => setCantidadInsumo(e.target.value)}
-                            className="w-24 bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border font-black text-white dark:text-brand-nacar rounded-2xl text-center outline-none focus:border-brand-ambar"
+                            className="w-24 bg-adm-ink dark:bg-adm-panel border border-adm-field font-black text-adm-bg rounded-ui text-center outline-none focus:border-adm-warn"
                           />
-                          <div className="bg-slate-800 dark:bg-ui-humo border border-slate-700 dark:border-ui-border rounded-2xl flex items-center px-4 focus-within:border-brand-ambar transition-colors">
+                          <div className="bg-adm-ink dark:bg-adm-panel border border-adm-border rounded-ui flex items-center px-4 focus-within:border-adm-warn transition-colors">
                             <input
                               type="number"
                               step="0.01"
                               value={mermaInsumo}
                               onChange={(e) => setMermaInsumo(e.target.value)}
-                              className="w-16 bg-transparent font-black text-white dark:text-brand-nacar text-center pr-2 outline-none"
+                              className="w-16 bg-transparent font-black text-adm-bg dark:text-adm-ink text-center pr-2 outline-none"
                               placeholder="0"
                             />
-                            <span className="text-[10px] font-black text-slate-500">
+                            <span className="text-[10px] font-black text-adm-muted">
                               % Merma
                             </span>
                           </div>
                           <button
                             type="button"
                             onClick={agregarIngrediente}
-                            className="bg-brand-ambar text-slate-900 dark:text-ui-obsidiana px-8 py-4 rounded-2xl font-black shadow-lg shadow-brand-ambar/30 transition-all hover:scale-105 active:scale-95"
+                            className="bg-adm-warn text-adm-ink dark:text-adm-bg px-8 py-4 rounded-ui font-black shadow-lg shadow-adm-warn/30 transition-all hover:scale-105 active:scale-95"
                           >
                             Agregar
                           </button>
@@ -1109,9 +1098,9 @@ export default function RecetasScreen() {
                       </div>
                     </div>
 
-                    <div className="bg-white dark:bg-ui-humo rounded-2xl border-2 border-slate-100 dark:border-ui-border overflow-hidden">
+                    <div className="bg-white dark:bg-adm-panel rounded-ui border-2 border-adm-border overflow-hidden">
                       <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 dark:bg-ui-obsidiana/50 text-slate-500 dark:text-ui-muted text-[10px] uppercase tracking-widest border-b border-slate-200 dark:border-ui-border">
+                        <thead className="bg-adm-bg text-adm-muted text-[10px] uppercase tracking-widest border-b border-adm-border">
                           <tr>
                             <th className="px-6 py-4 font-black">
                               Ingrediente
@@ -1128,12 +1117,12 @@ export default function RecetasScreen() {
                             <th className="px-4 py-4"></th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-ui-border">
+                        <tbody className="divide-y divide-adm-border">
                           {(form.insumos || []).length === 0 && (
                             <tr>
                               <td
                                 colSpan="5"
-                                className="p-8 text-center text-slate-400 dark:text-ui-muted font-bold"
+                                className="p-8 text-center text-adm-muted font-bold"
                               >
                                 Sin ingredientes. Usa el buscador de arriba.
                               </td>
@@ -1156,28 +1145,26 @@ export default function RecetasScreen() {
                             return (
                               <tr
                                 key={ing.productoId ?? ing.id_producto}
-                                className="hover:bg-slate-50 dark:hover:bg-ui-obsidiana/30"
+                                className="hover:bg-adm-bg dark:hover:bg-adm-bg/30"
                               >
-                                <td className="px-6 py-4 font-black text-slate-800 dark:text-brand-nacar">
+                                <td className="px-6 py-4 font-black text-adm-ink">
                                   {prod.nombre}
                                 </td>
                                 <td className="px-4 py-4 text-center">
-                                  <span className="bg-slate-100 dark:bg-ui-obsidiana text-slate-600 dark:text-ui-text px-3 py-1.5 rounded-lg font-mono text-xs font-black border border-slate-200 dark:border-ui-border">
+                                  <span className="bg-adm-chip dark:bg-adm-bg text-adm-muted dark:text-adm-ink px-3 py-1.5 rounded-ui font-mono text-xs font-black border border-adm-border">
                                     {ing.cantidad} {prod.unidad}
                                   </span>
                                 </td>
                                 <td className="px-4 py-4 text-center">
                                   {Number(mermaVal) > 0 ? (
-                                    <span className="bg-rose-50 dark:bg-brand-arrecife/10 text-rose-500 dark:text-brand-arrecife px-3 py-1 rounded-lg text-[10px] font-black border border-rose-100 dark:border-brand-arrecife/20">
+                                    <span className="bg-adm-danger/10 text-adm-danger px-3 py-1 rounded-ui text-[10px] font-black border border-adm-danger/30">
                                       {mermaVal}%
                                     </span>
                                   ) : (
-                                    <span className="text-slate-300 dark:text-ui-muted">
-                                      -
-                                    </span>
+                                    <span className="text-adm-muted">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right font-black text-slate-900 dark:text-brand-cesped">
+                                <td className="px-6 py-4 text-right font-black text-adm-ink dark:text-adm-ok">
                                   $
                                   {costoReal.toLocaleString('es-MX', {
                                     minimumFractionDigits: 2,
@@ -1197,7 +1184,7 @@ export default function RecetasScreen() {
                                         ),
                                       })
                                     }
-                                    className="p-2 text-slate-300 hover:text-rose-500 dark:text-ui-muted dark:hover:text-brand-arrecife transition-all rounded-lg hover:bg-rose-50 dark:hover:bg-brand-arrecife/10"
+                                    className="p-2 text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger transition-all rounded-ui hover:bg-adm-danger/10 dark:hover:bg-adm-danger/10"
                                   >
                                     <Trash2 className="w-5 h-5" />
                                   </button>
@@ -1213,7 +1200,7 @@ export default function RecetasScreen() {
 
                 {/* TAB: MODIFICADORES */}
                 {modalTab === 'modificadores' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-right-4 duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-right-4 duration-media">
                     {(modificadores || [])
                       .filter((m) => m.activo !== false)
                       .map((grupo) => {
@@ -1224,25 +1211,25 @@ export default function RecetasScreen() {
                           <div
                             key={grupo.id}
                             onClick={() => toggleModificador(grupo.id)}
-                            className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${activo ? 'border-brand-amatista bg-brand-amatista/5 shadow-lg shadow-brand-amatista/10 dark:bg-brand-amatista/10' : 'border-slate-200 dark:border-ui-border bg-white dark:bg-ui-obsidiana hover:border-brand-amatista/50'}`}
+                            className={`p-6 rounded-ui border-2 cursor-pointer transition-all flex items-center justify-between ${activo ? 'border-adm-info bg-adm-info/5 shadow-lg shadow-adm-info/10' : 'border-adm-border bg-white dark:bg-adm-bg hover:border-adm-info/50'}`}
                           >
                             <div className="flex items-center gap-4">
                               <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activo ? 'bg-brand-amatista text-white dark:text-ui-obsidiana' : 'bg-slate-100 dark:bg-ui-humo text-slate-400 dark:text-ui-muted'}`}
+                                className={`w-10 h-10 rounded-ui flex items-center justify-center transition-colors ${activo ? 'bg-adm-info text-adm-info-fg' : 'bg-adm-chip dark:bg-adm-panel text-adm-muted'}`}
                               >
                                 <ListPlus className="w-5 h-5" />
                               </div>
                               <p
-                                className={`font-black text-sm ${activo ? 'text-brand-amatista' : 'text-slate-600 dark:text-brand-nacar'}`}
+                                className={`font-black text-sm ${activo ? 'text-adm-info' : 'text-adm-muted dark:text-adm-ink'}`}
                               >
                                 {grupo.nombre}
                               </p>
                             </div>
                             <div
-                              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${activo ? 'bg-brand-amatista border-brand-amatista' : 'border-slate-200 dark:border-ui-border'}`}
+                              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${activo ? 'bg-adm-info border-adm-info' : 'border-adm-border'}`}
                             >
                               {activo && (
-                                <X className="w-3.5 h-3.5 text-white dark:text-ui-obsidiana" />
+                                <X className="w-3.5 h-3.5 text-adm-bg" />
                               )}
                             </div>
                           </div>
@@ -1254,13 +1241,13 @@ export default function RecetasScreen() {
             </div>
 
             {/* CALCULADORA INFERIOR FIJA */}
-            <div className="bg-slate-50 dark:bg-ui-obsidiana p-6 rounded-3xl border-2 border-slate-200 dark:border-ui-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-inner shrink-0 relative z-20 mt-4">
+            <div className="bg-adm-bg p-6 rounded-ui-lg border-2 border-adm-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-inner shrink-0 relative z-20 mt-4">
               <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10 w-full md:w-auto">
                 <div>
-                  <p className="text-[10px] text-slate-500 dark:text-ui-muted font-black uppercase tracking-[0.2em] mb-1">
+                  <p className="text-[10px] text-adm-muted font-black uppercase tracking-[0.2em] mb-1">
                     Costo Producción
                   </p>
-                  <p className="text-2xl font-black text-rose-500 dark:text-brand-arrecife leading-none">
+                  <p className="text-2xl font-black text-adm-danger leading-none">
                     $
                     {costoActual.toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
@@ -1268,13 +1255,13 @@ export default function RecetasScreen() {
                     })}
                   </p>
                 </div>
-                <div className="hidden md:block h-10 w-px bg-slate-200 dark:bg-ui-border" />
+                <div className="hidden md:block h-10 w-px bg-adm-chip dark:bg-adm-border" />
                 <div className="group relative">
-                  <p className="text-[10px] text-slate-500 dark:text-ui-muted font-black uppercase tracking-[0.2em] mb-2 flex items-center gap-1 group-hover:text-emerald-500 dark:group-hover:text-brand-cesped transition-colors">
+                  <p className="text-[10px] text-adm-muted font-black uppercase tracking-[0.2em] mb-2 flex items-center gap-1 group-hover:text-adm-ok dark:group-hover:text-adm-ok transition-colors">
                     <Coins className="w-3 h-3" /> Precio Público *
                   </p>
-                  <div className="flex items-center bg-white dark:bg-ui-humo rounded-2xl px-5 py-2.5 border-2 border-slate-200 dark:border-ui-border focus-within:border-emerald-500 dark:focus-within:border-brand-cesped transition-all shadow-sm">
-                    <span className="text-slate-400 dark:text-ui-muted font-black mr-2 text-lg">
+                  <div className="flex items-center bg-white dark:bg-adm-panel rounded-ui px-5 py-2.5 border-2 border-adm-border focus-within:border-adm-ok dark:focus-within:border-adm-ok transition-all shadow-sm">
+                    <span className="text-adm-muted font-black mr-2 text-lg">
                       $
                     </span>
                     <input
@@ -1287,23 +1274,23 @@ export default function RecetasScreen() {
                       onChange={(e) =>
                         setForm({ ...form, precio_venta: e.target.value })
                       }
-                      className="w-28 bg-transparent text-emerald-600 dark:text-brand-cesped font-black text-2xl outline-none"
+                      className="w-28 bg-transparent text-adm-ok font-black text-2xl outline-none"
                     />
                   </div>
                 </div>
-                <div className="hidden md:block h-10 w-px bg-slate-200 dark:bg-ui-border" />
+                <div className="hidden md:block h-10 w-px bg-adm-chip dark:bg-adm-border" />
                 <div>
-                  <p className="text-[10px] text-slate-500 dark:text-ui-muted font-black uppercase tracking-[0.2em] mb-1">
+                  <p className="text-[10px] text-adm-muted font-black uppercase tracking-[0.2em] mb-1">
                     Rentabilidad
                   </p>
                   <div className="flex items-center gap-2">
                     <p
-                      className={`text-2xl font-black leading-none ${margenPorcentaje >= 30 ? 'text-emerald-500 dark:text-brand-cesped' : 'text-rose-500 dark:text-brand-arrecife'}`}
+                      className={`text-2xl font-black leading-none ${margenPorcentaje >= 30 ? 'text-adm-ok' : 'text-adm-danger'}`}
                     >
                       {margenPorcentaje.toFixed(1)}%
                     </p>
                     <div
-                      className={`p-1.5 rounded-lg ${margenPorcentaje >= 30 ? 'bg-emerald-100 text-emerald-600 dark:bg-brand-cesped/20 dark:text-brand-cesped' : 'bg-rose-100 text-rose-600 dark:bg-brand-arrecife/20 dark:text-brand-arrecife'}`}
+                      className={`p-1.5 rounded-ui ${margenPorcentaje >= 30 ? 'bg-adm-ok/15 text-adm-ok' : 'bg-adm-danger/15 text-adm-danger'}`}
                     >
                       {margenPorcentaje >= 30 ? (
                         <TrendingUp className="w-4 h-4" />
@@ -1317,7 +1304,7 @@ export default function RecetasScreen() {
               <button
                 type="submit"
                 form="formReceta"
-                className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 dark:bg-brand-arrecife dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana font-black px-10 py-5 rounded-[1.5rem] shadow-xl shadow-slate-900/20 dark:shadow-brand-arrecife/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
+                className="w-full md:w-auto bg-adm-ink hover:bg-adm-ink dark:bg-adm-danger dark:hover:bg-adm-warn text-adm-danger-fg font-black px-10 py-5 rounded-ui-lg shadow-xl shadow-adm-border/20 dark:shadow-adm-danger/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
               >
                 <Save className="w-5 h-5" /> Guardar Platillo
               </button>
@@ -1328,15 +1315,15 @@ export default function RecetasScreen() {
 
       {/* ─── MODAL ELIMINAR PERMANENTE (HARD DELETE) ─── */}
       {recetaAEliminar && (
-        <div className="fixed inset-0 bg-slate-900/80 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[3rem] w-full max-w-md p-10 text-center shadow-2xl border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
-            <div className="w-20 h-20 bg-rose-50 dark:bg-brand-arrecife/20 text-rose-500 dark:text-brand-arrecife rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
+        <div className="fixed inset-0 bg-adm-ink/80 dark:bg-adm-bg/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-md p-10 text-center shadow-2xl border-2 border-adm-border animate-in zoom-in-95">
+            <div className="w-20 h-20 bg-adm-danger/10 text-adm-danger rounded-ui-lg flex items-center justify-center mx-auto mb-8 shadow-inner">
               <Trash2 className="w-10 h-10" />
             </div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-3 tracking-tight">
+            <h2 className="text-2xl font-black font-syne text-adm-ink mb-3 tracking-tight">
               ¿Eliminar Permanentemente?
             </h2>
-            <p className="text-slate-500 dark:text-ui-muted font-bold mb-10 leading-relaxed text-sm">
+            <p className="text-adm-muted font-bold mb-10 leading-relaxed text-sm">
               Esta acción borrará el platillo de la base de datos de forma
               definitiva. Si solo quieres que no aparezca en el POS, usa el
               botón de "Ocultar".
@@ -1344,13 +1331,13 @@ export default function RecetasScreen() {
             <div className="flex flex-col gap-3">
               <button
                 onClick={confirmarEliminarRecetaTotal}
-                className="w-full py-4 bg-rose-500 dark:bg-brand-arrecife hover:bg-rose-600 dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana font-black rounded-2xl shadow-lg transition-all active:scale-95"
+                className="w-full py-4 bg-adm-danger dark:hover:bg-adm-warn text-adm-danger-fg font-black rounded-ui shadow-lg transition-all active:scale-95"
               >
                 Eliminar de raíz
               </button>
               <button
                 onClick={() => setRecetaAEliminar(null)}
-                className="w-full py-4 bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-600 dark:text-brand-nacar font-bold rounded-2xl transition-all border border-transparent hover:border-slate-300 dark:hover:border-ui-border"
+                className="w-full py-4 bg-adm-chip dark:bg-adm-bg hover:bg-adm-chip dark:hover:bg-adm-border text-adm-muted dark:text-adm-ink font-bold rounded-ui transition-all border border-transparent hover:border-adm-border dark:hover:border-adm-border"
               >
                 Cancelar
               </button>
@@ -1358,6 +1345,6 @@ export default function RecetasScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -4,11 +4,7 @@ import { supabase } from '../../api/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
-import {
-  getRolEfectivo,
-  getCapacidades,
-  tieneFlag,
-} from '../../lib/Permisos';
+import { getRolEfectivo, getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore'; // FIX 3: sesión raíz (tenant)
 
 import {
@@ -21,6 +17,7 @@ import {
   ShieldOff,
   ChevronLeft,
 } from 'lucide-react';
+import { entradaActiva, horasDesde } from '../../lib/Asistencias';
 
 export default function RelojChecadorScreen() {
   // PIN: las altas nuevas son de 6 dígitos; PINs legados de 4-5 se toleran
@@ -173,7 +170,10 @@ export default function RelojChecadorScreen() {
       const pinIngresadoStr = String(pinUsado).trim();
 
       if (pinIngresadoStr.length < PIN_MIN) {
-        mostrarFeedback('error', `El PIN debe tener al menos ${PIN_MIN} dígitos.`);
+        mostrarFeedback(
+          'error',
+          `El PIN debe tener al menos ${PIN_MIN} dígitos.`,
+        );
         return;
       }
 
@@ -219,22 +219,30 @@ export default function RelojChecadorScreen() {
         return;
       }
 
-      const hoyStr = new Date().toISOString().split('T')[0];
-
-      const asistenciasHoy = (asistencias || []).filter(
-        (a) =>
-          String(a.empleado_id) === String(empleado.id) &&
-          a.fecha_hora?.startsWith(hoyStr),
-      );
-
-      const asistenciasOrdenadas = [...asistenciasHoy].sort(
-        (a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora),
-      );
-
-      const turnoActivoEmpleado =
-        asistenciasOrdenadas[0]?.tipo === 'entrada'
-          ? asistenciasOrdenadas[0]
-          : null;
+      // ── LA COMPARACIÓN DE FECHAS, QUE ESTABA A MEDIO ARREGLAR ───────────────
+      //
+      // `hoyStr` es la fecha de calendario LOCAL ('2026-08-05'), pero
+      // `fecha_hora` se guarda con `toISOString()`, que es **UTC**. Comparar
+      // con `startsWith` mezclaba los dos husos, y en México (UTC−6) el
+      // resultado era éste:
+      //
+      //   • Una entrada marcada a las 20:00 del 5-ago se guarda como
+      //     '2026-08-06T02:00:00Z'. Al pedir la salida, el filtro busca
+      //     '2026-08-05' → NO la encuentra → «No tienes entrada activa para
+      //     registrar salida». El trabajador no podía cerrar su turno.
+      //   • Y al día siguiente antes de las 18:00, esa misma entrada SÍ
+      //     aparecía —porque entonces `hoyStr` ya era '2026-08-06'—, así que
+      //     el checador decía «ya tienes entrada registrada» a alguien que
+      //     acababa de llegar.
+      //
+      // Por eso "se volvía loco": funcionaba de día y fallaba de noche, que es
+      // justo cuando trabaja un restaurante. El arreglo del 27-jul cambió el
+      // lado izquierdo de la comparación a fecha local, pero el derecho siguió
+      // siendo UTC; hay que convertir CADA registro a su día local, igual que
+      // hace `lib/Nominas.diasTrabajados`.
+      // La regla vive en `lib/Asistencias.js`, con 15 aserciones que fijan el
+      // caso del turno de noche en las dos direcciones. Aquí solo se consulta.
+      const turnoActivoEmpleado = entradaActiva(asistencias, empleado.id);
 
       // Última red para el tenant: empleado → configuración → sesión raíz.
       // asistencias quedó en RLS estricto (post-migración 022); un null se rechaza.
@@ -328,8 +336,7 @@ export default function RelojChecadorScreen() {
         const rolEmpleado = empleado.rol || empleado.puesto || '';
         const exento = tieneFlag(capDeRol(rolEmpleado), 'exento_jornada');
         if (horasJornada > 0 && !exento) {
-          const entradaT = new Date(turnoActivoEmpleado.fecha_hora).getTime();
-          const horasTranscurridas = (Date.now() - entradaT) / 3600000;
+          const horasTranscurridas = horasDesde(turnoActivoEmpleado);
           if (horasTranscurridas < horasJornada) {
             const faltanMin = Math.ceil(
               (horasJornada - horasTranscurridas) * 60,
@@ -427,10 +434,10 @@ export default function RelojChecadorScreen() {
   }, [registrarMovimiento]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-ui-obsidiana flex items-center justify-center p-6 transition-colors duration-500 relative overflow-hidden">
+    <div className="min-h-screen bg-ops-panel-2 dark:bg-ops-bg flex items-center justify-center p-6 transition-colors duration-lenta relative overflow-hidden">
       <button
         onClick={handleSalir}
-        className="absolute top-6 left-6 p-4 bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border rounded-2xl text-slate-500 dark:text-ui-muted hover:text-rose-500 dark:hover:text-brand-arrecife hover:border-rose-200 dark:hover:border-brand-arrecife/50 transition-all shadow-sm z-50 flex items-center gap-2 group"
+        className="absolute top-6 left-6 p-4 bg-white dark:bg-ops-panel border-2 border-ops-border rounded-ui text-ops-muted hover:text-ops-danger dark:hover:text-ops-danger hover:border-ops-danger/30 dark:hover:border-ops-danger/50 transition-all shadow-sm z-50 flex items-center gap-2 group"
       >
         <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
         <span className="text-xs font-black uppercase tracking-widest hidden sm:block">
@@ -449,16 +456,16 @@ export default function RelojChecadorScreen() {
 
       <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-2 gap-10 items-center relative z-10">
         <div className="flex flex-col items-center lg:items-start text-center lg:text-left space-y-6 mt-12 lg:mt-0">
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-[2rem] border-2 border-slate-200 dark:border-ui-border shadow-xl inline-flex mb-4 transition-colors">
-            <Clock className="w-12 h-12 text-indigo-600 dark:text-brand-amatista" />
+          <div className="bg-white dark:bg-ops-panel p-6 rounded-ui-lg border-2 border-ops-border shadow-xl inline-flex mb-4 transition-colors">
+            <Clock className="w-12 h-12 text-ops-info" />
           </div>
-          <h1 className="text-7xl lg:text-8xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tighter tabular-nums leading-none">
+          <h1 className="text-7xl lg:text-8xl font-black font-syne text-ops-ink tracking-tighter tabular-nums leading-none">
             {horaActual.toLocaleTimeString('es-MX', {
               hour: '2-digit',
               minute: '2-digit',
             })}
           </h1>
-          <p className="text-lg font-bold text-slate-500 dark:text-ui-muted uppercase tracking-widest">
+          <p className="text-lg font-bold text-ops-muted uppercase tracking-widest">
             {horaActual.toLocaleDateString('es-MX', {
               weekday: 'long',
               year: 'numeric',
@@ -468,23 +475,23 @@ export default function RelojChecadorScreen() {
           </p>
 
           <div
-            className={`px-5 py-3 rounded-2xl border-2 flex items-center gap-3 ${
+            className={`px-5 py-3 rounded-ui border-2 flex items-center gap-3 ${
               turnoAbierto
-                ? 'bg-emerald-50 dark:bg-brand-cesped/10 border-emerald-200 dark:border-brand-cesped/40'
-                : 'bg-rose-50 dark:bg-brand-arrecife/10 border-rose-200 dark:border-brand-arrecife/40'
+                ? 'bg-ops-ok/10 border-ops-ok/30'
+                : 'bg-ops-danger/10 border-ops-danger/30'
             }`}
           >
             <div
-              className={`w-2.5 h-2.5 rounded-full ${turnoAbierto ? 'bg-emerald-500 dark:bg-brand-cesped animate-pulse' : 'bg-rose-400 dark:bg-brand-arrecife'}`}
+              className={`w-2.5 h-2.5 rounded-full ${turnoAbierto ? 'bg-ops-ok animate-pulse' : 'bg-ops-danger'}`}
             />
             <div>
               <p
-                className={`text-[10px] font-black uppercase tracking-widest ${turnoAbierto ? 'text-emerald-600 dark:text-brand-cesped' : 'text-rose-500 dark:text-brand-arrecife'}`}
+                className={`text-[10px] font-black uppercase tracking-widest ${turnoAbierto ? 'text-ops-ok' : 'text-ops-danger'}`}
               >
                 Turno de caja
               </p>
               <p
-                className={`text-sm font-bold ${turnoAbierto ? 'text-emerald-700 dark:text-brand-cesped' : 'text-rose-600 dark:text-brand-arrecife'}`}
+                className={`text-sm font-bold ${turnoAbierto ? 'text-ops-ok' : 'text-ops-danger'}`}
               >
                 {turnoAbierto
                   ? 'Abierto — operaciones habilitadas'
@@ -494,65 +501,61 @@ export default function RelojChecadorScreen() {
           </div>
 
           <div>
-            <p className="text-sm font-black text-brand-arrecife uppercase tracking-widest">
+            <p className="text-sm font-black text-ops-danger uppercase tracking-widest">
               {configuracion?.nombre_empresa || 'AZUL Restaurante'}
             </p>
-            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted">
+            <p className="text-xs font-bold text-ops-muted">
               InvVenta · Control de Acceso
             </p>
           </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-ui-humo/90 backdrop-blur-xl rounded-[3rem] border-2 border-slate-200 dark:border-ui-border shadow-2xl p-8 md:p-12 relative overflow-hidden transition-colors">
+        <div className="bg-white/80 dark:bg-ops-panel/90 backdrop-blur-xl rounded-ui-lg border-2 border-ops-border shadow-2xl p-8 md:p-12 relative overflow-hidden transition-colors">
           {feedback && (
-            <div className="absolute inset-0 z-50 bg-white/95 dark:bg-ui-humo/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-300">
+            <div className="absolute inset-0 z-50 bg-white/95 dark:bg-ops-panel/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-media">
               {feedback.tipo === 'success' && (
                 <>
-                  <div className="w-24 h-24 bg-emerald-100 dark:bg-brand-cesped/20 rounded-full flex items-center justify-center mb-5">
-                    <CheckCircle className="w-12 h-12 text-emerald-500 dark:text-brand-cesped" />
+                  <div className="w-24 h-24 bg-ops-ok/15 rounded-full flex items-center justify-center mb-5">
+                    <CheckCircle className="w-12 h-12 text-ops-ok" />
                   </div>
-                  <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-1">
+                  <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-1">
                     Acceso Concedido
                   </p>
-                  <h2 className="text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar mb-1">
+                  <h2 className="text-3xl font-black font-syne text-ops-ink mb-1">
                     {feedback.usuario}
                   </h2>
-                  <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-indigo-100 dark:bg-brand-amatista/20 text-indigo-600 dark:text-brand-amatista rounded-full mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-ops-info/15 text-ops-info rounded-full mb-3">
                     {feedback.rol}
                   </span>
-                  <p className="text-emerald-600 dark:text-brand-cesped font-bold">
-                    {feedback.mensaje}
-                  </p>
+                  <p className="text-ops-ok font-bold">{feedback.mensaje}</p>
                 </>
               )}
               {feedback.tipo === 'error' && (
                 <>
-                  <div className="w-24 h-24 bg-rose-100 dark:bg-brand-arrecife/20 rounded-full flex items-center justify-center mb-5">
-                    <AlertTriangle className="w-12 h-12 text-rose-500 dark:text-brand-arrecife" />
+                  <div className="w-24 h-24 bg-ops-danger/15 rounded-full flex items-center justify-center mb-5">
+                    <AlertTriangle className="w-12 h-12 text-ops-danger" />
                   </div>
-                  <h2 className="text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar mb-3">
+                  <h2 className="text-3xl font-black font-syne text-ops-ink mb-3">
                     Acceso Denegado
                   </h2>
-                  <p className="text-rose-600 dark:text-brand-arrecife font-bold">
+                  <p className="text-ops-danger font-bold">
                     {feedback.mensaje}
                   </p>
                 </>
               )}
               {feedback.tipo === 'sin_turno' && (
                 <>
-                  <div className="w-24 h-24 bg-amber-100 dark:bg-brand-ambar/20 rounded-full flex items-center justify-center mb-5">
-                    <ShieldOff className="w-12 h-12 text-amber-500 dark:text-brand-ambar" />
+                  <div className="w-24 h-24 bg-ops-warn/15 rounded-full flex items-center justify-center mb-5">
+                    <ShieldOff className="w-12 h-12 text-ops-warn" />
                   </div>
-                  <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-1">
+                  <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-1">
                     Hola,
                   </p>
-                  <h2 className="text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar mb-3">
+                  <h2 className="text-3xl font-black font-syne text-ops-ink mb-3">
                     {feedback.usuario}
                   </h2>
-                  <p className="text-amber-600 dark:text-brand-ambar font-bold">
-                    {feedback.mensaje}
-                  </p>
-                  <p className="text-slate-400 dark:text-ui-muted text-sm font-bold mt-2">
+                  <p className="text-ops-warn font-bold">{feedback.mensaje}</p>
+                  <p className="text-ops-muted text-sm font-bold mt-2">
                     Avisa al gerente para abrir el turno.
                   </p>
                 </>
@@ -561,17 +564,17 @@ export default function RelojChecadorScreen() {
           )}
 
           <div className="mb-8">
-            <p className="text-center text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4">
+            <p className="text-center text-xs font-black text-ops-muted uppercase tracking-widest mb-4">
               Ingresa tu PIN personal
             </p>
             {empleadoActivo && (
-              <div className="mb-4 px-4 py-3 rounded-2xl bg-indigo-50 dark:bg-brand-amatista/10 border border-indigo-200 dark:border-brand-amatista/30 text-center">
-                <p className="text-sm font-black text-indigo-600 dark:text-brand-amatista">
+              <div className="mb-4 px-4 py-3 rounded-ui bg-ops-info/10 border border-ops-info/30 text-center">
+                <p className="text-sm font-black text-ops-info">
                   Hola, {empleadoActivo.nombre?.split(' ')[0]} 👋
                 </p>
-                <p className="text-[11px] font-bold text-slate-500 dark:text-ui-muted mt-0.5">
-                  Registra tu <span className="font-black">Entrada</span> con
-                  tu PIN para comenzar el día.
+                <p className="text-[11px] font-bold text-ops-muted mt-0.5">
+                  Registra tu <span className="font-black">Entrada</span> con tu
+                  PIN para comenzar el día.
                 </p>
               </div>
             )}
@@ -579,10 +582,10 @@ export default function RelojChecadorScreen() {
               {Array.from({ length: PIN_MAX }, (_, i) => i).map((i) => (
                 <div
                   key={i}
-                  className={`w-11 h-14 rounded-2xl flex items-center justify-center border-2 transition-all ${pin.length > i ? 'border-indigo-500 dark:border-brand-amatista bg-indigo-50 dark:bg-brand-amatista/10 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-slate-200 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana'}`}
+                  className={`w-11 h-14 rounded-ui flex items-center justify-center border-2 transition-all ${pin.length > i ? 'border-ops-info bg-ops-info/10 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-ops-border bg-ops-bg'}`}
                 >
                   {pin.length > i && (
-                    <div className="w-3.5 h-3.5 bg-indigo-500 dark:bg-brand-amatista rounded-full" />
+                    <div className="w-3.5 h-3.5 bg-ops-info rounded-full" />
                   )}
                 </div>
               ))}
@@ -596,27 +599,27 @@ export default function RelojChecadorScreen() {
                 onClick={() =>
                   setPin((p) => (p.length < PIN_MAX ? p + String(num) : p))
                 }
-                className="aspect-square text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border rounded-2xl hover:bg-slate-200 dark:hover:bg-ui-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
+                className="aspect-square text-3xl font-black font-syne text-ops-ink bg-ops-bg border border-ops-border rounded-ui hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
               >
                 {num}
               </button>
             ))}
             <button
               onClick={() => setPin('')}
-              className="aspect-square text-sm font-black text-slate-500 dark:text-ui-muted bg-slate-100 dark:bg-ui-obsidiana/50 border border-transparent dark:border-ui-border rounded-2xl hover:bg-slate-200 dark:hover:bg-ui-border active:scale-95 transition-all flex items-center justify-center uppercase tracking-widest"
+              className="aspect-square text-sm font-black text-ops-muted bg-ops-panel-2 dark:bg-ops-bg/50 border border-transparent dark:border-ops-border rounded-ui hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 transition-all flex items-center justify-center uppercase tracking-widest"
             >
               Limpiar
             </button>
             <button
               onClick={() => setPin((p) => (p.length < PIN_MAX ? p + '0' : p))}
-              className="aspect-square text-3xl font-black font-syne text-slate-800 dark:text-brand-nacar bg-slate-50 dark:bg-ui-obsidiana border border-slate-200 dark:border-ui-border rounded-2xl hover:bg-slate-200 dark:hover:bg-ui-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
+              className="aspect-square text-3xl font-black font-syne text-ops-ink bg-ops-bg border border-ops-border rounded-ui hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 transition-all flex items-center justify-center shadow-sm"
             >
               0
             </button>
             <button
               onClick={() => setPin((p) => p.slice(0, -1))}
               disabled={pin.length === 0}
-              className="aspect-square text-slate-500 dark:text-ui-muted bg-slate-100 dark:bg-ui-obsidiana/50 border border-transparent dark:border-ui-border rounded-2xl hover:text-rose-500 dark:hover:text-brand-arrecife active:scale-95 transition-all flex items-center justify-center disabled:opacity-40"
+              className="aspect-square text-ops-muted bg-ops-panel-2 dark:bg-ops-bg/50 border border-transparent dark:border-ops-border rounded-ui hover:text-ops-danger dark:hover:text-ops-danger active:scale-95 transition-all flex items-center justify-center disabled:opacity-40"
             >
               <Delete className="w-8 h-8" />
             </button>
@@ -626,7 +629,7 @@ export default function RelojChecadorScreen() {
             <button
               onClick={() => registrarMovimiento('Entrada')}
               disabled={pin.length < PIN_MIN}
-              className="bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] disabled:bg-slate-200 dark:disabled:bg-ui-border disabled:text-slate-400 dark:disabled:text-ui-muted text-white dark:text-ui-obsidiana py-5 rounded-2xl font-black shadow-lg dark:shadow-[0_0_20px_rgba(0,229,160,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
+              className="bg-ops-ok dark:hover:bg-[#00c98c] disabled:bg-ops-panel-2 dark:disabled:bg-ops-border disabled:text-ops-muted dark:disabled:text-ops-muted text-ops-ok-fg py-5 rounded-ui font-black shadow-lg dark:shadow-[0_0_20px_rgba(0,229,160,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
             >
               <LogIn className="w-6 h-6 mb-1" />
               <span className="uppercase tracking-widest text-[10px]">
@@ -637,7 +640,7 @@ export default function RelojChecadorScreen() {
             <button
               onClick={() => registrarMovimiento('Salida')}
               disabled={pin.length < PIN_MIN}
-              className="bg-slate-800 hover:bg-slate-900 dark:bg-brand-arrecife dark:hover:bg-orange-600 disabled:bg-slate-200 dark:disabled:bg-ui-border disabled:text-slate-400 dark:disabled:text-ui-muted text-white dark:text-ui-obsidiana py-5 rounded-2xl font-black shadow-lg dark:shadow-[0_0_20px_rgba(255,95,64,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
+              className="bg-ops-ink hover:bg-ops-ink dark:bg-ops-danger dark:hover:bg-ops-warn disabled:bg-ops-panel-2 dark:disabled:bg-ops-border disabled:text-ops-muted dark:disabled:text-ops-muted text-ops-danger-fg py-5 rounded-ui font-black shadow-lg dark:shadow-[0_0_20px_rgba(255,95,64,0.2)] disabled:shadow-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1"
             >
               <LogOut className="w-6 h-6 mb-1" />
               <span className="uppercase tracking-widest text-[10px]">
@@ -653,7 +656,7 @@ export default function RelojChecadorScreen() {
           {empleadoActivo && (
             <button
               onClick={handleSalir}
-              className="w-full mt-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted hover:text-indigo-500 dark:hover:text-brand-amatista transition-colors"
+              className="w-full mt-4 py-3 text-xs font-black uppercase tracking-widest text-ops-muted hover:text-ops-info dark:hover:text-ops-info transition-colors"
             >
               Ya registré mi entrada — continuar →
             </button>
@@ -663,25 +666,25 @@ export default function RelojChecadorScreen() {
 
       {/* CANDADO DE JORNADA: salida antes de tiempo requiere PIN del dueño */}
       {salidaPendiente && (
-        <div className="fixed inset-0 bg-slate-900/70 dark:bg-ui-obsidiana/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-7 max-w-sm w-full shadow-2xl border-2 border-slate-100 dark:border-ui-border text-center animate-in zoom-in-95">
-            <div className="w-16 h-16 bg-amber-100 dark:bg-brand-ambar/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="w-8 h-8 text-amber-500 dark:text-brand-ambar" />
+        <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-7 max-w-sm w-full shadow-2xl border-2 border-ops-border text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-ops-warn/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-ops-warn" />
             </div>
-            <h3 className="font-black text-slate-900 dark:text-brand-nacar text-xl font-syne mb-1">
+            <h3 className="font-black text-ops-ink text-xl font-syne mb-1">
               Jornada incompleta
             </h3>
-            <p className="text-slate-500 dark:text-ui-muted text-sm font-bold mb-1">
+            <p className="text-ops-muted text-sm font-bold mb-1">
               {salidaPendiente.empleado.nombre} lleva{' '}
-              <span className="text-slate-800 dark:text-brand-nacar">
+              <span className="text-ops-ink">
                 {salidaPendiente.horas.toFixed(1)} hrs
               </span>{' '}
               de {Number(configuracion?.horas_jornada) || 0} hrs.
             </p>
-            <p className="text-amber-600 dark:text-brand-ambar text-xs font-black uppercase tracking-widest mb-5">
+            <p className="text-ops-warn text-xs font-black uppercase tracking-widest mb-5">
               Faltan ~{salidaPendiente.faltanMin} min para poder salir
             </p>
-            <p className="text-slate-400 dark:text-ui-muted text-[11px] font-bold mb-3">
+            <p className="text-ops-muted text-[11px] font-bold mb-3">
               Para salir antes, el Admin autoriza con su PIN:
             </p>
             <input
@@ -698,24 +701,24 @@ export default function RelojChecadorScreen() {
                 if (e.key === 'Enter') autorizarSalidaAnticipada();
               }}
               placeholder="••••••"
-              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border focus:border-amber-500 dark:focus:border-brand-ambar rounded-2xl py-4 outline-none text-slate-900 dark:text-brand-nacar transition-colors mb-3"
+              className="w-full text-center text-3xl tracking-[0.5em] font-black bg-ops-bg border-2 border-ops-field focus:border-ops-warn dark:focus:border-ops-warn rounded-ui py-4 outline-none text-ops-ink transition-colors mb-3"
             />
             {pinAdminError && (
-              <p className="text-rose-500 dark:text-brand-arrecife text-xs font-bold mb-3">
+              <p className="text-ops-danger text-xs font-bold mb-3">
                 {pinAdminError}
               </p>
             )}
             <div className="flex gap-3">
               <button
                 onClick={() => setSalidaPendiente(null)}
-                className="flex-1 py-3.5 rounded-xl border-2 border-slate-200 dark:border-ui-border font-bold text-slate-500 dark:text-ui-muted hover:bg-slate-50 dark:hover:bg-ui-border transition-colors"
+                className="flex-1 py-3.5 rounded-ui border-2 border-ops-border font-bold text-ops-muted hover:bg-ops-bg dark:hover:bg-ops-border transition-colors"
               >
                 Esperar
               </button>
               <button
                 onClick={autorizarSalidaAnticipada}
                 disabled={pinAdminSalida.length < PIN_MIN}
-                className="flex-1 py-3.5 rounded-xl bg-amber-500 dark:bg-brand-ambar text-white dark:text-ui-obsidiana font-black disabled:opacity-40 active:scale-95 transition-all"
+                className="flex-1 py-3.5 rounded-ui bg-ops-warn text-ops-danger-fg font-black disabled:opacity-40 active:scale-95 transition-all"
               >
                 Autorizar
               </button>

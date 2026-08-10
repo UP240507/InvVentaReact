@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { PageShell, PageHeader, Button } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { CAPACIDADES_BASE } from '../../lib/Permisos';
 import {
   ShieldCheck,
-  Lock,
   MonitorPlay,
   LayoutGrid,
   ChefHat,
@@ -178,7 +178,8 @@ export default function PermisosScreen() {
   );
 
   const [rolActivoId, setRolActivoId] = useState(null);
-  const fila = roles.find((r) => String(r.id) === String(rolActivoId)) || roles[0];
+  const fila =
+    roles.find((r) => String(r.id) === String(rolActivoId)) || roles[0];
   const rolActivo = fila?.rol || '';
   const esSistema = fila?.capacidades?.es_sistema === true;
   const cap = useMemo(
@@ -199,8 +200,7 @@ export default function PermisosScreen() {
   }, [fila]);
 
   const empleadosConRol = useMemo(
-    () =>
-      (staff || []).filter((s) => (s.rol || s.puesto) === rolActivo).length,
+    () => (staff || []).filter((s) => (s.rol || s.puesto) === rolActivo).length,
     [staff, rolActivo],
   );
 
@@ -244,7 +244,9 @@ export default function PermisosScreen() {
 
   const toggleFlag = (flagId) => {
     if (esSistema) return; // Admin es intocable
-    actualizarActivo({ capacidades: { ...cap, [flagId]: cap[flagId] !== true } });
+    actualizarActivo({
+      capacidades: { ...cap, [flagId]: cap[flagId] !== true },
+    });
   };
 
   const toggleRuta = (slug) => {
@@ -352,35 +354,25 @@ export default function PermisosScreen() {
   const inicialSlug = String(cap.ruta_inicial || '').replace(/^\//, '');
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col h-full animate-in fade-in duration-500 transition-colors">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-ui-humo p-8 rounded-[2.5rem] border border-slate-200 dark:border-ui-border shadow-xl shadow-slate-200/50 dark:shadow-none mb-8 relative overflow-hidden transition-colors">
-        <div className="absolute top-0 right-0 p-12 bg-amber-50 dark:bg-brand-ambar/5 rounded-full -mr-12 -mt-12 opacity-50" />
-        <div className="flex items-center gap-6 relative z-10">
-          <div className="bg-amber-500 p-4 rounded-3xl shadow-lg shadow-amber-500/40 text-ui-obsidiana">
-            <ShieldCheck className="w-8 h-8" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 dark:text-brand-nacar tracking-tight">
-              Matriz de Seguridad
-            </h1>
-            <p className="text-slate-500 dark:text-ui-muted font-bold mt-1 flex items-center gap-2">
-              <Lock className="w-4 h-4" /> Roles y capacidades del restaurante
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => setModalNuevo({ nombre: '', copiarDeId: fila?.id })}
-          className="relative z-10 bg-amber-500 hover:bg-amber-400 text-ui-obsidiana px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-lg shadow-amber-500/30 transition-colors"
-        >
-          <Plus className="w-5 h-5" /> Nuevo Rol
-        </button>
-      </div>
+    <PageShell>
+      <PageHeader
+        icono={ShieldCheck}
+        titulo="Matriz de Seguridad"
+        descripcion="Roles y capacidades del restaurante"
+        acciones={
+          <Button
+            icono={Plus}
+            onClick={() => setModalNuevo({ nombre: '', copiarDeId: fila?.id })}
+          >
+            Nuevo rol
+          </Button>
+        }
+      />
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden">
         {/* PANEL IZQUIERDO: LISTA DE ROLES (VIVA) */}
-        <div className="w-full lg:w-1/3 bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-50 dark:border-ui-border shadow-sm p-6 flex flex-col h-full overflow-y-auto custom-scrollbar transition-colors">
-          <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-6 px-2">
+        <div className="w-full lg:w-1/3 bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-sm p-6 flex flex-col h-full overflow-y-auto custom-scrollbar transition-colors">
+          <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-6 px-2">
             Roles del restaurante
           </h3>
           <div className="space-y-3">
@@ -391,22 +383,22 @@ export default function PermisosScreen() {
                 <button
                   key={r.id}
                   onClick={() => setRolActivoId(r.id)}
-                  className={`w-full text-left px-6 py-5 rounded-2xl font-black transition-all border-2 flex justify-between items-center ${
+                  className={`w-full text-left px-6 py-5 rounded-ui font-black transition-all border-2 flex justify-between items-center ${
                     isActivo
-                      ? 'bg-amber-50 dark:bg-brand-ambar/10 border-amber-500 text-amber-700 dark:text-brand-ambar shadow-md scale-100'
-                      : 'bg-slate-50 dark:bg-ui-obsidiana border-transparent text-slate-600 dark:text-brand-nacar hover:bg-slate-100 dark:hover:bg-ui-border hover:scale-[0.98]'
+                      ? 'bg-adm-warn/10 border-adm-warn text-adm-warn shadow-md scale-100'
+                      : 'bg-adm-bg border-transparent text-adm-muted dark:text-adm-ink hover:bg-adm-chip dark:hover:bg-adm-border hover:scale-[0.98]'
                   }`}
                 >
                   <span className="flex items-center gap-3">
                     {esRoot && (
                       <ShieldCheck
-                        className={`w-5 h-5 ${isActivo ? 'text-amber-500' : 'text-slate-400 dark:text-ui-muted'}`}
+                        className={`w-5 h-5 ${isActivo ? 'text-adm-warn' : 'text-adm-muted'}`}
                       />
                     )}
                     {r.rol}
                   </span>
                   {isActivo && (
-                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-adm-warn animate-pulse" />
                   )}
                 </button>
               );
@@ -415,20 +407,20 @@ export default function PermisosScreen() {
         </div>
 
         {/* PANEL DERECHO: EDITOR DEL ROL */}
-        <div className="w-full lg:w-2/3 bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-50 dark:border-ui-border shadow-sm flex flex-col h-full overflow-hidden transition-colors">
-          <div className="p-8 border-b border-slate-100 dark:border-ui-border flex justify-between items-center bg-slate-50/50 dark:bg-ui-obsidiana/50">
+        <div className="w-full lg:w-2/3 bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-sm flex flex-col h-full overflow-hidden transition-colors">
+          <div className="p-8 border-b border-adm-border flex justify-between items-center bg-adm-bg/50">
             <div>
-              <h2 className="text-2xl font-black text-slate-900 dark:text-brand-nacar">
+              <h2 className="text-2xl font-black text-adm-ink">
                 {rolActivo || 'Sin roles'}
               </h2>
-              <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mt-1">
+              <p className="text-sm font-bold text-adm-muted mt-1">
                 {empleadosConRol} empleado{empleadosConRol === 1 ? '' : 's'} con
                 este rol
               </p>
             </div>
             <div className="flex items-center gap-2">
               {esSistema ? (
-                <div className="bg-rose-50 dark:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 border border-rose-100 dark:border-brand-arrecife/30">
+                <div className="bg-adm-danger/10 text-adm-danger px-4 py-2 rounded-ui text-xs font-black uppercase tracking-widest flex items-center gap-2 border border-adm-danger/30">
                   <AlertTriangle className="w-4 h-4" /> Root Access
                 </div>
               ) : (
@@ -437,7 +429,7 @@ export default function PermisosScreen() {
                     <button
                       onClick={() => setModalRenombrar({ nombre: rolActivo })}
                       title="Renombrar rol"
-                      className="p-3 rounded-xl bg-slate-100 dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted hover:text-amber-600 dark:hover:text-brand-ambar transition-colors"
+                      className="p-3 rounded-ui bg-adm-chip dark:bg-adm-bg text-adm-muted hover:text-adm-warn dark:hover:text-adm-warn transition-colors"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -449,22 +441,24 @@ export default function PermisosScreen() {
                         })
                       }
                       title="Duplicar rol"
-                      className="p-3 rounded-xl bg-slate-100 dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted hover:text-amber-600 dark:hover:text-brand-ambar transition-colors"
+                      className="p-3 rounded-ui bg-adm-chip dark:bg-adm-bg text-adm-muted hover:text-adm-warn dark:hover:text-adm-warn transition-colors"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => empleadosConRol === 0 && setModalEliminar(true)}
+                      onClick={() =>
+                        empleadosConRol === 0 && setModalEliminar(true)
+                      }
                       disabled={empleadosConRol > 0}
                       title={
                         empleadosConRol > 0
                           ? 'No se puede eliminar: hay empleados con este rol'
                           : 'Eliminar rol'
                       }
-                      className={`p-3 rounded-xl transition-colors ${
+                      className={`p-3 rounded-ui transition-colors ${
                         empleadosConRol > 0
-                          ? 'bg-slate-50 dark:bg-ui-obsidiana text-slate-300 dark:text-ui-border cursor-not-allowed'
-                          : 'bg-rose-50 dark:bg-brand-arrecife/10 text-rose-500 dark:text-brand-arrecife hover:bg-rose-100'
+                          ? 'bg-adm-bg text-adm-muted dark:text-adm-border cursor-not-allowed'
+                          : 'bg-adm-danger/10 text-adm-danger hover:bg-adm-danger/15'
                       }`}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -478,7 +472,7 @@ export default function PermisosScreen() {
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-10">
             {/* CAPACIDADES */}
             <section>
-              <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+              <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-4 flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4" /> Capacidades
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -488,27 +482,27 @@ export default function PermisosScreen() {
                     <div
                       key={f.id}
                       onClick={() => toggleFlag(f.id)}
-                      className={`p-4 rounded-2xl border-2 flex items-center justify-between gap-3 transition-all ${
+                      className={`p-4 rounded-ui border-2 flex items-center justify-between gap-3 transition-all ${
                         esSistema
-                          ? 'opacity-70 cursor-not-allowed border-slate-100 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana'
-                          : 'cursor-pointer hover:border-slate-200 dark:hover:border-ui-muted border-slate-50 dark:border-ui-obsidiana bg-white dark:bg-ui-obsidiana'
-                      } ${activo && !esSistema ? 'border-amber-100 dark:border-brand-ambar/30 bg-amber-50/30 dark:bg-brand-ambar/10' : ''}`}
+                          ? 'opacity-70 cursor-not-allowed border-adm-border bg-adm-bg'
+                          : 'cursor-pointer hover:border-adm-border dark:hover:border-adm-muted border-adm-border dark:border-adm-bg bg-white dark:bg-adm-bg'
+                      } ${activo && !esSistema ? 'border-adm-warn/30 bg-adm-warn/30' : ''}`}
                     >
                       <div>
                         <h4
-                          className={`font-black text-sm ${activo ? 'text-slate-900 dark:text-brand-nacar' : 'text-slate-500 dark:text-ui-muted'}`}
+                          className={`font-black text-sm ${activo ? 'text-adm-ink' : 'text-adm-muted'}`}
                         >
                           {f.nombre}
                         </h4>
-                        <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted mt-0.5">
+                        <p className="text-[11px] font-bold text-adm-muted mt-0.5">
                           {f.desc}
                         </p>
                       </div>
                       <div
-                        className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-300 ${activo ? 'bg-amber-500' : 'bg-slate-200 dark:bg-ui-border'}`}
+                        className={`w-12 h-7 shrink-0 rounded-full relative transition-colors duration-media ${activo ? 'bg-adm-warn' : 'bg-adm-chip dark:bg-adm-border'}`}
                       >
                         <div
-                          className={`absolute top-1 bg-white dark:bg-brand-nacar w-5 h-5 rounded-full shadow-sm transition-all duration-300 ${activo ? 'left-6' : 'left-1'}`}
+                          className={`absolute top-1 bg-white dark:bg-adm-ink w-5 h-5 rounded-full shadow-sm transition-all duration-media ${activo ? 'left-6' : 'left-1'}`}
                         />
                       </div>
                     </div>
@@ -519,11 +513,11 @@ export default function PermisosScreen() {
 
             {/* RUTAS */}
             <section>
-              <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+              <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Compass className="w-4 h-4" /> Pantallas permitidas
               </h3>
               {esSistema ? (
-                <p className="text-sm font-bold text-slate-500 dark:text-ui-muted bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-4">
+                <p className="text-sm font-bold text-adm-muted bg-adm-bg rounded-ui p-4">
                   Este rol tiene acceso a TODAS las pantallas.
                 </p>
               ) : (
@@ -536,10 +530,10 @@ export default function PermisosScreen() {
                         <button
                           key={r.slug}
                           onClick={() => toggleRuta(r.slug)}
-                          className={`px-4 py-3 rounded-xl text-xs font-black text-left transition-all border-2 ${
+                          className={`px-4 py-3 rounded-ui text-xs font-black text-left transition-all border-2 ${
                             activo
-                              ? 'bg-amber-50 dark:bg-brand-ambar/10 border-amber-400 text-amber-700 dark:text-brand-ambar'
-                              : 'bg-slate-50 dark:bg-ui-obsidiana border-transparent text-slate-500 dark:text-ui-muted hover:border-slate-200'
+                              ? 'bg-adm-warn/10 border-adm-warn text-adm-warn'
+                              : 'bg-adm-bg border-transparent text-adm-muted hover:border-adm-border'
                           }`}
                         >
                           {r.nombre}
@@ -548,13 +542,13 @@ export default function PermisosScreen() {
                     })}
                   </div>
                   <div className="mt-4 flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+                    <span className="text-xs font-black text-adm-muted uppercase tracking-widest">
                       Pantalla inicial:
                     </span>
                     <select
                       value={inicialSlug}
                       onChange={(e) => setRutaInicial(e.target.value)}
-                      className="px-4 py-2 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-xl font-bold text-sm text-slate-900 dark:text-brand-nacar outline-none cursor-pointer"
+                      className="px-4 py-2 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-sm text-adm-ink outline-none cursor-pointer"
                     >
                       {rutasDelRol.map((slug) => (
                         <option key={slug} value={slug}>
@@ -570,7 +564,7 @@ export default function PermisosScreen() {
 
             {/* MÓDULOS (LEGADO) */}
             <section>
-              <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4">
+              <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-4">
                 Módulos operativos
               </h3>
               <div className="space-y-3">
@@ -583,34 +577,34 @@ export default function PermisosScreen() {
                     <div
                       key={modulo.id}
                       onClick={() => togglePermiso(modulo.id)}
-                      className={`p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${
+                      className={`p-4 rounded-ui border-2 flex items-center justify-between transition-all ${
                         esSistema
-                          ? 'opacity-70 cursor-not-allowed border-slate-100 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana'
-                          : 'cursor-pointer hover:border-slate-200 dark:hover:border-ui-muted border-slate-50 dark:border-ui-obsidiana bg-white dark:bg-ui-obsidiana'
-                      } ${tieneAcceso && !esSistema ? 'border-amber-100 dark:border-brand-ambar/30 bg-amber-50/30 dark:bg-brand-ambar/10' : ''}`}
+                          ? 'opacity-70 cursor-not-allowed border-adm-border bg-adm-bg'
+                          : 'cursor-pointer hover:border-adm-border dark:hover:border-adm-muted border-adm-border dark:border-adm-bg bg-white dark:bg-adm-bg'
+                      } ${tieneAcceso && !esSistema ? 'border-adm-warn/30 bg-adm-warn/30' : ''}`}
                     >
                       <div className="flex items-center gap-4">
                         <div
-                          className={`p-2.5 rounded-xl transition-colors ${tieneAcceso ? 'bg-amber-500 text-ui-obsidiana shadow-lg shadow-amber-500/30' : 'bg-slate-100 dark:bg-ui-humo text-slate-400 dark:text-ui-muted'}`}
+                          className={`p-2.5 rounded-ui transition-colors ${tieneAcceso ? 'bg-adm-warn text-adm-bg shadow-lg shadow-adm-warn/30' : 'bg-adm-chip dark:bg-adm-panel text-adm-muted'}`}
                         >
                           <Icono className="w-5 h-5" />
                         </div>
                         <div>
                           <h4
-                            className={`font-black ${tieneAcceso ? 'text-slate-900 dark:text-brand-nacar' : 'text-slate-500 dark:text-ui-muted'}`}
+                            className={`font-black ${tieneAcceso ? 'text-adm-ink' : 'text-adm-muted'}`}
                           >
                             {modulo.nombre}
                           </h4>
-                          <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mt-0.5">
+                          <p className="text-xs font-bold text-adm-muted mt-0.5">
                             {modulo.desc}
                           </p>
                         </div>
                       </div>
                       <div
-                        className={`w-14 h-8 shrink-0 rounded-full relative transition-colors duration-300 ${tieneAcceso ? 'bg-amber-500' : 'bg-slate-200 dark:bg-ui-border'}`}
+                        className={`w-14 h-8 shrink-0 rounded-full relative transition-colors duration-media ${tieneAcceso ? 'bg-adm-warn' : 'bg-adm-chip dark:bg-adm-border'}`}
                       >
                         <div
-                          className={`absolute top-1 bg-white dark:bg-brand-nacar w-6 h-6 rounded-full shadow-sm transition-all duration-300 ${tieneAcceso ? 'left-7' : 'left-1'}`}
+                          className={`absolute top-1 bg-white dark:bg-adm-ink w-6 h-6 rounded-full shadow-sm transition-all duration-media ${tieneAcceso ? 'left-7' : 'left-1'}`}
                         />
                       </div>
                     </div>
@@ -620,13 +614,13 @@ export default function PermisosScreen() {
             </section>
           </div>
 
-          <div className="p-6 bg-slate-900 dark:bg-ui-obsidiana shadow-[0_-10px_30px_rgba(0,0,0,0.1)] flex justify-between items-center z-10 relative border-t dark:border-ui-border transition-colors">
-            <p className="text-slate-400 dark:text-ui-muted text-xs font-bold w-2/3">
+          <div className="p-6 bg-adm-ink dark:bg-adm-bg shadow-[0_-10px_30px_rgba(0,0,0,0.1)] flex justify-between items-center z-10 relative border-t dark:border-adm-border transition-colors">
+            <p className="text-adm-muted text-xs font-bold w-2/3">
               Los cambios se guardan y sincronizan automáticamente y toman
-              efecto en el siguiente inicio de sesión. Renombrar un rol
-              reasigna a sus empleados en automático.
+              efecto en el siguiente inicio de sesión. Renombrar un rol reasigna
+              a sus empleados en automático.
             </p>
-            <div className="bg-brand-cesped/20 text-brand-cesped px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 border border-brand-cesped/30">
+            <div className="bg-adm-ok/20 text-adm-ok px-4 py-2 rounded-ui text-xs font-black uppercase flex items-center gap-2 border border-adm-ok/30">
               <Save className="w-4 h-4" /> Auto-Guardado
             </div>
           </div>
@@ -636,19 +630,17 @@ export default function PermisosScreen() {
       {/* MODAL: NUEVO / DUPLICAR ROL */}
       {modalNuevo && (
         <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-6">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-8 w-full max-w-md shadow-2xl border dark:border-ui-border">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 w-full max-w-md shadow-2xl border dark:border-adm-border">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-900 dark:text-brand-nacar">
-                Nuevo rol
-              </h3>
+              <h3 className="text-xl font-black text-adm-ink">Nuevo rol</h3>
               <button
                 onClick={() => setModalNuevo(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-rose-500 transition-colors"
+                className="p-2 rounded-ui text-adm-muted hover:text-adm-danger transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-1">
+            <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-1">
               Nombre del rol *
             </label>
             <input
@@ -659,9 +651,9 @@ export default function PermisosScreen() {
               }
               onKeyDown={(e) => e.key === 'Enter' && crearRol()}
               placeholder="Ej. Capitán de Meseros"
-              className="w-full mt-1 mb-4 px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-amber-500 transition-colors"
+              className="w-full mt-1 mb-4 px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-warn transition-colors"
             />
-            <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-1">
+            <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest px-1">
               Copiar capacidades de
             </label>
             <select
@@ -669,7 +661,7 @@ export default function PermisosScreen() {
               onChange={(e) =>
                 setModalNuevo({ ...modalNuevo, copiarDeId: e.target.value })
               }
-              className="w-full mt-1 mb-6 px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none cursor-pointer"
+              className="w-full mt-1 mb-6 px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none cursor-pointer"
             >
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -679,7 +671,7 @@ export default function PermisosScreen() {
             </select>
             <button
               onClick={crearRol}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-ui-obsidiana py-4 rounded-2xl font-black transition-colors"
+              className="w-full bg-adm-warn hover:bg-adm-warn text-adm-bg py-4 rounded-ui font-black transition-colors"
             >
               Crear rol
             </button>
@@ -690,14 +682,14 @@ export default function PermisosScreen() {
       {/* MODAL: RENOMBRAR */}
       {modalRenombrar && (
         <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-6">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-8 w-full max-w-md shadow-2xl border dark:border-ui-border">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 w-full max-w-md shadow-2xl border dark:border-adm-border">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-900 dark:text-brand-nacar">
+              <h3 className="text-xl font-black text-adm-ink">
                 Renombrar "{rolActivo}"
               </h3>
               <button
                 onClick={() => setModalRenombrar(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-rose-500 transition-colors"
+                className="p-2 rounded-ui text-adm-muted hover:text-adm-danger transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -707,15 +699,15 @@ export default function PermisosScreen() {
               value={modalRenombrar.nombre}
               onChange={(e) => setModalRenombrar({ nombre: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && renombrarRol()}
-              className="w-full mb-3 px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-bold text-slate-900 dark:text-brand-nacar outline-none focus:border-amber-500 transition-colors"
+              className="w-full mb-3 px-4 py-3.5 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-adm-ink outline-none focus:border-adm-warn transition-colors"
             />
-            <p className="text-xs font-bold text-slate-400 dark:text-ui-muted mb-6">
+            <p className="text-xs font-bold text-adm-muted mb-6">
               Los {empleadosConRol} empleado{empleadosConRol === 1 ? '' : 's'}{' '}
               con este rol se reasignan automáticamente al nuevo nombre.
             </p>
             <button
               onClick={renombrarRol}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-ui-obsidiana py-4 rounded-2xl font-black transition-colors"
+              className="w-full bg-adm-warn hover:bg-adm-warn text-adm-bg py-4 rounded-ui font-black transition-colors"
             >
               Renombrar
             </button>
@@ -726,29 +718,29 @@ export default function PermisosScreen() {
       {/* MODAL: ELIMINAR */}
       {modalEliminar && (
         <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-6">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] p-8 w-full max-w-md shadow-2xl border dark:border-ui-border">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg p-8 w-full max-w-md shadow-2xl border dark:border-adm-border">
             <div className="flex items-center gap-4 mb-4">
-              <div className="bg-rose-100 dark:bg-brand-arrecife/10 p-3 rounded-2xl text-rose-500 dark:text-brand-arrecife">
+              <div className="bg-adm-danger/15 p-3 rounded-ui text-adm-danger">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-brand-nacar">
+              <h3 className="text-xl font-black text-adm-ink">
                 ¿Eliminar "{rolActivo}"?
               </h3>
             </div>
-            <p className="text-sm font-bold text-slate-500 dark:text-ui-muted mb-6">
+            <p className="text-sm font-bold text-adm-muted mb-6">
               Esta acción no se puede deshacer. Nadie tiene este rol asignado,
               así que es seguro eliminarlo.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setModalEliminar(false)}
-                className="flex-1 bg-slate-100 dark:bg-ui-obsidiana text-slate-600 dark:text-brand-nacar py-4 rounded-2xl font-black transition-colors"
+                className="flex-1 bg-adm-chip dark:bg-adm-bg text-adm-muted dark:text-adm-ink py-4 rounded-ui font-black transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={eliminarRol}
-                className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-4 rounded-2xl font-black transition-colors"
+                className="flex-1 bg-adm-danger text-adm-danger-fg py-4 rounded-ui font-black transition-colors"
               >
                 Eliminar
               </button>
@@ -756,6 +748,6 @@ export default function PermisosScreen() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

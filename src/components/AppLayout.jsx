@@ -30,13 +30,13 @@ export default function AppLayout({ children }) {
       >
         {/* Controles de Ventana (Estilo Windows/Linux a la izquierda según tu mockup, ajustable) */}
         <div className="flex items-center gap-1 window-controls pointer-events-auto">
-          <button className="flex h-6 w-8 items-center justify-center rounded text-ui-muted hover:bg-ui-border hover:text-ui-text transition-colors">
+          <button className="flex h-6 w-8 items-center justify-center rounded-ui text-ui-muted hover:bg-ui-border hover:text-ui-text transition-colors">
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <button className="flex h-6 w-8 items-center justify-center rounded text-ui-muted hover:bg-ui-border hover:text-ui-text transition-colors">
+          <button className="flex h-6 w-8 items-center justify-center rounded-ui text-ui-muted hover:bg-ui-border hover:text-ui-text transition-colors">
             <Square className="h-3 w-3" />
           </button>
-          <button className="flex h-6 w-8 items-center justify-center rounded text-ui-muted hover:bg-brand-arrecife hover:text-ui-text transition-colors">
+          <button className="flex h-6 w-8 items-center justify-center rounded-ui text-ui-muted hover:bg-brand-arrecife hover:text-ui-text transition-colors">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -103,7 +103,7 @@ export default function AppLayout({ children }) {
         ].map((action) => (
           <button
             key={action}
-            className="px-4 py-1.5 text-xs font-medium bg-ui-humo border border-ui-border rounded-[var(--radius-brand)] text-ui-text hover:bg-ui-border hover:text-brand-cesped transition-colors whitespace-nowrap"
+            className="px-4 py-1.5 text-xs font-medium bg-ui-humo border border-ui-border rounded-ui-lg text-ui-text hover:bg-ui-border hover:text-brand-cesped transition-colors whitespace-nowrap"
           >
             {action}
           </button>
@@ -118,7 +118,7 @@ export default function AppLayout({ children }) {
             children
           ) : (
             // Contenido simulado del wireframe si no hay children
-            <div className="w-full h-full border-2 border-dashed border-ui-border rounded-[var(--radius-brand)] flex flex-col items-center justify-center">
+            <div className="w-full h-full border-2 border-dashed border-ui-border rounded-ui-lg flex flex-col items-center justify-center">
               <h2 className="text-xl font-bold font-syne text-ui-muted mb-8 tracking-widest">
                 MAPA OPERATIVO
               </h2>
@@ -131,7 +131,7 @@ export default function AppLayout({ children }) {
                 ].map((mesa) => (
                   <button
                     key={mesa.id}
-                    className="w-24 h-24 border border-ui-border bg-ui-humo rounded-[var(--radius-brand)] flex flex-col items-center justify-center hover:border-brand-cesped transition-colors group"
+                    className="w-24 h-24 border border-ui-border bg-ui-humo rounded-ui-lg flex flex-col items-center justify-center hover:border-brand-cesped transition-colors group"
                   >
                     <span className="text-xl font-bold font-syne text-ui-text group-hover:text-brand-cesped">
                       {mesa.id}
@@ -175,13 +175,13 @@ export default function AppLayout({ children }) {
 
           {/* Acciones Rápidas del Panel */}
           <div className="p-4 space-y-2 border-b border-ui-border">
-            <button className="w-full py-2.5 text-sm font-medium bg-ui-obsidiana border border-ui-border rounded-[var(--radius-brand)] hover:bg-ui-border transition-colors">
+            <button className="w-full py-2.5 text-sm font-medium bg-ui-obsidiana border border-ui-border rounded-ui-lg hover:bg-ui-border transition-colors">
               [Ver orden]
             </button>
-            <button className="w-full py-2.5 text-sm font-medium bg-ui-obsidiana border border-ui-border rounded-[var(--radius-brand)] hover:bg-ui-border transition-colors">
+            <button className="w-full py-2.5 text-sm font-medium bg-ui-obsidiana border border-ui-border rounded-ui-lg hover:bg-ui-border transition-colors">
               [Agregar item]
             </button>
-            <button className="w-full py-2.5 text-sm font-bold bg-brand-arrecife text-ui-obsidiana rounded-[var(--radius-brand)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+            <button className="w-full py-2.5 text-sm font-bold bg-brand-arrecife text-ui-obsidiana rounded-ui-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
               [Cobrar <ChevronRight className="h-4 w-4" />]
             </button>
           </div>
@@ -193,19 +193,19 @@ export default function AppLayout({ children }) {
             </div>
             <ul className="space-y-2 text-xs font-mono text-ui-muted">
               <li className="flex items-center gap-3">
-                <kbd className="bg-ui-border px-2 py-0.5 rounded text-ui-text">
+                <kbd className="bg-ui-border px-2 py-0.5 rounded-ui text-ui-text">
                   F2
                 </kbd>{' '}
                 Nueva orden
               </li>
               <li className="flex items-center gap-3">
-                <kbd className="bg-ui-border px-2 py-0.5 rounded text-ui-text">
+                <kbd className="bg-ui-border px-2 py-0.5 rounded-ui text-ui-text">
                   F4
                 </kbd>{' '}
                 Cobrar mesa
               </li>
               <li className="flex items-center gap-3">
-                <kbd className="bg-ui-border px-2 py-0.5 rounded text-ui-text">
+                <kbd className="bg-ui-border px-2 py-0.5 rounded-ui text-ui-text">
                   Esc
                 </kbd>{' '}
                 Cancelar / Cerrar

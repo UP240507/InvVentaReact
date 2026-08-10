@@ -70,7 +70,9 @@
  * Tabla: configuracion (fila única, id=1)
  * @typedef {Object} Configuracion
  * @property {number}   id
- * @property {string}   nombre_empresa
+ * @property {string}   nombre_empresa — nombre COMERCIAL del local
+ * @property {string}   [razon_social] — nombre FISCAL del emisor, distinto del
+ *                                       comercial. Se imprime junto al RFC.
  * @property {string}   [rfc]
  * @property {number}   iva            — decimal: 0.16
  * @property {string[]} categorias     — lista de categorías de productos

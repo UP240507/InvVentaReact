@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../api/supabase';
+import { olvidarEntrarComoAdmin } from '../../lib/Puerta';
+import MarcaConmutador from './MarcaConmutador';
 import { Store, Delete, Loader2, ArrowRight, Pencil } from 'lucide-react';
 
 // El código del restaurante NO es secreto (solo enruta al tenant; el login real
@@ -16,6 +18,14 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Llegar a esta pantalla cancela la salida manual: si el dueño se fue al
+  // login de correo y vuelve aquí, este dispositivo es de staff otra vez. Sin
+  // esto, la excepción se quedaría puesta toda la sesión y el mesero seguiría
+  // aterrizando en el formulario de correo.
+  useEffect(() => {
+    olvidarEntrarComoAdmin();
+  }, []);
 
   const necesitaCodigo = !codigoGuardado;
   const codigoEfectivo = (codigoGuardado || codigoInput).trim().toUpperCase();
@@ -134,23 +144,26 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-100 dark:bg-ui-obsidiana transition-colors">
-      <div className="w-full max-w-sm bg-white dark:bg-ui-humo rounded-[2.5rem] shadow-2xl border-2 border-slate-100 dark:border-ui-border p-8 flex flex-col items-center transition-colors">
-        {/* ─── MARCA ─── */}
-        <div className="w-16 h-16 rounded-3xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 mb-5">
-          <Store className="w-8 h-8 text-white" />
-        </div>
-        <h1 className="text-2xl font-black text-slate-900 dark:text-brand-nacar tracking-tight">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-ops-panel-2 dark:bg-ops-bg transition-colors">
+      <div className="w-full max-w-sm bg-white dark:bg-ops-panel rounded-ui-lg shadow-2xl border-2 border-ops-border p-8 flex flex-col items-center transition-colors">
+        {/* ─── MARCA, QUE ADEMÁS ES LA PUERTA AL OTRO LOGIN ─── */}
+        <MarcaConmutador
+          hacia="correo"
+          className="w-16 h-16 rounded-ui-lg bg-ops-info flex items-center justify-center shadow-lg shadow-ops-info/30 mb-5"
+        >
+          <Store className="w-8 h-8 text-ops-accent-fg" />
+        </MarcaConmutador>
+        <h1 className="text-2xl font-black text-ops-ink tracking-tight">
           Acceso de Personal
         </h1>
-        <p className="text-xs font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest mt-1 mb-7">
+        <p className="text-xs font-bold text-ops-muted uppercase tracking-widest mt-1 mb-7">
           InvVenta
         </p>
 
         {/* ─── CÓDIGO DE RESTAURANTE (solo primera vez en el dispositivo) ─── */}
         {necesitaCodigo ? (
           <div className="w-full space-y-2 mb-6">
-            <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest px-2">
+            <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest px-2">
               Código del restaurante
             </label>
             <input
@@ -162,16 +175,16 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
-              className="w-full px-4 py-3.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-100 dark:border-ui-border rounded-2xl font-black text-center text-lg tracking-widest text-slate-900 dark:text-brand-nacar outline-none focus:border-indigo-500 transition-colors"
+              className="w-full px-4 py-3.5 bg-ops-bg border-2 border-ops-field rounded-ui font-black text-center text-lg tracking-widest text-ops-ink outline-none focus:border-ops-info transition-colors"
             />
-            <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted px-2 text-center">
+            <p className="text-[11px] font-bold text-ops-muted px-2 text-center">
               Solo se pide una vez; queda guardado en este dispositivo.
             </p>
           </div>
         ) : (
           <button
             onClick={cambiarCodigo}
-            className="mb-6 inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 dark:text-ui-muted hover:text-indigo-500 transition-colors"
+            className="mb-6 inline-flex items-center gap-1.5 text-xs font-bold text-ops-muted hover:text-ops-info transition-colors"
           >
             <Pencil className="w-3 h-3" /> {codigoGuardado} · cambiar
           </button>
@@ -187,8 +200,8 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
               key={i}
               className={`w-3.5 h-3.5 rounded-full transition-all ${
                 i < pin.length
-                  ? 'bg-indigo-600 dark:bg-brand-amatista scale-110'
-                  : 'bg-slate-200 dark:bg-ui-border'
+                  ? 'bg-ops-info scale-110'
+                  : 'bg-ops-panel-2 dark:bg-ops-border'
               }`}
             />
           ))}
@@ -196,7 +209,7 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
 
         {/* ─── ERROR ─── */}
         {error && (
-          <p className="text-sm font-bold text-rose-500 dark:text-brand-arrecife text-center mb-5 -mt-1">
+          <p className="text-sm font-bold text-ops-danger text-center mb-5 -mt-1">
             {error}
           </p>
         )}
@@ -209,7 +222,7 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
               type="button"
               onClick={() => tecla(d)}
               disabled={loading}
-              className="aspect-square rounded-2xl bg-slate-50 dark:bg-ui-obsidiana hover:bg-slate-100 dark:hover:bg-ui-border active:scale-95 text-2xl font-black text-slate-900 dark:text-brand-nacar transition-all disabled:opacity-50"
+              className="aspect-square rounded-ui bg-ops-bg hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 text-2xl font-black text-ops-ink transition-all disabled:opacity-50"
             >
               {d}
             </button>
@@ -219,7 +232,7 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
             type="button"
             onClick={() => tecla('0')}
             disabled={loading}
-            className="aspect-square rounded-2xl bg-slate-50 dark:bg-ui-obsidiana hover:bg-slate-100 dark:hover:bg-ui-border active:scale-95 text-2xl font-black text-slate-900 dark:text-brand-nacar transition-all disabled:opacity-50"
+            className="aspect-square rounded-ui bg-ops-bg hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 text-2xl font-black text-ops-ink transition-all disabled:opacity-50"
           >
             0
           </button>
@@ -227,7 +240,7 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
             type="button"
             onClick={borrar}
             disabled={loading || pin.length === 0}
-            className="aspect-square rounded-2xl bg-slate-50 dark:bg-ui-obsidiana hover:bg-slate-100 dark:hover:bg-ui-border active:scale-95 text-slate-500 dark:text-ui-muted transition-all disabled:opacity-50 flex items-center justify-center"
+            className="aspect-square rounded-ui bg-ops-bg hover:bg-ops-panel-2 dark:hover:bg-ops-border active:scale-95 text-ops-muted transition-all disabled:opacity-50 flex items-center justify-center"
             aria-label="Borrar"
           >
             <Delete className="w-6 h-6" />
@@ -239,7 +252,7 @@ export default function LoginEmpleadoScreen({ onSuccess }) {
           type="button"
           onClick={handleLogin}
           disabled={!puedeEnviar}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-4 rounded-2xl active:scale-95 transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+          className="w-full bg-ops-info hover:bg-ops-info disabled:opacity-50 disabled:cursor-not-allowed text-ops-accent-fg font-black py-4 rounded-ui active:scale-95 transition-all shadow-lg shadow-ops-info/30 flex items-center justify-center gap-2"
         >
           {loading ? (
             <>

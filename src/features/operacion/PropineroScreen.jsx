@@ -3,6 +3,14 @@ import { useAppStore, parseUTC } from '../../store/useAppStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { supabase } from '../../api/supabase';
+import { useAtajos } from '../../hooks/useAtajos';
+import {
+  OpsShell,
+  OpsHeader,
+  OpsTabs,
+  OpsButton,
+  AvisoOffline,
+} from '../../components/ui';
 import {
   DollarSign,
   Calculator,
@@ -12,7 +20,6 @@ import {
   ShieldCheck,
   Coins,
   Check,
-  WifiOff,
   History,
   Clock,
   PencilLine,
@@ -20,6 +27,7 @@ import {
   CalendarDays,
   CheckCircle2,
 } from 'lucide-react';
+import { hoyLocalISO } from '../../lib/Fechas';
 
 // ── Helpers numéricos ─────────────────────────────────────────────────────────
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -114,7 +122,9 @@ export default function PropineroScreen() {
   // ── Scope del bote ─────────────────────────────────────────────────────────
   const [modo, setModo] = useState('turno');
   const [turnoId, setTurnoId] = useState(turnosOrden[0]?.id || '');
-  const hoy = new Date().toISOString().slice(0, 10);
+  // Fecha LOCAL: en un restaurante la jornada fuerte es la noche, y con UTC el
+  // Propinero abría por defecto en el día de MAÑANA (México va 6 h detrás).
+  const hoy = hoyLocalISO();
   const [fechaSel, setFechaSel] = useState(hoy); // para dia / semana
   const [desde, setDesde] = useState(hoy); // para rango
   const [hasta, setHasta] = useState(hoy);
@@ -419,63 +429,85 @@ export default function PropineroScreen() {
   const fmtDia = (d) =>
     d ? d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
 
+  // ─── ATAJOS DEL PROPINERO (Proyecto D · tanda 5) ─────────────────────────
+  // El reparto se hace al cierre, con prisa y con gente esperando su dinero.
+  // F9 = acción de dinero, igual que cobrar en el POS: una sola convención.
+  const mover = (delta) => {
+    const i = SCOPES.findIndex((x) => x.id === modo);
+    setModo(SCOPES[(i + delta + SCOPES.length) % SCOPES.length].id);
+  };
+
+  useAtajos(
+    'propinero',
+    {
+      arrowright: { descripcion: 'Cambiar periodo', accion: () => mover(1) },
+      arrowleft: { accion: () => mover(-1) },
+      1: { descripcion: 'Método 1·2·3', accion: () => setMetodo('equitativo') },
+      2: { accion: () => setMetodo('horas') },
+      3: { accion: () => setMetodo('manual') },
+      f9: {
+        descripcion: 'Registrar el reparto',
+        // Mismo gate que el botón: sin propinas, ya repartido o sin conexión
+        // no se dispara nada.
+        accion: () => puedeRegistrar && !isProcessing && setConfirmando(true),
+      },
+    },
+    { titulo: 'Propinero', activo: !confirmando },
+  );
+
+  // Con la confirmación abierta el teclado se reduce a decidir: nada de andar
+  // cambiando el periodo con el reparto a medio confirmar.
+  useAtajos(
+    'propinero-confirmar',
+    {
+      escape: {
+        descripcion: 'Cancelar',
+        accion: () => !isProcessing && setConfirmando(false),
+      },
+      enter: {
+        descripcion: 'Confirmar el reparto',
+        accion: () => !isProcessing && handleRegistrar(),
+      },
+    },
+    { titulo: 'Confirmar reparto', activo: confirmando },
+  );
+
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto h-full animate-in fade-in duration-500 transition-colors">
-      {/* CABECERA */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="bg-indigo-500 dark:bg-brand-amatista/20 p-3 rounded-2xl shadow-lg shadow-indigo-500/30 dark:shadow-none border border-transparent dark:border-brand-amatista/30 transition-colors">
-          <Calculator className="w-8 h-8 text-white dark:text-brand-amatista" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-brand-nacar tracking-tight">
-            Propinero
-          </h1>
-          <p className="text-sm font-bold text-slate-500 dark:text-ui-muted uppercase tracking-widest mt-1">
-            Reparto de propinas · acumulado para reportes
-          </p>
-        </div>
-      </div>
+    <OpsShell ancho="max-w-6xl" className="overflow-y-auto custom-scrollbar">
+      <OpsHeader
+        icono={Calculator}
+        titulo="Propinero"
+        subtitulo="Reparto de propinas · acumulado para reportes"
+        scopeAtajos="propinero"
+      />
 
       {isOffline && (
-        <div className="flex items-center gap-3 px-4 py-3 mb-6 bg-amber-50 dark:bg-brand-ambar/10 border-2 border-amber-200 dark:border-brand-ambar/30 rounded-2xl">
-          <WifiOff className="w-4 h-4 text-amber-600 dark:text-brand-ambar shrink-0" />
-          <p className="text-sm font-bold text-amber-700 dark:text-brand-ambar leading-snug">
-            Sin conexión: puedes revisar el cálculo, pero el registro del
-            reparto requiere internet. Regístralo al reconectar.
-          </p>
-        </div>
+        <AvisoOffline className="mb-6">
+          Sin conexión: puedes revisar el cálculo, pero el registro del reparto
+          requiere internet. Regístralo al reconectar.
+        </AvisoOffline>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ───────────── PANEL IZQUIERDO ───────────── */}
         <div className="lg:col-span-1 space-y-6">
           {/* SELECTOR DE SCOPE */}
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
-            <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-4">
+          <div className="bg-ops-panel p-6 rounded-ui-lg border-2 border-ops-border shadow-sm transition-colors">
+            <h3 className="text-xs font-black text-ops-muted uppercase tracking-widest mb-4">
               Periodo del bote
             </h3>
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              {SCOPES.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setModo(s.id)}
-                  className={`py-2.5 rounded-xl text-xs font-black transition-all ${
-                    modo === s.id
-                      ? 'bg-indigo-600 dark:bg-brand-amatista text-white shadow-md'
-                      : 'bg-slate-100 dark:bg-ui-border text-slate-600 dark:text-ui-muted hover:bg-slate-200'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
+            <OpsTabs
+              className="mb-4"
+              valor={modo}
+              onChange={setModo}
+              opciones={SCOPES}
+            />
 
             {modo === 'turno' && (
               <select
                 value={turnoId}
                 onChange={(e) => setTurnoId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-bold text-sm text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista transition-all"
+                className="w-full px-4 py-3 bg-ops-panel-2 border-2 border-ops-field rounded-ui font-bold text-sm text-ops-ink outline-none focus:border-ops-accent dark:focus:border-ops-accent transition-all"
               >
                 {turnosOrden.length === 0 && (
                   <option value="">Sin turnos</option>
@@ -491,17 +523,17 @@ export default function PropineroScreen() {
 
             {(modo === 'dia' || modo === 'semana') && (
               <div>
-                <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest block mb-1">
+                <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest block mb-1">
                   {modo === 'dia' ? 'Día' : 'Semana de'}
                 </label>
                 <input
                   type="date"
                   value={fechaSel}
                   onChange={(e) => setFechaSel(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-bold text-sm text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista"
+                  className="w-full px-3 py-2.5 bg-ops-panel-2 border-2 border-ops-field rounded-ui font-bold text-sm text-ops-ink outline-none focus:border-ops-accent dark:focus:border-ops-accent"
                 />
                 {modo === 'semana' && (
-                  <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted mt-2 flex items-center gap-1.5">
+                  <p className="text-[11px] font-bold text-ops-muted mt-2 flex items-center gap-1.5">
                     <CalendarDays className="w-3 h-3" />
                     {fmtDia(periodo.desdeDt)} – {fmtDia(periodo.hastaDt)}
                   </p>
@@ -512,34 +544,34 @@ export default function PropineroScreen() {
             {modo === 'rango' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest block mb-1">
+                  <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest block mb-1">
                     Desde
                   </label>
                   <input
                     type="date"
                     value={desde}
                     onChange={(e) => setDesde(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-bold text-sm text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista"
+                    className="w-full px-3 py-2.5 bg-ops-panel-2 border-2 border-ops-field rounded-ui font-bold text-sm text-ops-ink outline-none focus:border-ops-accent dark:focus:border-ops-accent"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest block mb-1">
+                  <label className="text-[10px] font-black text-ops-muted uppercase tracking-widest block mb-1">
                     Hasta
                   </label>
                   <input
                     type="date"
                     value={hasta}
                     onChange={(e) => setHasta(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-bold text-sm text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista"
+                    className="w-full px-3 py-2.5 bg-ops-panel-2 border-2 border-ops-field rounded-ui font-bold text-sm text-ops-ink outline-none focus:border-ops-accent dark:focus:border-ops-accent"
                   />
                 </div>
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t-2 border-slate-100 dark:border-ui-border">
-              <p className="text-sm font-bold text-slate-500 dark:text-ui-muted flex justify-between">
+            <div className="mt-4 pt-4 border-t-2 border-ops-border">
+              <p className="text-sm font-bold text-ops-muted flex justify-between">
                 <span>Ventas del periodo:</span>
-                <span className="text-slate-900 dark:text-brand-nacar">
+                <span className="text-ops-ink">
                   ${money(ventasTotales)} · {ventasScope.length}
                 </span>
               </p>
@@ -547,33 +579,33 @@ export default function PropineroScreen() {
           </div>
 
           {/* CAJA FUERTE DEL BOTE */}
-          <div className="bg-slate-900 dark:bg-ui-obsidiana rounded-3xl p-6 text-white shadow-xl relative overflow-hidden border border-slate-800 dark:border-ui-border transition-colors">
+          <div className="bg-ops-accent text-ops-accent-fg rounded-ui-lg p-6 shadow-xl relative overflow-hidden transition-colors">
             <div className="absolute -right-4 -top-4 opacity-10">
-              <DollarSign className="w-32 h-32 text-white dark:text-brand-nacar" />
+              <DollarSign className="w-32 h-32" />
             </div>
-            <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest mb-6 relative z-10">
+            <h3 className="text-xs font-black uppercase tracking-widest mb-6 relative z-10 opacity-70">
               Bote disponible
             </h3>
             <div className="space-y-4 relative z-10">
               <div className="flex justify-between items-end">
-                <span className="text-slate-300 dark:text-ui-muted font-bold text-sm">
+                <span className="font-bold text-sm opacity-80">
                   Propinas sin repartir
                 </span>
-                <span className="text-3xl font-black text-white dark:text-brand-nacar">
+                <span className="text-3xl font-black tabular-nums">
                   ${money(bote)}
                 </span>
               </div>
               {propinasYaRepartidas > 0 && (
-                <div className="flex justify-between items-center text-sm pt-3 border-t border-slate-700/50 dark:border-ui-border">
-                  <span className="text-slate-400 dark:text-ui-muted font-bold flex items-center gap-1.5">
+                <div className="flex justify-between items-center text-sm pt-3 border-t border-ops-border/50">
+                  <span className="text-ops-muted font-bold flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Ya repartidas
                   </span>
-                  <span className="font-black text-slate-400 dark:text-ui-muted">
+                  <span className="font-black text-ops-muted">
                     ${money(propinasYaRepartidas)}
                   </span>
                 </div>
               )}
-              <p className="text-[11px] font-bold text-slate-500 dark:text-ui-muted flex items-center gap-1.5 pt-1">
+              <p className="text-[11px] font-bold text-ops-muted flex items-center gap-1.5 pt-1">
                 <ReceiptText className="w-3 h-3 shrink-0" /> Automático de las
                 propinas cobradas. El cajero no captura nada.
               </p>
@@ -581,19 +613,19 @@ export default function PropineroScreen() {
           </div>
 
           {/* HISTORIAL */}
-          <div className="bg-white dark:bg-ui-humo p-6 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm transition-colors">
+          <div className="bg-ops-panel p-6 rounded-ui-lg border-2 border-ops-border shadow-sm transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-xs font-black text-ops-muted uppercase tracking-widest flex items-center gap-2">
                 <History className="w-4 h-4" /> Acumulado
               </h3>
               {historial.length > 0 && (
-                <span className="text-xs font-black text-emerald-600 dark:text-brand-cesped">
+                <span className="text-xs font-black text-ops-ok">
                   ${money(acumuladoHistorial)}
                 </span>
               )}
             </div>
             {historial.length === 0 ? (
-              <p className="text-sm font-bold text-slate-400 dark:text-ui-muted">
+              <p className="text-sm font-bold text-ops-muted">
                 Aún no hay reparto registrado.
               </p>
             ) : (
@@ -601,20 +633,20 @@ export default function PropineroScreen() {
                 {historial.map((h) => (
                   <div
                     key={h.id}
-                    className="flex justify-between items-center text-xs p-2.5 bg-slate-50 dark:bg-ui-obsidiana rounded-xl border border-slate-100 dark:border-ui-border"
+                    className="flex justify-between items-center text-xs p-2.5 bg-ops-panel-2 rounded-ui border border-ops-border"
                   >
                     <div>
-                      <p className="font-black text-slate-700 dark:text-brand-nacar">
+                      <p className="font-black text-ops-ink">
                         ${money(h.total_repartido)}{' '}
-                        <span className="font-bold text-slate-400 dark:text-ui-muted capitalize">
+                        <span className="font-bold text-ops-muted capitalize">
                           · {h.metodo} · {h.modo}
                         </span>
                       </p>
-                      <p className="font-bold text-slate-400 dark:text-ui-muted">
+                      <p className="font-bold text-ops-muted">
                         {fmtFecha(h.creado_en)}
                       </p>
                     </div>
-                    <span className="font-black text-slate-400 dark:text-ui-muted">
+                    <span className="font-black text-ops-muted">
                       {(h.participantes || []).length} pers.
                     </span>
                   </div>
@@ -625,42 +657,46 @@ export default function PropineroScreen() {
         </div>
 
         {/* ───────────── PANEL DERECHO ───────────── */}
-        <div className="lg:col-span-2 bg-white dark:bg-ui-humo p-6 md:p-8 rounded-3xl border-2 border-slate-100 dark:border-ui-border shadow-sm flex flex-col transition-colors">
+        <div className="lg:col-span-2 bg-ops-panel p-6 md:p-8 rounded-ui-lg border-2 border-ops-border shadow-sm flex flex-col transition-colors">
           {/* MÉTODO */}
           <div className="mb-6">
-            <h2 className="text-xl font-black text-slate-900 dark:text-brand-nacar flex items-center gap-2 mb-3">
-              <Users className="w-5 h-5 text-indigo-500 dark:text-brand-amatista" />{' '}
-              Método de reparto
+            <h2 className="text-xl font-black text-ops-ink flex items-center gap-2 mb-3">
+              <Users className="w-5 h-5 text-ops-accent" /> Método de reparto
             </h2>
             <div className="grid grid-cols-3 gap-2">
-              {METODOS.map((m) => (
+              {METODOS.map((m, i) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => setMetodo(m.id)}
-                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-2xl border-2 transition-all ${
+                  title={`Atajo: ${i + 1}`}
+                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-ui border-2 transition-all ${
                     metodo === m.id
-                      ? 'bg-indigo-600 dark:bg-brand-amatista text-white border-indigo-600 dark:border-brand-amatista shadow-md'
-                      : 'bg-slate-50 dark:bg-ui-obsidiana text-slate-600 dark:text-ui-muted border-slate-200 dark:border-ui-border hover:border-indigo-300'
+                      ? 'bg-ops-accent text-ops-accent-fg border-ops-accent shadow-md'
+                      : 'bg-ops-panel-2 text-ops-muted border-ops-border hover:border-ops-accent/30'
                   }`}
                 >
                   <m.icon className="w-4 h-4" />
                   <span className="text-[11px] font-black leading-tight text-center">
                     {m.label}
                   </span>
+                  {/* La tecla, impresa: así el atajo se aprende con el ratón. */}
+                  <kbd className="text-[9px] font-black px-1 rounded-ui border border-current/40 opacity-60">
+                    {i + 1}
+                  </kbd>
                 </button>
               ))}
             </div>
-            <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted mt-2">
+            <p className="text-[11px] font-bold text-ops-muted mt-2">
               {METODOS.find((m) => m.id === metodo)?.desc}
             </p>
           </div>
 
           {/* ESTADO YA REPARTIDO / SIN PROPINAS */}
           {yaRepartidoScope && (
-            <div className="flex items-center gap-3 px-4 py-3 mb-5 bg-emerald-50 dark:bg-brand-cesped/10 border-2 border-emerald-200 dark:border-brand-cesped/30 rounded-2xl">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-brand-cesped shrink-0" />
-              <p className="text-sm font-bold text-emerald-700 dark:text-brand-cesped leading-snug">
+            <div className="flex items-center gap-3 px-4 py-3 mb-5 bg-ops-ok/10 border-2 border-ops-ok/30 rounded-ui">
+              <CheckCircle2 className="w-5 h-5 text-ops-ok shrink-0" />
+              <p className="text-sm font-bold text-ops-ok leading-snug">
                 Este periodo ya fue repartido (${money(propinasYaRepartidas)}).
                 El bote está vacío; no se puede repartir de nuevo.
               </p>
@@ -670,7 +706,7 @@ export default function PropineroScreen() {
           {/* PARTICIPANTES */}
           <div className="flex-1 overflow-y-auto space-y-2 pr-1 mb-5">
             {participantes.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-ui-muted py-10">
+              <div className="h-full flex flex-col items-center justify-center text-ops-muted py-10">
                 <AlertCircle className="w-12 h-12 mb-3 opacity-20" />
                 <p className="font-bold">No hay staff activo para repartir</p>
                 <p className="text-xs font-bold mt-1">
@@ -685,29 +721,29 @@ export default function PropineroScreen() {
                 return (
                   <div
                     key={p.id}
-                    className={`flex items-center justify-between gap-3 p-3 rounded-2xl border transition-colors ${
+                    className={`flex items-center justify-between gap-3 p-3 rounded-ui border transition-colors ${
                       p.incluido
-                        ? 'bg-slate-50 dark:bg-ui-obsidiana border-slate-100 dark:border-ui-border'
-                        : 'bg-slate-50/40 dark:bg-ui-obsidiana/40 border-dashed border-slate-200 dark:border-ui-border opacity-50'
+                        ? 'bg-ops-panel-2 border-ops-border'
+                        : 'bg-ops-panel-2/40 dark:bg-ops-bg/40 border-dashed border-ops-border opacity-50'
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => setAjuste(p.id, { incluido: !p.incluido })}
-                      className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center border-2 transition-all ${
+                      className={`w-9 h-9 rounded-ui shrink-0 flex items-center justify-center border-2 transition-all ${
                         p.incluido
-                          ? 'bg-indigo-600 dark:bg-brand-amatista border-indigo-600 dark:border-brand-amatista text-white'
-                          : 'bg-transparent border-slate-300 dark:border-ui-border text-transparent'
+                          ? 'bg-ops-accent border-ops-accent text-ops-accent-fg'
+                          : 'bg-transparent border-ops-border text-transparent'
                       }`}
                     >
                       <Check className="w-4 h-4" />
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <p className="font-black text-sm text-slate-900 dark:text-brand-nacar truncate">
+                      <p className="font-black text-sm text-ops-ink truncate">
                         {p.nombre}
                       </p>
-                      <p className="text-[11px] font-bold text-slate-500 dark:text-ui-muted truncate">
+                      <p className="text-[11px] font-bold text-ops-muted truncate">
                         {p.rol}
                         {metodo === 'horas' && ` · ${p.horas} h`}
                       </p>
@@ -715,7 +751,7 @@ export default function PropineroScreen() {
 
                     {metodo === 'manual' && p.incluido && (
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-ops-muted">
                           $
                         </span>
                         <input
@@ -726,13 +762,13 @@ export default function PropineroScreen() {
                             setAjuste(p.id, { montoManual: e.target.value })
                           }
                           placeholder="0"
-                          className="w-24 pl-5 pr-2 py-1.5 bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border rounded-lg font-black text-sm text-right text-slate-800 dark:text-brand-nacar outline-none focus:border-indigo-500 dark:focus:border-brand-amatista"
+                          className="w-24 pl-5 pr-2 py-1.5 bg-ops-panel border-2 border-ops-field rounded-ui font-black text-sm text-right text-ops-ink outline-none focus:border-ops-accent dark:focus:border-ops-accent"
                         />
                       </div>
                     )}
 
                     <div className="text-right w-24 shrink-0">
-                      <p className="text-base font-black text-emerald-600 dark:text-brand-cesped">
+                      <p className="text-base font-black text-ops-ok">
                         ${money(dist.monto)}
                       </p>
                     </div>
@@ -744,38 +780,34 @@ export default function PropineroScreen() {
 
           {/* RECONCILIACIÓN */}
           <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-3 text-center border border-slate-100 dark:border-ui-border">
-              <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+            <div className="bg-ops-panel-2 rounded-ui p-3 text-center border border-ops-border">
+              <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
                 Bote
               </p>
-              <p className="text-lg font-black text-slate-900 dark:text-brand-nacar">
-                ${money(bote)}
-              </p>
+              <p className="text-lg font-black text-ops-ink">${money(bote)}</p>
             </div>
-            <div className="bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-3 text-center border border-slate-100 dark:border-ui-border">
-              <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest">
+            <div className="bg-ops-panel-2 rounded-ui p-3 text-center border border-ops-border">
+              <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
                 Repartido
               </p>
-              <p className="text-lg font-black text-emerald-600 dark:text-brand-cesped">
+              <p className="text-lg font-black text-ops-ok">
                 ${money(totalRepartido)}
               </p>
             </div>
             <div
-              className={`rounded-2xl p-3 text-center border ${
+              className={`rounded-ui p-3 text-center border ${
                 remanente < -0.001
-                  ? 'bg-rose-50 dark:bg-brand-arrecife/10 border-rose-200 dark:border-brand-arrecife/30'
-                  : 'bg-slate-50 dark:bg-ui-obsidiana border-slate-100 dark:border-ui-border'
+                  ? 'bg-ops-danger/10 border-ops-danger/30'
+                  : 'bg-ops-panel-2 border-ops-border'
               }`}
             >
-              <p className="text-[10px] font-black text-slate-400 dark:text-ui-muted uppercase tracking-widest flex items-center justify-center gap-1">
+              <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest flex items-center justify-center gap-1">
                 <Coins className="w-3 h-3" />
                 {remanente < -0.001 ? 'Sobregiro' : 'Remanente'}
               </p>
               <p
                 className={`text-lg font-black ${
-                  remanente < -0.001
-                    ? 'text-rose-600 dark:text-brand-arrecife'
-                    : 'text-slate-900 dark:text-brand-nacar'
+                  remanente < -0.001 ? 'text-ops-danger' : 'text-ops-ink'
                 }`}
               >
                 ${money(remanente)}
@@ -784,13 +816,13 @@ export default function PropineroScreen() {
           </div>
 
           {remanente > 0.001 && metodo !== 'manual' && (
-            <p className="text-[11px] font-bold text-slate-400 dark:text-ui-muted text-center mb-4">
+            <p className="text-[11px] font-bold text-ops-muted text-center mb-4">
               El remanente de ${money(remanente)} (centavos no divisibles) queda
               en caja.
             </p>
           )}
           {remanente < -0.001 && (
-            <p className="text-[11px] font-bold text-rose-500 dark:text-brand-arrecife text-center mb-4">
+            <p className="text-[11px] font-bold text-ops-danger text-center mb-4">
               Asignaste ${money(Math.abs(remanente))} más que el bote. Ajusta
               antes de registrar.
             </p>
@@ -798,13 +830,15 @@ export default function PropineroScreen() {
 
           {/* BOTÓN / CONFIRMACIÓN */}
           {!confirmando ? (
-            <button
-              type="button"
+            <OpsButton
+              variante="primario"
+              tamano="lg"
+              icono={Coins}
+              tecla="F9"
               onClick={() => setConfirmando(true)}
               disabled={isProcessing || !puedeRegistrar}
-              className="w-full bg-slate-900 dark:bg-brand-amatista hover:bg-slate-800 dark:hover:bg-indigo-600 text-white disabled:bg-slate-200 disabled:dark:bg-ui-border disabled:text-slate-400 disabled:dark:text-ui-muted font-black py-5 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="w-full py-5"
             >
-              <Coins className="w-5 h-5" />
               {isOffline
                 ? 'Sin conexión para registrar'
                 : yaRepartidoScope
@@ -812,41 +846,42 @@ export default function PropineroScreen() {
                   : sinPropinas
                     ? 'Sin propinas que repartir'
                     : 'Registrar y vaciar bote'}
-            </button>
+            </OpsButton>
           ) : (
-            <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-ui-obsidiana rounded-2xl border-2 border-slate-200 dark:border-ui-border">
-              <p className="text-sm font-bold text-slate-700 dark:text-brand-nacar text-center">
+            <div className="flex flex-col gap-3 p-4 bg-ops-panel-2 rounded-ui border-2 border-ops-border">
+              <p className="text-sm font-bold text-ops-ink text-center">
                 Repartir{' '}
                 <span className="font-black">${money(totalRepartido)}</span>{' '}
                 entre {incluidosConMonto.filter((p) => p.monto > 0).length}{' '}
                 personas. El bote se vacía y queda en auditoría.
               </p>
               <div className="flex gap-3">
-                <button
-                  type="button"
+                <OpsButton
+                  className="flex-1"
+                  tecla="Esc"
                   onClick={() => setConfirmando(false)}
                   disabled={isProcessing}
-                  className="flex-1 py-3 rounded-xl font-black text-sm bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border text-slate-600 dark:text-ui-muted active:scale-95 transition-all"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="button"
+                </OpsButton>
+                <OpsButton
+                  variante="primario"
+                  className="flex-1"
+                  tecla="Enter"
                   onClick={handleRegistrar}
                   disabled={isProcessing}
-                  className="flex-1 py-3 rounded-xl font-black text-sm bg-indigo-600 dark:bg-brand-amatista text-white shadow-md active:scale-95 transition-all"
                 >
-                  {isProcessing ? 'Registrando...' : 'Confirmar'}
-                </button>
+                  {isProcessing ? 'Registrando…' : 'Confirmar'}
+                </OpsButton>
               </div>
             </div>
           )}
 
-          <p className="text-center text-[10px] font-bold text-slate-400 dark:text-ui-muted uppercase tracking-widest mt-4 flex items-center justify-center gap-1">
+          <p className="text-center text-[10px] font-bold text-ops-muted uppercase tracking-widest mt-4 flex items-center justify-center gap-1">
             <ShieldCheck className="w-3 h-3" /> Acción registrada en auditoría
           </p>
         </div>
       </div>
-    </div>
+    </OpsShell>
   );
 }

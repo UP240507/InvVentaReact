@@ -68,33 +68,33 @@ export default function CierreTurnoModal({ onClose }) {
   if (!turnoActivo) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-ui-humo rounded-[2rem] border border-slate-200 dark:border-ui-border shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
-        <div className="px-8 py-6 border-b border-slate-200 dark:border-ui-border flex justify-between items-center bg-slate-50 dark:bg-ui-obsidiana/50">
+    <div className="fixed inset-0 z-[200] bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
+        <div className="px-8 py-6 border-b border-adm-border flex justify-between items-center bg-adm-bg">
           <div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar">
+            <h2 className="text-2xl font-black font-syne text-adm-ink">
               Corte de Caja
             </h2>
-            <p className="text-sm font-bold text-slate-500 dark:text-ui-muted uppercase tracking-widest mt-1">
+            <p className="text-sm font-bold text-adm-muted uppercase tracking-widest mt-1">
               {configuracion?.nombre_empresa || 'Restaurante'}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-ui-border rounded-xl transition-colors"
+            className="p-2 text-adm-muted hover:bg-adm-chip dark:hover:bg-adm-border rounded-ui transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
         {mesasAbiertas.length > 0 && (
-          <div className="px-8 py-4 bg-brand-ambar/10 border-b border-brand-ambar/20 flex items-start gap-4">
-            <AlertTriangle className="w-6 h-6 text-brand-ambar shrink-0 mt-0.5" />
+          <div className="px-8 py-4 bg-adm-warn/10 border-b border-adm-warn/20 flex items-start gap-4">
+            <AlertTriangle className="w-6 h-6 text-adm-warn shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-black text-amber-700 dark:text-brand-ambar">
+              <h3 className="font-black text-adm-warn">
                 Aún hay {mesasAbiertas.length} mesas abiertas
               </h3>
-              <p className="text-sm font-medium text-amber-600 dark:text-amber-500/80">
+              <p className="text-sm font-medium text-adm-warn">
                 Cobra o cancela todas las mesas antes del corte para que los
                 ingresos entren en este turno.
               </p>
@@ -102,13 +102,13 @@ export default function CierreTurnoModal({ onClose }) {
           </div>
         )}
 
-        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-ui-humo">
+        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-adm-panel">
           {/* ARQUEO */}
           <div className="space-y-6">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
               Arqueo de Efectivo
             </h3>
-            <div className="bg-slate-50 dark:bg-ui-obsidiana rounded-2xl p-5 border border-slate-100 dark:border-ui-border space-y-4">
+            <div className="bg-adm-bg rounded-ui p-5 border border-adm-border space-y-4">
               <div className="space-y-2">
                 {[
                   {
@@ -119,56 +119,56 @@ export default function CierreTurnoModal({ onClose }) {
                   {
                     label: 'Ingresos del turno',
                     val: `+ $${(metricas?.efectivo || 0).toFixed(2)}`,
-                    color: 'text-emerald-600 dark:text-brand-cesped',
+                    color: 'text-adm-ok',
                   },
                 ].map(({ label, val, color }) => (
                   <div
                     key={label}
                     className="flex justify-between items-center"
                   >
-                    <span className="text-xs font-bold text-slate-500 dark:text-ui-muted">
+                    <span className="text-xs font-bold text-adm-muted">
                       {label}
                     </span>
                     <span
-                      className={`font-mono font-bold ${color || 'text-slate-700 dark:text-brand-nacar/70'}`}
+                      className={`font-mono font-bold ${color || 'text-adm-ink'}`}
                     >
                       {val}
                     </span>
                   </div>
                 ))}
-                <div className="pt-2 border-t border-slate-200 dark:border-ui-border flex justify-between items-center">
-                  <span className="text-xs font-black text-slate-800 dark:text-brand-nacar uppercase">
+                <div className="pt-2 border-t border-adm-border flex justify-between items-center">
+                  <span className="text-xs font-black text-adm-ink uppercase">
                     Sistema espera
                   </span>
-                  <span className="text-lg font-black font-syne text-slate-900 dark:text-brand-nacar">
+                  <span className="text-lg font-black font-syne text-adm-ink">
                     ${esperadoEnCaja.toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-200 dark:border-ui-border">
-                <label className="text-[10px] font-black text-brand-amatista uppercase tracking-widest mb-2 block">
+              <div className="pt-4 border-t border-adm-border">
+                <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
                   ¿Cuánto efectivo hay en cajón?
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-adm-muted" />
                   <input
                     type="number"
                     step="0.01"
                     value={efectivoContado}
                     onChange={(e) => setEfectivoContado(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-ui-humo border-2 border-brand-amatista/30 focus:border-brand-amatista rounded-xl text-xl font-black font-syne text-slate-900 dark:text-brand-nacar outline-none transition-colors"
+                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-info/30 focus:border-adm-info rounded-ui text-xl font-black font-syne text-adm-ink outline-none transition-colors"
                   />
                 </div>
                 {efectivoContado !== '' && (
                   <div
-                    className={`mt-3 p-3 rounded-xl flex items-center justify-between border ${
+                    className={`mt-3 p-3 rounded-ui flex items-center justify-between border ${
                       diferencia === 0
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-brand-cesped/10 dark:border-brand-cesped/30 dark:text-brand-cesped'
+                        ? 'bg-adm-ok/10 border-adm-ok/30 text-adm-ok'
                         : diferencia > 0
-                          ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-brand-ambar/10 dark:border-brand-ambar/30 dark:text-brand-ambar'
-                          : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-brand-arrecife/10 dark:border-brand-arrecife/30 dark:text-brand-arrecife'
+                          ? 'bg-adm-warn/10 border-adm-warn/30 text-adm-warn'
+                          : 'bg-adm-danger/10 border-adm-danger/30 text-adm-danger'
                     }`}
                   >
                     <span className="text-xs font-black uppercase tracking-widest">
@@ -189,7 +189,7 @@ export default function CierreTurnoModal({ onClose }) {
 
           {/* MEDIOS DIGITALES */}
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
               Medios Digitales
             </h3>
             {[
@@ -206,36 +206,36 @@ export default function CierreTurnoModal({ onClose }) {
             ].map(({ icon: Icon, label, val }) => (
               <div
                 key={label}
-                className="bg-slate-50 dark:bg-ui-obsidiana rounded-xl p-4 flex justify-between items-center border border-slate-100 dark:border-ui-border"
+                className="bg-adm-bg rounded-ui p-4 flex justify-between items-center border border-adm-border"
               >
-                <span className="text-sm font-bold text-slate-600 dark:text-brand-nacar flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-slate-400" /> {label}
+                <span className="text-sm font-bold text-adm-muted dark:text-adm-ink flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-adm-muted" /> {label}
                 </span>
-                <span className="font-mono font-black text-slate-900 dark:text-brand-nacar">
+                <span className="font-mono font-black text-adm-ink">
                   ${val.toFixed(2)}
                 </span>
               </div>
             ))}
-            <div className="bg-brand-arrecife/10 rounded-xl p-4 border border-brand-arrecife/20 flex justify-between items-center">
-              <span className="text-sm font-bold text-brand-arrecife flex items-center gap-2">
+            <div className="bg-adm-danger/10 rounded-ui p-4 border border-adm-danger/20 flex justify-between items-center">
+              <span className="text-sm font-bold text-adm-danger flex items-center gap-2">
                 <Coins className="w-4 h-4" /> Propinas
               </span>
-              <span className="font-mono font-black text-brand-arrecife">
+              <span className="font-mono font-black text-adm-danger">
                 ${(metricas?.propinas || 0).toFixed(2)}
               </span>
             </div>
-            <div className="pt-4 flex items-center justify-between border-t border-slate-100 dark:border-ui-border">
-              <div className="flex items-center gap-2 text-slate-500 dark:text-ui-muted">
+            <div className="pt-4 flex items-center justify-between border-t border-adm-border">
+              <div className="flex items-center gap-2 text-adm-muted">
                 <Receipt className="w-5 h-5" />
                 <span className="text-sm font-bold">
                   {metricas?.ticketsCount || 0} Tickets
                 </span>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+                <p className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
                   Venta Total Neta
                 </p>
-                <p className="text-xl font-black text-slate-900 dark:text-brand-nacar">
+                <p className="text-xl font-black text-adm-ink">
                   ${(metricas?.totalVentas || 0).toFixed(2)}
                 </p>
               </div>
@@ -243,17 +243,17 @@ export default function CierreTurnoModal({ onClose }) {
           </div>
         </div>
 
-        <div className="px-8 py-6 border-t border-slate-200 dark:border-ui-border bg-slate-50 dark:bg-ui-obsidiana/50 flex gap-4">
+        <div className="px-8 py-6 border-t border-adm-border bg-adm-bg flex gap-4">
           <button
             onClick={onClose}
-            className="flex-1 py-4 rounded-2xl font-bold text-slate-600 dark:text-brand-nacar hover:bg-slate-200 dark:hover:bg-ui-border transition-colors"
+            className="flex-1 py-4 rounded-ui font-bold text-adm-muted dark:text-adm-ink hover:bg-adm-chip dark:hover:bg-adm-border transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirmarCierre}
             disabled={isSubmitting || efectivoContado === ''}
-            className="flex-1 py-4 rounded-2xl font-black text-white bg-rose-500 hover:bg-rose-600 dark:bg-brand-arrecife shadow-lg shadow-rose-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex-1 py-4 rounded-ui font-black text-adm-danger-fg bg-adm-danger shadow-lg shadow-adm-danger/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <CheckCircle2 className="w-5 h-5" />
             {isSubmitting ? 'Procesando...' : 'Confirmar Cierre'}

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>InvVenta</title>
+    <!--
+      Pantalla de arranque de la caja.
+
+      Es un HTML suelto a propósito: se carga en su propia ventana de Tauri,
+      ANTES de que React exista. No puede usar los tokens `adm-*` de la app
+      porque esa hoja de estilos todavía no se ha cargado — de ahí que los
+      colores estén escritos a mano. Son los del tema por defecto (terracota):
+      navy de la barra lateral, crema del texto, terracota del acento.
+
+      Regla que gobierna esta ventana: se cierra cuando la app está USABLE, no
+      a los N segundos. Un temporizador cambiaría una espera honesta por una
+      pantalla congelada — y en una caja que arranca lenta, mentir sobre el
+      progreso es peor que tardar.
+    -->
+    <style>
+      @font-face {
+        font-family: 'Fraunces';
+        src: local('Fraunces');
+        font-display: swap;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: default;
+      }
+
+      body {
+        background: #0d1b35;
+        color: #e8e0d0;
+        font-family: 'Figtree', system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        position: relative;
+      }
+
+      /* Trama diagonal muy tenue: da textura sin competir con la marca.
+         2% de opacidad — se percibe, no se mira. */
+      body::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: repeating-linear-gradient(
+          135deg,
+          rgba(232, 224, 208, 0.02) 0px,
+          rgba(232, 224, 208, 0.02) 1px,
+          transparent 1px,
+          transparent 9px
+        );
+        pointer-events: none;
+      }
+
+      .marca {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        animation: entrar 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+
+      .isotipo {
+        width: 104px;
+        height: auto;
+        display: block;
+      }
+
+      .logotipo {
+        width: 176px;
+        height: auto;
+        display: block;
+      }
+
+      /* Respaldo si los PNG de marca no cargan: el nombre en tipografía
+         display. Vale más un nombre bien puesto que un hueco. */
+      .respaldo {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 40px;
+        letter-spacing: 0.01em;
+        display: none;
+      }
+
+      .barra {
+        width: 190px;
+        height: 2px;
+        background: rgba(232, 224, 208, 0.14);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      /* Indeterminada a propósito: no sabemos cuánto falta, y una barra que
+         finge un porcentaje es una mentira que el usuario detecta cuando se
+         queda clavada en el 90%. */
+      .barra span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        background: #c04128;
+        border-radius: 2px;
+        animation: recorrer 1400ms ease-in-out infinite;
+      }
+
+      .estado {
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7f9fc9;
+        min-height: 15px;
+        transition: opacity 300ms ease;
+      }
+
+      .pie {
+        position: absolute;
+        bottom: 22px;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        color: rgba(127, 159, 201, 0.55);
+      }
+
+      @keyframes entrar {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @keyframes recorrer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(250%);
+        }
+      }
+
+      /* Quien pidió menos movimiento no debería recibir una barra corriendo. */
+      @media (prefers-reduced-motion: reduce) {
+        .marca {
+          animation: none;
+        }
+        .barra span {
+          animation: none;
+          width: 100%;
+          opacity: 0.5;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="marca">
+      <img
+        class="isotipo"
+        src="./brand/isotipo-tight.png"
+        alt=""
+        onerror="this.style.display='none'"
+      />
+      <img
+        class="logotipo"
+        src="./brand/logotipo-tight.png"
+        alt="InvVenta"
+        onerror="this.style.display='none'; document.querySelector('.respaldo').style.display='block'"
+      />
+      <div class="respaldo">InvVenta</div>
+    </div>
+
+    <div class="barra"><span></span></div>
+    <div class="estado" id="estado">Iniciando</div>
+    <div class="pie">Sistema operativo gastronómico</div>
+
+    <script>
+      // Los mensajes acompañan al arranque real de la app. No son un guion
+      // temporizado que finja progreso: van despacio y el último se queda
+      // puesto hasta que la ventana principal está lista y ésta se cierra.
+      const pasos = [
+        'Iniciando',
+        'Cargando tu restaurante',
+        'Preparando la caja',
+        'Casi listo',
+      ];
+      let i = 0;
+      const el = document.getElementById('estado');
+      setInterval(() => {
+        if (i < pasos.length - 1) {
+          i += 1;
+          el.style.opacity = '0';
+          setTimeout(() => {
+            el.textContent = pasos[i];
+            el.style.opacity = '1';
+          }, 300);
+        }
+      }, 1100);
+    </script>
+  </body>
+</html>

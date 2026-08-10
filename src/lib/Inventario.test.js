@@ -1,6 +1,6 @@
 // src/lib/Inventario.test.js
 import { describe, it, expect } from 'vitest';
-import { construirDeltasStock, verificarStock } from './inventario';
+import { construirDeltasStock, verificarStock } from './Inventario';
 
 describe('construirDeltasStock · expansión de inventario', () => {
   it('expande una receta a sus insumos por cantidad vendida', () => {

@@ -50,9 +50,9 @@ const RondaTimer = ({ desde }) => {
     const i = setInterval(calc, 10000);
     return () => clearInterval(i);
   }, [desde]);
-  let cls = 'text-emerald-600 dark:text-brand-cesped';
-  if (min >= 15) cls = 'text-rose-600 dark:text-brand-arrecife';
-  else if (min >= 10) cls = 'text-amber-600 dark:text-brand-ambar';
+  let cls = 'text-ops-ok';
+  if (min >= 15) cls = 'text-ops-danger';
+  else if (min >= 10) cls = 'text-ops-warn';
   return (
     <span
       className={`flex items-center gap-1 text-[10px] font-black uppercase tracking-widest ${cls}`}
@@ -147,7 +147,7 @@ export default function PanelRondas({ mesaId }) {
   if (rondas.length === 0) {
     return (
       <div className="px-5 py-4 text-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-ui-muted">
+        <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted">
           Sin rondas en producción
         </p>
       </div>
@@ -156,7 +156,7 @@ export default function PanelRondas({ mesaId }) {
 
   return (
     <div className="space-y-3 px-5 py-4">
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-ui-muted flex items-center gap-2">
+      <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted flex items-center gap-2">
         <ChefHat className="w-3.5 h-3.5" /> Rondas en producción (
         {rondas.length})
       </p>
@@ -168,10 +168,10 @@ export default function PanelRondas({ mesaId }) {
         const esEntregada = est === 'entregada';
 
         const badge = esEntregada
-          ? 'bg-slate-100 text-slate-500 dark:bg-ui-obsidiana dark:text-ui-muted border-slate-200 dark:border-ui-border'
+          ? 'bg-ops-panel-2 text-ops-muted dark:bg-ops-bg border-ops-border'
           : esLista
-            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-brand-cesped/10 dark:text-brand-cesped dark:border-brand-cesped/30'
-            : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-brand-ambar/10 dark:text-brand-ambar dark:border-brand-ambar/30';
+            ? 'bg-ops-ok/10 text-ops-ok border-ops-ok/30'
+            : 'bg-ops-warn/10 text-ops-warn border-ops-warn/30';
 
         const etiqueta = esEntregada
           ? 'Entregada'
@@ -182,15 +182,15 @@ export default function PanelRondas({ mesaId }) {
         return (
           <div
             key={comanda.id}
-            className={`border-2 rounded-2xl overflow-hidden ${esEntregada ? 'border-slate-200 dark:border-ui-border opacity-70' : 'border-slate-200 dark:border-ui-border'}`}
+            className={`border-2 rounded-ui overflow-hidden ${esEntregada ? 'border-ops-border opacity-70' : 'border-ops-border'}`}
           >
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/60 dark:bg-ui-obsidiana/40">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-ops-panel-2/60 dark:bg-ops-bg/40">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-slate-600 dark:text-brand-nacar uppercase tracking-widest">
+                <span className="text-[10px] font-black text-ops-muted dark:text-ops-ink uppercase tracking-widest">
                   {comanda.folio || String(comanda.id).slice(-5)}
                 </span>
                 <span
-                  className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${badge}`}
+                  className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-ui border ${badge}`}
                 >
                   {etiqueta}
                 </span>
@@ -208,19 +208,19 @@ export default function PanelRondas({ mesaId }) {
                     className="flex items-center justify-between text-sm"
                   >
                     <span
-                      className={`font-bold ${listo ? 'text-emerald-600 dark:text-brand-cesped' : 'text-slate-700 dark:text-brand-nacar'}`}
+                      className={`font-bold ${listo ? 'text-ops-ok' : 'text-ops-ink'}`}
                     >
-                      <span className="text-indigo-500 dark:text-brand-amatista font-black mr-1.5">
+                      <span className="text-ops-accent font-black mr-1.5">
                         {it.cantidad}x
                       </span>
                       {it.nombre}
                     </span>
                     <span className="flex items-center gap-1.5 shrink-0">
-                      <Icon className="w-3 h-3 text-slate-400 dark:text-ui-muted" />
+                      <Icon className="w-3 h-3 text-ops-muted" />
                       {listo ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-brand-cesped" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-ops-ok" />
                       ) : (
-                        <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-brand-ambar" />
+                        <Clock className="w-3.5 h-3.5 text-ops-warn" />
                       )}
                     </span>
                   </div>
@@ -229,21 +229,21 @@ export default function PanelRondas({ mesaId }) {
             </div>
 
             {!esEntregada && (
-              <div className="flex gap-2 px-4 py-3 border-t-2 border-slate-100 dark:border-ui-border">
+              <div className="flex gap-2 px-4 py-3 border-t-2 border-ops-border">
                 <button
                   onClick={() => entregarRonda(comanda)}
                   disabled={!esLista}
-                  className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                  className={`flex-1 py-2.5 rounded-ui font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 ${
                     esLista
-                      ? 'bg-emerald-500 dark:bg-brand-cesped text-white dark:text-ui-obsidiana hover:bg-emerald-600 shadow-md'
-                      : 'bg-slate-100 dark:bg-ui-obsidiana text-slate-400 dark:text-ui-muted cursor-not-allowed'
+                      ? 'bg-ops-ok text-ops-ok-fg shadow-md'
+                      : 'bg-ops-panel-2 dark:bg-ops-bg text-ops-muted cursor-not-allowed'
                   }`}
                 >
                   <Hand className="w-4 h-4" /> Entregar
                 </button>
                 <button
                   onClick={() => abrirCancelar(comanda)}
-                  className="px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 bg-rose-50 dark:bg-brand-arrecife/10 text-rose-600 dark:text-brand-arrecife border-2 border-rose-200 dark:border-brand-arrecife/20 hover:bg-rose-100 dark:hover:bg-brand-arrecife/20 transition-all active:scale-95"
+                  className="px-4 py-2.5 rounded-ui font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 bg-ops-danger/10 text-ops-danger border-2 border-ops-danger/30 hover:bg-ops-danger/15 dark:hover:bg-ops-danger/20 transition-all active:scale-95"
                 >
                   <Ban className="w-4 h-4" />
                 </button>
@@ -255,32 +255,31 @@ export default function PanelRondas({ mesaId }) {
 
       {/* MODAL CANCELACIÓN (motivo obligatorio) */}
       {modalCancelar.show && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2rem] border-2 border-slate-100 dark:border-ui-border p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-black font-syne text-slate-900 dark:text-brand-nacar flex items-center gap-2">
-                <Ban className="w-5 h-5 text-rose-500 dark:text-brand-arrecife" />{' '}
-                Cancelar ronda
+              <h3 className="text-lg font-black font-syne text-ops-ink flex items-center gap-2">
+                <Ban className="w-5 h-5 text-ops-danger" /> Cancelar ronda
               </h3>
               <button
                 onClick={() => setModalCancelar({ show: false, comanda: null })}
-                className="text-slate-400 dark:text-ui-muted hover:text-rose-500 p-1"
+                className="text-ops-muted hover:text-ops-danger p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Warning: puede cobrarse el consumo */}
-            <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 dark:bg-brand-ambar/10 border-2 border-amber-200 dark:border-brand-ambar/30 rounded-2xl mb-5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-brand-ambar shrink-0 mt-0.5" />
-              <p className="text-xs font-bold text-amber-700 dark:text-brand-ambar leading-snug">
+            <div className="flex items-start gap-3 px-4 py-3 bg-ops-warn/10 border-2 border-ops-warn/30 rounded-ui mb-5">
+              <AlertTriangle className="w-4 h-4 text-ops-warn shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-ops-warn leading-snug">
                 Si la cocina ya preparó estos platillos, el consumo{' '}
                 <strong>puede cobrarse</strong> al cliente. Registra el motivo
                 real.
               </p>
             </div>
 
-            <label className="block text-[10px] font-black text-slate-500 dark:text-ui-muted uppercase tracking-widest mb-2">
+            <label className="block text-[10px] font-black text-ops-muted uppercase tracking-widest mb-2">
               Motivo de cancelación *
             </label>
             <textarea
@@ -289,20 +288,20 @@ export default function PanelRondas({ mesaId }) {
               rows={3}
               autoFocus
               placeholder="Ej. Cliente se retiró, demora excesiva, error de captura..."
-              className="w-full px-4 py-3 bg-slate-50 dark:bg-ui-obsidiana border-2 border-slate-200 dark:border-ui-border rounded-xl font-bold text-sm text-slate-800 dark:text-brand-nacar placeholder:text-slate-400 dark:placeholder:text-ui-muted/50 outline-none focus:border-rose-500 dark:focus:border-brand-arrecife resize-none transition-all"
+              className="w-full px-4 py-3 bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-field rounded-ui font-bold text-sm text-ops-ink placeholder:text-ops-muted dark:placeholder:text-ops-muted/50 outline-none focus:border-ops-danger dark:focus:border-ops-danger resize-none transition-all"
             />
 
             <div className="flex gap-3 mt-5">
               <button
                 onClick={() => setModalCancelar({ show: false, comanda: null })}
-                className="flex-1 py-3.5 bg-slate-100 dark:bg-ui-obsidiana text-slate-500 dark:text-ui-muted font-bold rounded-xl border-2 border-transparent hover:border-slate-200 dark:hover:border-ui-border transition-colors"
+                className="flex-1 py-3.5 bg-ops-panel-2 dark:bg-ops-bg text-ops-muted font-bold rounded-ui border-2 border-transparent hover:border-ops-border dark:hover:border-ops-border transition-colors"
               >
                 Volver
               </button>
               <button
                 onClick={confirmarCancelar}
                 disabled={!motivo.trim()}
-                className="flex-1 py-3.5 bg-rose-500 dark:bg-brand-arrecife hover:bg-rose-600 dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana font-black rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 bg-ops-danger text-ops-danger-fg font-black rounded-ui shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirmar cancelación
               </button>

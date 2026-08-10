@@ -13,6 +13,7 @@
 //      'turno' → turnos de caja del periodo donde el empleado checó dentro
 //                de la ventana [apertura, cierre] del turno
 import { parseUTC } from '../utils/parseUTC';
+import { aISOLocal } from './Fechas';
 
 export const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -48,9 +49,13 @@ export function horasTrabajadas(asistencias, nombre, desdeDt, hastaDt) {
 // Días distintos (fecha local del registro) con al menos una asistencia.
 export function diasTrabajados(asistencias, nombre, desdeDt, hastaDt) {
   if (!nombre) return 0;
+  // aISOLocal, no toISOString: el comentario decía "fecha local" pero el código
+  // usaba UTC. Con eso, un turno de noche (22:00–02:00) caía entero en el día
+  // siguiente y contaba como UN día trabajado en vez de dos —o al revés, según
+  // la hora—. Los días trabajados no pueden depender del huso de Greenwich.
   const dias = new Set(
     registrosDe(asistencias, nombre, desdeDt, hastaDt).map((r) =>
-      r.t.toISOString().slice(0, 10),
+      aISOLocal(r.t),
     ),
   );
   return dias.size;

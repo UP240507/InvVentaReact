@@ -4,9 +4,17 @@ import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { useAtajos } from '../../hooks/useAtajos';
+import {
+  OpsHeader,
+  OpsTabs,
+  OpsButton,
+  OpsEmpty,
+  OpsModal,
+} from '../../components/ui';
 import {
   ChefHat,
-  CheckCircle2,
+  ArrowLeft,
   Clock,
   Trash2,
   CheckSquare,
@@ -42,18 +50,16 @@ const TicketTimer = ({ horaEntrada }) => {
     return () => clearInterval(interval);
   }, [horaEntrada]);
 
-  let colorClass =
-    'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-brand-cesped/10 dark:text-brand-cesped dark:border-brand-cesped/20';
+  let colorClass = 'bg-ops-ok/10 text-ops-ok border border-ops-ok/30';
   if (minutos >= 15)
     colorClass =
-      'bg-rose-50 text-rose-600 border border-rose-200 dark:bg-brand-arrecife/10 dark:text-brand-arrecife dark:border-brand-arrecife/20 animate-pulse';
+      'bg-ops-danger/10 text-ops-danger border border-ops-danger/30 animate-pulse';
   else if (minutos >= 10)
-    colorClass =
-      'bg-amber-50 text-amber-600 border border-amber-200 dark:bg-brand-ambar/10 dark:text-brand-ambar dark:border-brand-ambar/20';
+    colorClass = 'bg-ops-warn/10 text-ops-warn border border-ops-warn/30';
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest ${colorClass} shadow-sm`}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-ui text-xs font-black uppercase tracking-widest ${colorClass} shadow-sm`}
     >
       <Clock className="w-3.5 h-3.5" />
       {minutos} min
@@ -106,21 +112,17 @@ export default function KdsScreen() {
     estaciones[0] || 'Cocina',
   );
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(
-    document.documentElement.classList.contains('dark'),
-  );
+
+  // (Proyecto D · tanda 3) El claro/oscuro sale del store, no de una copia
+  // local: esta pantalla mantenía su propio useState y alternar aquí dejaba
+  // desincronizados el sidebar, PerfilScreen y el nuevo Ctrl+Shift+L.
+  const isDarkMode = useAppStore((s) => s.temaGlobal) === 'dark';
+  const toggleTheme = useAppStore((s) => s.toggleTemaGlobal);
 
   useEffect(() => {
     if (!estaciones.includes(estacionActiva))
       setEstacionActiva(estaciones[0] || 'Cocina');
   }, [estaciones, estacionActiva]);
-
-  const toggleTheme = () => {
-    const nuevo = !isDarkMode;
-    document.documentElement.classList.toggle('dark', nuevo);
-    localStorage.setItem('theme', nuevo ? 'dark' : 'light');
-    setIsDarkMode(nuevo);
-  };
 
   // ── Comandas visibles en esta estación ───────────────────────────────────
   // Reglas:
@@ -244,10 +246,55 @@ export default function KdsScreen() {
     setShowConfirmModal(false);
   };
 
+  // ─── ATAJOS DEL KDS (Proyecto D · tanda 3) ───────────────────────────────
+  // La cocina no usa ratón: hay grasa, prisa y a veces guantes. Los números
+  // marcan lista la comanda N de la columna (en el mismo orden en que se ven,
+  // que es por antigüedad) y las flechas cambian de estación.
+  //
+  // Solo 1..9: más allá el operador ya no cuenta de un vistazo y la tecla deja
+  // de ser más rápida que el dedo.
+  const atajosKds = {
+    arrowleft: {
+      descripcion: 'Estación anterior',
+      accion: () => {
+        const i = estaciones.indexOf(estacionActiva);
+        setEstacionActiva(
+          estaciones[(i - 1 + estaciones.length) % estaciones.length],
+        );
+      },
+    },
+    arrowright: {
+      descripcion: 'Estación siguiente',
+      accion: () => {
+        const i = estaciones.indexOf(estacionActiva);
+        setEstacionActiva(estaciones[(i + 1) % estaciones.length]);
+      },
+    },
+    escape: { descripcion: 'Salir del monitor', accion: salirDelKds },
+  };
+  if (comandasDeEstacion.length > 0) {
+    atajosKds['1'] = {
+      descripcion: 'Marcar lista la comanda 1…9',
+      accion: () => marcarEstacionLista(comandasDeEstacion[0]?.id),
+    };
+    for (let n = 2; n <= Math.min(9, comandasDeEstacion.length); n++) {
+      atajosKds[String(n)] = {
+        // Sin descripción: se documenta una sola línea (la del '1') en vez de
+        // nueve entradas que dicen lo mismo.
+        accion: () => marcarEstacionLista(comandasDeEstacion[n - 1]?.id),
+      };
+    }
+  }
+
+  useAtajos('kds', atajosKds, {
+    titulo: 'Monitor de cocina',
+    activo: !showConfirmModal,
+  });
+
   const EstacionIcon = iconoEstacion(estacionActiva);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-ui-obsidiana p-6 md:p-8 text-slate-800 dark:text-ui-text font-sans overflow-y-auto custom-scrollbar transition-colors duration-500 relative z-0">
+    <div className="min-h-screen bg-ops-panel-2 p-6 md:p-8 text-ops-ink font-sans overflow-y-auto custom-scrollbar transition-colors duration-lenta relative z-0">
       <div
         className="fixed inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none -z-10"
         style={{
@@ -258,105 +305,84 @@ export default function KdsScreen() {
       ></div>
 
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b-2 border-slate-200 dark:border-ui-border pb-6 relative z-10 gap-4">
-        <div className="flex items-center gap-5">
-          <button
-            onClick={salirDelKds}
-            className="p-3 bg-white dark:bg-ui-humo hover:bg-slate-100 dark:hover:bg-ui-border border-2 border-slate-200 dark:border-ui-border rounded-2xl transition-all active:scale-95 shadow-sm group"
-            title="Salir del monitor"
-          >
-            <ChefHat className="w-8 h-8 text-indigo-500 dark:text-brand-amatista group-hover:scale-110 transition-transform" />
-          </button>
-          <div>
-            <h1 className="text-3xl font-black font-syne text-slate-900 dark:text-brand-nacar tracking-tight">
-              Monitor de Producción
-            </h1>
-            <p className="text-slate-500 dark:text-ui-muted font-bold tracking-widest uppercase text-xs mt-1">
-              {comandasDeEstacion.length} pendiente
-              {comandasDeEstacion.length !== 1 ? 's' : ''} en {estacionActiva}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-          <button
-            onClick={toggleTheme}
-            className="p-3 bg-white dark:bg-ui-humo border-2 border-slate-200 dark:border-ui-border rounded-xl text-slate-500 dark:text-brand-ambar hover:bg-slate-100 dark:hover:bg-ui-border transition-all active:scale-95 shadow-sm"
-          >
-            {isDarkMode ? (
-              <Sun className="w-5 h-5" />
-            ) : (
-              <Moon className="w-5 h-5" />
-            )}
-          </button>
-          {(comandas_activas?.length || 0) > 0 && (
-            <button
-              onClick={() => setShowConfirmModal(true)}
-              className="flex items-center gap-2 px-5 py-3 bg-rose-50 dark:bg-brand-arrecife/10 hover:bg-rose-100 dark:hover:bg-brand-arrecife border-2 border-rose-200 dark:border-brand-arrecife/20 text-rose-600 dark:text-brand-arrecife dark:hover:text-ui-obsidiana rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-sm"
-            >
-              <Trash2 className="w-4 h-4" /> Purgar Todo
-            </button>
-          )}
-        </div>
+      <div className="border-b-2 border-ops-border pb-6 mb-6 relative z-10">
+        <OpsHeader
+          className="mb-0"
+          icono={ChefHat}
+          titulo="Monitor de Producción"
+          subtitulo={`${comandasDeEstacion.length} pendiente${comandasDeEstacion.length !== 1 ? 's' : ''} en ${estacionActiva}`}
+          scopeAtajos="kds"
+          acciones={
+            <>
+              <OpsButton
+                icono={isDarkMode ? Sun : Moon}
+                onClick={toggleTheme}
+                aria-label="Cambiar entre modo claro y oscuro"
+                className="px-3"
+              />
+              <OpsButton icono={ArrowLeft} onClick={salirDelKds} tecla="Esc">
+                Salir
+              </OpsButton>
+              {(comandas_activas?.length || 0) > 0 && (
+                <OpsButton
+                  variante="peligro"
+                  icono={Trash2}
+                  onClick={() => setShowConfirmModal(true)}
+                >
+                  Purgar todo
+                </OpsButton>
+              )}
+            </>
+          }
+        />
       </div>
 
       {/* PESTAÑAS POR ESTACIÓN */}
-      <div className="flex gap-3 mb-8 relative z-10 overflow-x-auto custom-scrollbar pb-2">
-        {estaciones.map((est) => {
-          const Icon = iconoEstacion(est);
-          const activa = est === estacionActiva;
-          const pend = conteoPorEstacion[est] || 0;
-          return (
-            <button
-              key={est}
-              onClick={() => setEstacionActiva(est)}
-              className={`px-6 py-3 rounded-2xl font-black text-sm whitespace-nowrap transition-all border-2 flex items-center gap-2.5 ${
-                activa
-                  ? 'bg-indigo-500 dark:bg-brand-amatista text-white dark:text-ui-obsidiana border-indigo-500 dark:border-brand-amatista shadow-lg shadow-indigo-500/30 dark:shadow-brand-amatista/30'
-                  : 'bg-white dark:bg-ui-humo text-slate-500 dark:text-ui-muted border-slate-200 dark:border-ui-border hover:border-slate-300 dark:hover:border-ui-muted'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              {est}
-              {pend > 0 && (
-                <span
-                  className={`text-[10px] font-black px-2 py-0.5 rounded-full ${activa ? 'bg-white/25 text-white dark:bg-ui-obsidiana/30 dark:text-ui-obsidiana' : 'bg-brand-arrecife text-white'}`}
-                >
-                  {pend}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <OpsTabs
+        className="mb-8 relative z-10"
+        valor={estacionActiva}
+        onChange={setEstacionActiva}
+        opciones={estaciones.map((est) => ({
+          id: est,
+          label: est,
+          icono: iconoEstacion(est),
+          badge: conteoPorEstacion[est] || 0,
+        }))}
+      />
 
       {/* GRID DE TICKETS DE LA ESTACIÓN ACTIVA */}
       <div className="relative z-10">
         {comandasDeEstacion.length === 0 ? (
-          <div className="h-[55vh] flex flex-col items-center justify-center text-slate-400 dark:text-ui-muted">
-            <EstacionIcon className="w-24 h-24 mb-6 opacity-20" />
-            <h2 className="text-3xl font-black font-syne opacity-50">
-              {estacionActiva} al día
-            </h2>
-            <p className="font-bold mt-2 uppercase tracking-widest text-xs">
-              Sin pendientes en esta estación
-            </p>
-          </div>
+          <OpsEmpty
+            icono={EstacionIcon}
+            titulo={`${estacionActiva} al día`}
+            descripcion="Sin pendientes en esta estación."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {comandasDeEstacion.map((orden) => {
+            {comandasDeEstacion.map((orden, idx) => {
               const itemsEstacion = orden._itemsEstacion;
+              // Número de tecla: solo hasta 9 (ver el comentario de atajosKds).
+              const tecla = idx < 9 ? idx + 1 : null;
               return (
                 <div
                   key={orden.id}
-                  className="bg-white/90 dark:bg-ui-humo/90 backdrop-blur-md border-2 border-slate-200 dark:border-ui-border rounded-[2rem] overflow-hidden shadow-xl transition-all duration-300"
+                  className="bg-ops-panel/95 backdrop-blur-md border-2 border-ops-border rounded-ui-lg overflow-hidden shadow-xl transition-all duration-media"
                 >
-                  <div className="p-5 flex justify-between items-start border-b-2 border-slate-100 dark:border-ui-border bg-slate-50/50 dark:bg-ui-obsidiana/30">
+                  <div className="p-5 flex justify-between items-start border-b-2 border-ops-border bg-ops-panel-2">
                     <div>
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-brand-nacar font-syne leading-none">
+                      <h3 className="text-2xl font-black text-ops-ink font-syne leading-none flex items-center gap-2.5">
+                        {tecla && (
+                          <kbd
+                            title={`Pulsa ${tecla} para marcar esta comanda lista`}
+                            className="text-sm font-black w-7 h-7 flex items-center justify-center rounded-ui bg-ops-accent/10 text-ops-accent border-2 border-ops-accent/30 shrink-0"
+                          >
+                            {tecla}
+                          </kbd>
+                        )}
                         {orden.mesa || 'Mostrador'}
                       </h3>
-                      <p className="text-[10px] font-black text-indigo-500 dark:text-brand-amatista mt-2 uppercase tracking-widest">
+                      <p className="text-[10px] font-black text-ops-accent mt-2 uppercase tracking-widest">
                         {orden.mesero} •{' '}
                         {orden.folio || String(orden.id).slice(-5)}
                       </p>
@@ -373,24 +399,24 @@ export default function KdsScreen() {
                         <div
                           key={itemId || idx}
                           onClick={() => toggleItem(orden.id, itemId)}
-                          className={`flex gap-3 p-4 rounded-2xl cursor-pointer transition-all border-2 ${
+                          className={`flex gap-3 p-4 rounded-ui cursor-pointer transition-all border-2 ${
                             listo
-                              ? 'bg-slate-50 dark:bg-ui-obsidiana/50 border-slate-100 dark:border-ui-border opacity-50 scale-[0.98]'
-                              : 'bg-white dark:bg-ui-obsidiana border-slate-100 dark:border-ui-border hover:border-indigo-300 dark:hover:border-brand-amatista/50 shadow-sm'
+                              ? 'bg-ops-panel-2 border-ops-border opacity-50 scale-[0.98]'
+                              : 'bg-white dark:bg-ops-bg border-ops-border hover:border-ops-accent/30 dark:hover:border-ops-accent/50 shadow-sm'
                           }`}
                         >
                           <div className="mt-0.5">
                             {listo ? (
-                              <CheckSquare className="w-6 h-6 text-emerald-500 dark:text-brand-cesped" />
+                              <CheckSquare className="w-6 h-6 text-ops-ok" />
                             ) : (
-                              <Square className="w-6 h-6 text-slate-300 dark:text-ui-muted" />
+                              <Square className="w-6 h-6 text-ops-muted" />
                             )}
                           </div>
                           <div>
                             <p
-                              className={`font-black text-lg leading-tight ${listo ? 'text-emerald-600 dark:text-brand-cesped line-through' : 'text-slate-800 dark:text-brand-nacar'}`}
+                              className={`font-black text-lg leading-tight ${listo ? 'text-ops-ok line-through' : 'text-ops-ink'}`}
                             >
-                              <span className="text-indigo-500 dark:text-brand-amatista mr-2 text-xl">
+                              <span className="text-ops-accent mr-2 text-xl">
                                 {item.cantidad}x
                               </span>
                               {item.nombre}
@@ -399,7 +425,7 @@ export default function KdsScreen() {
                               item.componentes.filter(
                                 (comp) => comp?.recetaId != null,
                               ).length > 0 && (
-                                <p className="text-xs font-bold text-slate-500 dark:text-ui-muted mt-1">
+                                <p className="text-xs font-bold text-ops-muted mt-1">
                                   Incluye:{' '}
                                   {item.componentes
                                     .filter((comp) => comp?.recetaId != null)
@@ -411,7 +437,7 @@ export default function KdsScreen() {
                                 </p>
                               )}
                             {nota && (
-                              <p className="text-xs font-black text-amber-700 dark:text-brand-ambar mt-2 bg-amber-100 dark:bg-brand-ambar/10 border border-amber-200 dark:border-brand-ambar/20 px-3 py-1.5 rounded-xl inline-block">
+                              <p className="text-xs font-black text-ops-warn mt-2 bg-ops-warn/15 border border-ops-warn/30 px-3 py-1.5 rounded-ui inline-block">
                                 📝 {nota}
                               </p>
                             )}
@@ -421,10 +447,10 @@ export default function KdsScreen() {
                     })}
                   </div>
 
-                  <div className="p-4 bg-slate-50/50 dark:bg-ui-obsidiana/30 border-t-2 border-slate-100 dark:border-ui-border">
+                  <div className="p-4 bg-ops-panel-2 border-t-2 border-ops-border">
                     <button
                       onClick={() => marcarEstacionLista(orden.id)}
-                      className="w-full py-4 rounded-2xl font-black text-sm tracking-widest uppercase transition-all active:scale-95 shadow-md bg-emerald-500 hover:bg-emerald-600 dark:bg-brand-cesped dark:hover:bg-[#00c98c] text-white dark:text-ui-obsidiana shadow-emerald-500/30 dark:shadow-[0_0_20px_rgba(0,229,160,0.3)] flex items-center justify-center gap-2"
+                      className="w-full py-4 rounded-ui font-black text-sm tracking-widest uppercase transition-all active:scale-95 shadow-md bg-ops-ok dark:hover:bg-[#00c98c] text-ops-ok-fg shadow-ops-ok/30 dark:shadow-[0_0_20px_rgba(0,229,160,0.3)] flex items-center justify-center gap-2"
                     >
                       <CheckCheck className="w-5 h-5" /> Marcar {estacionActiva}{' '}
                       lista
@@ -439,34 +465,34 @@ export default function KdsScreen() {
 
       {/* MODAL DE PURGA */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-ui-obsidiana/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ui-humo rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-slate-100 dark:border-ui-border animate-in zoom-in-95">
-            <div className="w-20 h-20 bg-rose-100 dark:bg-brand-arrecife/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-10 h-10 text-rose-500 dark:text-brand-arrecife" />
-            </div>
-            <h2 className="text-2xl font-black font-syne text-slate-900 dark:text-brand-nacar mb-2">
-              ¿Purgar Producción?
-            </h2>
-            <p className="text-slate-500 dark:text-ui-muted font-bold text-sm mb-8">
-              Cancelará <strong>todas</strong> las comandas activas. No se puede
-              deshacer.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={ejecutarLimpiezaTotal}
-                className="w-full bg-rose-500 hover:bg-rose-600 dark:bg-brand-arrecife dark:hover:bg-orange-600 text-white dark:text-ui-obsidiana py-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-rose-500/30 dark:shadow-brand-arrecife/20 transition-transform active:scale-95"
-              >
-                Sí, Purgar Todo
-              </button>
-              <button
+        <OpsModal
+          titulo="¿Purgar producción?"
+          icono={AlertTriangle}
+          ancho="max-w-sm"
+          onClose={() => setShowConfirmModal(false)}
+          pie={
+            <>
+              <OpsButton
+                className="flex-1"
                 onClick={() => setShowConfirmModal(false)}
-                className="w-full bg-slate-100 dark:bg-ui-obsidiana hover:bg-slate-200 dark:hover:bg-ui-border text-slate-600 dark:text-brand-nacar py-4 rounded-xl font-bold transition-colors"
               >
                 Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
+              </OpsButton>
+              <OpsButton
+                variante="cobro"
+                className="flex-1"
+                onClick={ejecutarLimpiezaTotal}
+              >
+                Sí, purgar
+              </OpsButton>
+            </>
+          }
+        >
+          <p className="text-ops-muted font-bold text-sm">
+            Cancelará <strong>todas</strong> las comandas activas, de todas las
+            estaciones. No se puede deshacer.
+          </p>
+        </OpsModal>
       )}
     </div>
   );

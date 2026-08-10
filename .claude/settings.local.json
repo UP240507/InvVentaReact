@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest *)",
+      "mcp__cd7b5b94-5eb2-46b9-901d-25bd3c03a5a6__get_advisors",
+      "mcp__cd7b5b94-5eb2-46b9-901d-25bd3c03a5a6__list_edge_functions",
+      "mcp__cd7b5b94-5eb2-46b9-901d-25bd3c03a5a6__list_migrations",
+      "mcp__cd7b5b94-5eb2-46b9-901d-25bd3c03a5a6__execute_sql",
+      "mcp__cd7b5b94-5eb2-46b9-901d-25bd3c03a5a6__list_tables",
+      "Bash(grep -n \"Túnel WebSocket\\\\|timeout-red\" src/store/useAppStore.js src/store/useSyncStore.js src/api/supabase.js)",
+      "Bash(cat e2e/.gitignore)",
+      "Bash(git check-ignore *)",
+      "Bash(npx playwright *)"
+    ]
+  }
+}

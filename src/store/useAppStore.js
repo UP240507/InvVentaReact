@@ -15,11 +15,28 @@ export function parseUTC(str) {
 // Estados que sacan una comanda de la fila activa (ya no se cocina ni se entrega).
 const ESTADOS_TERMINADOS = ['entregada', 'completada', 'cancelada'];
 
+// Tema claro/oscuro de arranque: preferencia guardada > preferencia del sistema.
+function temaInicial() {
+  try {
+    const guardado = localStorage.getItem('theme');
+    if (guardado === 'dark' || guardado === 'light') return guardado;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 export const useAppStore = create((set, get) => ({
   // ─── 1. ESTADO GLOBAL (RAM) ──────────────────────────────────────────────
   isLoading: false,
   toast: null,
-  temaGlobal: localStorage.getItem('theme') || 'light',
+  // (Proyecto D · tanda 3) MISMO criterio que el boot de App.jsx: sin
+  // preferencia guardada manda el sistema operativo. Si aquí asumiéramos
+  // 'light', en un equipo en modo oscuro el DOM arrancaría con .dark y el
+  // store diría 'light' → iconos al revés y primer toggle sin efecto.
+  temaGlobal: temaInicial(),
   temaColor: localStorage.getItem('tema_color') || 'terracota',
 
   configuracion: null,
@@ -36,6 +53,9 @@ export const useAppStore = create((set, get) => ({
   modificadores: [],
   staff: [],
   nominas: [],
+  gastos: [],
+  categorias_gasto: [],
+  gastos_recurrentes: [],
   roles_permisos: [],
   clientes: [],
   auditoria: [],
@@ -113,6 +133,9 @@ export const useAppStore = create((set, get) => ({
           modificadores: await localDB.modificadores.toArray(),
           staff: await localDB.staff.toArray(),
           nominas: await localDB.nominas.toArray(),
+          gastos: await localDB.gastos.toArray(),
+          categorias_gasto: await localDB.categorias_gasto.toArray(),
+          gastos_recurrentes: await localDB.gastos_recurrentes.toArray(),
           roles_permisos: await localDB.roles_permisos.toArray(),
           clientes: await localDB.clientes.toArray(),
           auditoria: await localDB.auditoria.toArray(),
@@ -176,6 +199,9 @@ export const useAppStore = create((set, get) => ({
         { data: auditoriaData },
         { data: asistenciasData },
         { data: comandasData },
+        { data: gastosData },
+        { data: categoriasGastoData },
+        { data: recurrentesData },
       ] = await conTimeout(
         Promise.all([
           supabase
@@ -271,6 +297,19 @@ export const useAppStore = create((set, get) => ({
             .neq('estado', 'entregada')
             .neq('estado', 'cancelada')
             .order('fecha_hora', { ascending: true }),
+          // ── Fase 2.5: gastos ──
+          supabase
+            .from('gastos')
+            .select('*')
+            .eq('restaurante_id', restauranteId)
+            .order('fecha', { ascending: false }),
+          // Las categorías de SISTEMA no llevan restaurante_id: la RLS ya
+          // decide qué ve cada tenant, así que aquí no se filtra por columna.
+          supabase.from('categorias_gasto').select('*').order('orden'),
+          supabase
+            .from('gastos_recurrentes')
+            .select('*')
+            .eq('restaurante_id', restauranteId),
         ]),
       );
 
@@ -307,6 +346,9 @@ export const useAppStore = create((set, get) => ({
         modificadores: modifData || [],
         staff: staffData || [],
         nominas: nominasData || [],
+        gastos: gastosData || [],
+        categorias_gasto: categoriasGastoData || [],
+        gastos_recurrentes: recurrentesData || [],
         roles_permisos: rolesData || [],
         clientes: clientesData || [],
         auditoria: auditoriaData || [],
@@ -338,6 +380,9 @@ export const useAppStore = create((set, get) => ({
           localDB.modificadores,
           localDB.staff,
           localDB.nominas,
+          localDB.gastos,
+          localDB.categorias_gasto,
+          localDB.gastos_recurrentes,
           localDB.roles_permisos,
           localDB.clientes,
           localDB.auditoria,
@@ -358,6 +403,9 @@ export const useAppStore = create((set, get) => ({
             await localDB.modificadores.bulkPut(safe(modifData));
             await localDB.staff.bulkPut(safe(staffData));
             await localDB.nominas.bulkPut(safe(nominasData));
+            await localDB.gastos.bulkPut(safe(gastosData));
+            await localDB.categorias_gasto.bulkPut(safe(categoriasGastoData));
+            await localDB.gastos_recurrentes.bulkPut(safe(recurrentesData));
             await localDB.roles_permisos.bulkPut(safe(rolesData));
             await localDB.clientes.bulkPut(safe(clientesData));
             await localDB.auditoria.bulkPut(safe(auditoriaData));
