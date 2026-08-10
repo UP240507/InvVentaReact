@@ -1,0 +1,12 @@
+-- Corrección del REVOKE de 20260810205611.
+--
+-- `REVOKE ... FROM anon` no quitó nada: el permiso no venía del rol `anon`
+-- sino del grant implícito a PUBLIC que Postgres pone en toda función nueva.
+-- En pg_proc.proacl se ve como `=X/postgres` — grantee vacío = PUBLIC —, y
+-- `anon` heredaba de ahí. Las otras tres funciones SECURITY DEFINER
+-- (decrementar_stock, canjear_puntos, registrar_visita_cliente) no lo tienen,
+-- así que a esas sí se les revocó bien en su día.
+--
+-- authenticated y service_role conservan su grant explícito, que es lo que
+-- usan las políticas de RLS al evaluar `restaurante_id = get_restaurante_id()`.
+REVOKE EXECUTE ON FUNCTION public.get_restaurante_id() FROM PUBLIC;
