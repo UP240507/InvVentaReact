@@ -30,3 +30,10 @@ e2e/.auth/
 # Tauri (artefactos de build Rust)
 src-tauri/target/
 src-tauri/gen/
+
+# Salida de build del service worker en desarrollo: se regenera en cada
+# `npm run dev` y ensuciaba el diff de cada sesión con ruido que nadie revisa.
+dev-dist/
+
+# Resultados de la última corrida de Playwright.
+test-results/
