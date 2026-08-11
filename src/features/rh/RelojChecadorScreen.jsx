@@ -16,8 +16,15 @@ import {
   LogOut,
   ShieldOff,
   ChevronLeft,
+  Users,
 } from 'lucide-react';
-import { entradaActiva, horasDesde } from '../../lib/Asistencias';
+import {
+  entradaActiva,
+  horasDesde,
+  plantillaActiva,
+  cierreSugerido,
+} from '../../lib/Asistencias';
+import { siguienteIdUnico, SERIE_ASISTENCIA } from '../../lib/IdVenta';
 
 export default function RelojChecadorScreen() {
   // PIN: las altas nuevas son de 6 dígitos; PINs legados de 4-5 se toleran
@@ -33,6 +40,23 @@ export default function RelojChecadorScreen() {
   const [salidaPendiente, setSalidaPendiente] = useState(null); // {empleado, horas, faltan}
   const [pinAdminSalida, setPinAdminSalida] = useState('');
   const [pinAdminError, setPinAdminError] = useState('');
+
+  // ── Plantilla activa: quién está dentro ahora mismo ──────────────────────
+  // Va detrás de un PIN y no a la vista porque este dispositivo está en la
+  // pared: si la lista saliera sola, cualquiera que pase vería a qué hora
+  // llega y se va todo el mundo. El horario de un compañero no es información
+  // de pasillo.
+  //
+  // El flag es `gestion` (Admin y Gerente) y NO `autoriza_salidas`: ver quién
+  // trabaja es supervisión, no autorización. `autoriza_salidas` incluye al
+  // Capitán de Meseros y excluye al Gerente, que para esto está al revés — el
+  // Gerente es justamente quien tiene que saberlo.
+  const [pinPlantilla, setPinPlantilla] = useState('');
+  const [pinPlantillaError, setPinPlantillaError] = useState('');
+  const [plantillaAbierta, setPlantillaAbierta] = useState(false);
+  const [pidiendoPlantilla, setPidiendoPlantilla] = useState(false);
+  const [quienAbrio, setQuienAbrio] = useState(null);
+  const [cierrePendiente, setCierrePendiente] = useState(null);
 
   const {
     staff,
@@ -65,6 +89,295 @@ export default function RelojChecadorScreen() {
     setTimeout(() => setFeedback(null), tipo === 'success' ? 2500 : 3000);
   };
 
+  /**
+   * Quién es el dueño de este PIN, si además tiene la capacidad que se pide.
+   *
+   * Se extrae porque ya hay dos sitios que preguntan lo mismo —autorizar una
+   * salida anticipada y abrir la plantilla activa— y la comprobación tiene tres
+   * partes fáciles de escribir a medias: el flag, que el empleado siga activo, y
+   * que el PIN puede estar en `pin` o en `pin_acceso` (legado). Dos copias de
+   * esto acabarían divergiendo en la parte que menos se ve, que es la del
+   * empleado dado de baja.
+   */
+  const buscarPorPin = (pinCrudo, flag) => {
+    const p = String(pinCrudo).trim();
+    if (!p) return null;
+    return (
+      (staff || []).find((s) => {
+        const rolS = s.rol || s.puesto || '';
+        const activo =
+          s.activo !== false && s.activo !== 'false' && s.activo !== 0;
+        const p1 = String(s.pin ?? '').trim();
+        const p2 = String(s.pin_acceso ?? '').trim();
+        return (
+          tieneFlag(capDeRol(rolS), flag) &&
+          activo &&
+          ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
+        );
+      }) || null
+    );
+  };
+
+  /**
+   * Escribe una marca del checador. Una sola puerta para los cuatro caminos que
+   * las producen: la entrada del empleado, su salida, la salida anticipada
+   * autorizada, y el cierre desde la plantilla activa.
+   *
+   * `fechaHora` es un parámetro y no `new Date()` a propósito: cerrar un
+   * registro olvidado tiene que poder guardar una hora del pasado. Ver
+   * `cierreSugerido` en `lib/Asistencias.js` — de esta fecha depende lo que la
+   * nómina paga.
+   */
+  const escribirMarca = useCallback(
+    ({ tipo, empleadoId, nombre, restauranteId, fechaHora }) => {
+      const registro = {
+        // `Date.now()` lo comparten todos los dispositivos: dos cierres en el
+        // mismo milisegundo darían dos filas con la misma clave. Ver
+        // `lib/IdVenta.js`, que es donde se resolvió hoy para ventas y comandas.
+        id: siguienteIdUnico({ serie: SERIE_ASISTENCIA }),
+        empleado_id: String(empleadoId),
+        empleado_nombre: nombre,
+        tipo,
+        fecha_hora: fechaHora,
+        restaurante_id: restauranteId,
+      };
+      enqueueAction('asistencias', 'upsert', registro);
+      useAppStore.setState((prev) => ({
+        asistencias: [registro, ...(prev.asistencias || [])],
+      }));
+      // Cerrar la sesión del empleado sólo si es SU salida la que se registra:
+      // una entrada no cierra nada, y la salida de un compañero tampoco puede
+      // echar de la tablet a quien está dentro.
+      if (
+        tipo === 'salida' &&
+        String(empleadoActivo?.id) === String(empleadoId)
+      ) {
+        cerrarSesionEmpleado();
+      }
+      return registro;
+    },
+    [enqueueAction, empleadoActivo, cerrarSesionEmpleado],
+  );
+
+  const tenantId = () =>
+    configuracion?.restaurante_id || useAuthStore.getState().restauranteId;
+
+  const abrirPlantilla = () => {
+    const p = String(pinPlantilla).trim();
+    if (p.length < PIN_MIN) {
+      setPinPlantillaError('PIN incompleto.');
+      return;
+    }
+    const quien = buscarPorPin(p, 'gestion');
+    if (!quien) {
+      setPinPlantillaError('PIN inválido para ver la plantilla.');
+      setPinPlantilla('');
+      return;
+    }
+    setQuienAbrio(quien);
+    setPinPlantilla('');
+    setPinPlantillaError('');
+    setPidiendoPlantilla(false);
+    setPlantillaAbierta(true);
+
+    // Queda en auditoría: consultar el horario de la plantilla es un acto de
+    // supervisión, y un acceso que no deja rastro es un acceso que nadie puede
+    // revisar después. Nivel informativo, no alerta.
+    registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quien.nombre,
+      accion: 'CONSULTA_PLANTILLA_ACTIVA',
+      detalles: `${quien.nombre} consultó quién está dentro desde el checador.`,
+      nivel: 'info',
+      modulo: 'Checador',
+    });
+  };
+
+  const cerrarPlantilla = () => {
+    setPlantillaAbierta(false);
+    setQuienAbrio(null);
+    setCierrePendiente(null);
+  };
+
+  /**
+   * ── LA REGLA DE AUTORIDAD, QUE NO ES LA MISMA QUE LA DE VER ────────────────
+   * Ver la plantilla exige `gestion` (Admin y Gerente). Cerrar una salida
+   * ANTICIPADA exige `autoriza_salidas`, que el Gerente NO tiene.
+   *
+   * Podría parecer inconsistente y es justo lo contrario: el candado de jornada
+   * ya le niega al Gerente autorizar una salida anticipada por la puerta de
+   * delante — el flujo normal del checador le pide el PIN de quien sí puede. Si
+   * este panel se lo permitiera, la misma persona conseguiría por la puerta de
+   * atrás lo que el sistema le acaba de negar, y el candado dejaría de ser un
+   * candado para ser una sugerencia.
+   *
+   * Así que aquí sólo se decide QUÉ tipo de cierre es. Cuando hace falta
+   * autorización y quien abrió el panel no la tiene, se reusa el modal de
+   * salida anticipada que ya existe y ya está probado, en vez de escribir un
+   * segundo camino que autorice lo mismo.
+   */
+  const clasificarCierre = (activo) => {
+    const enPlantilla = (staff || []).find(
+      (s) => String(s.id) === String(activo.empleadoId),
+    );
+
+    // ── POR QUÉ NO SE EXIGE QUE SIGA EN `staff` ──────────────────────────────
+    // Porque el caso más común de registro abierto es justamente el de alguien
+    // que ya no está. Se fue, no marcó salida, y en algún momento se le dio de
+    // baja: su fila de `staff` desaparece y su entrada se queda abierta para
+    // siempre.
+    //
+    // Y no había forma de cerrarla. El checador clásico pide el PIN del
+    // empleado para marcar su salida, y un empleado borrado no tiene PIN que
+    // teclear. Si además este panel exigiera la fila de `staff`, la única
+    // pantalla que ve el problema sería también incapaz de resolverlo — el
+    // registro quedaría visible y eterno.
+    //
+    // No hace falta: el nombre y el tenant viajan en la propia marca del
+    // checador, que es de donde `plantillaActiva` los saca. De `staff` sólo se
+    // necesitaba `exento_jornada`, y sin fila se asume `false`, que es el lado
+    // estricto — a falta de dato, la salida se trata como anticipada y pasa por
+    // la autorización que corresponda.
+    const empleado = enPlantilla || {
+      id: activo.empleadoId,
+      nombre: activo.nombre,
+      rol: activo.puesto || null,
+      restaurante_id: null, // lo resuelve `tenantId()` al escribir
+      _fueraDePlantilla: true,
+    };
+
+    const rolEmp = enPlantilla?.rol || enPlantilla?.puesto || '';
+    const exento = enPlantilla
+      ? tieneFlag(capDeRol(rolEmp), 'exento_jornada')
+      : false;
+    const jornada = Number(configuracion?.horas_jornada) || 0;
+    const anticipada = jornada > 0 && !exento && activo.horas < jornada;
+
+    return { empleado, anticipada, jornada, enPlantilla: Boolean(enPlantilla) };
+  };
+
+  const pedirCierre = (registro, { olvidado = false } = {}) => {
+    const { empleado, anticipada, jornada, enPlantilla } =
+      clasificarCierre(registro);
+
+    const sugerido = cierreSugerido(registro.entrada, {
+      horasJornada: jornada,
+      ahora: horaActual,
+    });
+
+    // Sin jornada configurada no se puede deducir a qué hora se fue quien
+    // olvidó marcar, y esa hora es lo que la nómina paga. Se dice en vez de
+    // inventarla.
+    if (sugerido.tipo === 'indeterminable') {
+      mostrarFeedback(
+        'error',
+        'Configura las horas de jornada para poder cerrar un registro olvidado.',
+      );
+      return;
+    }
+
+    // Salida anticipada sin autoridad para autorizarla → al modal que ya existe.
+    // Un olvido no es una salida anticipada: se está registrando una jornada
+    // COMPLETA, así que el candado no aplica.
+    if (anticipada && !olvidado) {
+      const tieneAutoridad = quienAbrio
+        ? tieneFlag(
+            capDeRol(quienAbrio.rol || quienAbrio.puesto || ''),
+            'autoriza_salidas',
+          )
+        : false;
+
+      if (!tieneAutoridad) {
+        const faltanMin = Math.max(
+          0,
+          Math.round((jornada - registro.horas) * 60),
+        );
+        setPlantillaAbierta(false);
+        setSalidaPendiente({ empleado, horas: registro.horas, faltanMin });
+        setPinAdminSalida('');
+        setPinAdminError('');
+        return;
+      }
+    }
+
+    setCierrePendiente({
+      registro,
+      empleado,
+      olvidado,
+      anticipada: anticipada && !olvidado,
+      sugerido,
+      enPlantilla,
+    });
+  };
+
+  const confirmarCierre = () => {
+    const { registro, empleado, olvidado, anticipada, sugerido, enPlantilla } =
+      cierrePendiente;
+
+    escribirMarca({
+      tipo: 'salida',
+      empleadoId: empleado.id,
+      nombre: empleado.nombre,
+      restauranteId: empleado.restaurante_id || tenantId(),
+      fechaHora: sugerido.fecha.toISOString(),
+    });
+
+    const quien = quienAbrio?.nombre || 'Gestión';
+    const horas = Number(sugerido.horas || 0).toFixed(2);
+
+    registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quien,
+      // Tres acciones distintas y no una: un olvido corregido a mano y una
+      // salida normal cerrada por el encargado no son el mismo hecho, y quien
+      // audite un mes después no tiene forma de distinguirlos si comparten
+      // etiqueta.
+      accion: olvidado
+        ? 'CIERRE_REGISTRO_OLVIDADO'
+        : anticipada
+          ? 'SALIDA_ANTICIPADA'
+          : 'SALIDA_CERRADA_POR_GESTION',
+      modulo: 'CHECADOR',
+      nivel: olvidado || anticipada ? 'warning' : 'info',
+      detalles:
+        (enPlantilla === false ? '[Fuera de plantilla] ' : '') +
+        (olvidado
+          ? `${empleado.nombre} tenía la entrada abierta desde ${new Date(registro.desde).toLocaleString('es-MX')}. ` +
+            `${quien} la cerró aplicando la jornada configurada (${horas} hrs) a las ` +
+            `${sugerido.fecha.toLocaleString('es-MX')}. La hora real de salida se desconoce.`
+          : `${quien} registró la salida de ${empleado.nombre} con ${horas} hrs` +
+            (anticipada
+              ? ` de ${Number(configuracion?.horas_jornada) || 0} hrs de jornada (anticipada).`
+              : '.')),
+    });
+
+    setCierrePendiente(null);
+    mostrarFeedback(
+      'success',
+      olvidado
+        ? `Registro de ${empleado.nombre} cerrado con ${horas} hrs de jornada.`
+        : `Salida de ${empleado.nombre} registrada.`,
+      empleado.nombre,
+      empleado.rol || empleado.puesto,
+    );
+  };
+
+  // Se calcula sólo con el panel abierto: recorrer las asistencias en cada tic
+  // del reloj para una lista que nadie está mirando es gasto por gasto.
+  //
+  // Y se recalcula con `horaActual`, que ya avanza cada segundo para el reloj de
+  // la pantalla. Por eso el tiempo dentro sube solo sin realtime: `asistencias`
+  // no está en el canal, pero las horas no dependen de que llegue nada nuevo —
+  // dependen de que pase el tiempo. Lo único que necesita recarga es una marca
+  // NUEVA, y esa la produce este mismo dispositivo.
+  const plantilla = plantillaAbierta
+    ? plantillaActiva(asistencias, {
+        staff,
+        ahora: horaActual,
+        horasJornada: Number(configuracion?.horas_jornada) || 0,
+      })
+    : null;
+
   // Salida anticipada autorizada: un Admin teclea SU PIN → se registra la
   // salida con rastro de auditoría (quién autorizó, horas cumplidas vs jornada).
   const autorizarSalidaAnticipada = async () => {
@@ -73,18 +386,7 @@ export default function RelojChecadorScreen() {
       setPinAdminError('PIN incompleto.');
       return;
     }
-    const autorizador = (staff || []).find((s) => {
-      const rolS = s.rol || s.puesto || '';
-      const activo =
-        s.activo !== false && s.activo !== 'false' && s.activo !== 0;
-      const p1 = String(s.pin ?? '').trim();
-      const p2 = String(s.pin_acceso ?? '').trim();
-      return (
-        tieneFlag(capDeRol(rolS), 'autoriza_salidas') &&
-        activo &&
-        ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
-      );
-    });
+    const autorizador = buscarPorPin(p, 'autoriza_salidas');
     if (!autorizador) {
       setPinAdminError('PIN inválido: solo el Admin puede autorizar.');
       setPinAdminSalida('');
@@ -97,21 +399,13 @@ export default function RelojChecadorScreen() {
       configuracion?.restaurante_id ||
       useAuthStore.getState().restauranteId;
 
-    const registroSalida = {
-      id: Date.now(),
-      empleado_id: String(empleado.id),
-      empleado_nombre: empleado.nombre,
+    escribirMarca({
       tipo: 'salida',
-      fecha_hora: new Date().toISOString(),
-      restaurante_id: restauranteId,
-    };
-    enqueueAction('asistencias', 'upsert', registroSalida);
-    useAppStore.setState((prev) => ({
-      asistencias: [registroSalida, ...(prev.asistencias || [])],
-    }));
-    if (String(empleadoActivo?.id) === String(empleado.id)) {
-      cerrarSesionEmpleado();
-    }
+      empleadoId: empleado.id,
+      nombre: empleado.nombre,
+      restauranteId,
+      fechaHora: new Date().toISOString(),
+    });
 
     registrarAuditoria({
       usuario: autorizador.nombre,
@@ -284,19 +578,13 @@ export default function RelojChecadorScreen() {
           return;
         }
 
-        const nuevoRegistro = {
-          id: Date.now(),
-          empleado_id: String(empleado.id),
-          empleado_nombre: empleado.nombre,
+        escribirMarca({
           tipo: 'entrada',
-          fecha_hora: new Date().toISOString(),
-          restaurante_id: restauranteId,
-        };
-
-        enqueueAction('asistencias', 'upsert', nuevoRegistro);
-        useAppStore.setState((prev) => ({
-          asistencias: [nuevoRegistro, ...(prev.asistencias || [])],
-        }));
+          empleadoId: empleado.id,
+          nombre: empleado.nombre,
+          restauranteId,
+          fechaHora: new Date().toISOString(),
+        });
 
         abrirSesionEmpleado(empleado);
 
@@ -353,20 +641,13 @@ export default function RelojChecadorScreen() {
           }
         }
 
-        const registroSalida = {
-          id: Date.now(),
-          empleado_id: String(empleado.id),
-          empleado_nombre: empleado.nombre,
+        escribirMarca({
           tipo: 'salida',
-          fecha_hora: new Date().toISOString(),
-          restaurante_id: restauranteId,
-        };
-
-        enqueueAction('asistencias', 'upsert', registroSalida);
-
-        useAppStore.setState((prev) => ({
-          asistencias: [registroSalida, ...(prev.asistencias || [])],
-        }));
+          empleadoId: empleado.id,
+          nombre: empleado.nombre,
+          restauranteId,
+          fechaHora: new Date().toISOString(),
+        });
 
         if (String(empleadoActivo?.id) === String(empleado.id)) {
           cerrarSesionEmpleado();
@@ -395,6 +676,9 @@ export default function RelojChecadorScreen() {
       cerrarSesionEmpleado,
       navigate,
       user,
+      // Memoizada arriba con dependencias estables, así que entra en la lista
+      // sin reconstruir este callback en cada render.
+      escribirMarca,
     ],
   );
 
@@ -661,8 +945,313 @@ export default function RelojChecadorScreen() {
               Ya registré mi entrada — continuar →
             </button>
           )}
+
+          {/* Acceso a la plantilla activa. Discreto pero con nombre accesible:
+              en un dispositivo de pared, un botón sin etiqueta legible por
+              lector de pantalla es un botón que sólo existe para quien ve. */}
+          <button
+            onClick={() => {
+              setPidiendoPlantilla(true);
+              setPinPlantilla('');
+              setPinPlantillaError('');
+            }}
+            aria-label="Ver quién está trabajando ahora (requiere PIN)"
+            title="Ver quién está trabajando ahora"
+            className="w-full mt-2 py-3 text-xs font-black uppercase tracking-widest text-ops-muted hover:text-ops-info dark:hover:text-ops-info transition-colors flex items-center justify-center gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Quién está trabajando
+          </button>
         </div>
       </div>
+
+      {/* PIN para abrir la plantilla */}
+      {pidiendoPlantilla && (
+        <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-7 max-w-sm w-full shadow-2xl border-2 border-ops-border text-center animate-in zoom-in-95">
+            <div className="w-16 h-16 bg-ops-info/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Users className="w-8 h-8 text-ops-info" />
+            </div>
+            <h3 className="font-black text-ops-ink text-xl font-syne mb-1">
+              Quién está trabajando
+            </h3>
+            <p className="text-ops-muted text-[11px] font-bold mb-4">
+              El horario de la plantilla no es público. Teclea tu PIN de
+              administrador o gerente:
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              maxLength={PIN_MAX}
+              value={pinPlantilla}
+              onChange={(e) => {
+                setPinPlantilla(e.target.value.replace(/\D/g, ''));
+                setPinPlantillaError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') abrirPlantilla();
+                if (e.key === 'Escape') setPidiendoPlantilla(false);
+              }}
+              className="w-full text-center text-3xl tracking-[0.4em] font-black bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-border rounded-ui py-3 mb-2 text-ops-ink"
+              placeholder="••••••"
+            />
+            {pinPlantillaError && (
+              <p className="text-ops-danger text-xs font-black mb-2">
+                {pinPlantillaError}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button
+                onClick={() => setPidiendoPlantilla(false)}
+                className="py-3 rounded-ui font-black text-xs uppercase tracking-widest text-ops-muted border-2 border-ops-border hover:text-ops-ink transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={abrirPlantilla}
+                disabled={pinPlantilla.length < PIN_MIN}
+                className="py-3 rounded-ui font-black text-xs uppercase tracking-widest bg-ops-ink text-ops-danger-fg disabled:bg-ops-panel-2 disabled:text-ops-muted transition-colors"
+              >
+                Ver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* La plantilla */}
+      {plantillaAbierta && plantilla && (
+        <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-6 max-w-md w-full shadow-2xl border-2 border-ops-border animate-in zoom-in-95 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-1">
+              <div>
+                <h3 className="font-black text-ops-ink text-xl font-syne">
+                  Quién está trabajando
+                </h3>
+                <p className="text-ops-muted text-[11px] font-bold">
+                  {plantilla.activos.length === 1
+                    ? '1 persona dentro'
+                    : `${plantilla.activos.length} personas dentro`}
+                  {quienAbrio ? ` · consulta de ${quienAbrio.nombre}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={cerrarPlantilla}
+                aria-label="Cerrar"
+                className="text-ops-muted hover:text-ops-ink transition-colors font-black text-lg px-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            {plantilla.activos.length === 0 && (
+              <p className="text-ops-muted text-sm font-bold text-center py-8">
+                Nadie tiene entrada abierta ahora mismo.
+              </p>
+            )}
+
+            <ul className="divide-y divide-ops-border mt-3">
+              {plantilla.activos.map((a) => (
+                <li
+                  key={a.empleadoId}
+                  className="py-3 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-black text-ops-ink truncate">
+                      {a.nombre}
+                    </p>
+                    <p className="text-ops-muted text-[11px] font-bold">
+                      {a.puesto ? `${a.puesto} · ` : ''}
+                      desde{' '}
+                      {new Date(a.desde).toLocaleTimeString('es-MX', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <p
+                        className={`font-black tabular-nums ${
+                          a.jornadaCumplida ? 'text-ops-warn' : 'text-ops-ink'
+                        }`}
+                      >
+                        {a.horas.toFixed(1)} h
+                      </p>
+                      {a.jornadaCumplida && (
+                        <p className="text-ops-warn text-[10px] font-black uppercase tracking-widest">
+                          Jornada cumplida
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => pedirCierre(a)}
+                      aria-label={`Registrar la salida de ${a.nombre}`}
+                      title={`Registrar la salida de ${a.nombre}`}
+                      className="px-3 py-2 rounded-ui border-2 border-ops-border text-[10px] font-black uppercase tracking-widest text-ops-muted hover:text-ops-ink hover:border-ops-ink transition-colors flex items-center gap-1"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Salida
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Los olvidos van aparte y no sumados a la plantilla: mezclarlos
+                inflaría el número de gente dentro y esconderría el error de
+                captura entre los nombres correctos. */}
+            {plantilla.olvidados.length > 0 && (
+              <div className="mt-5 pt-4 border-t-2 border-ops-border">
+                <p className="text-ops-warn text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Sin salida registrada
+                </p>
+                <p className="text-ops-muted text-[11px] font-bold mb-3">
+                  Llevan más de {Math.round(plantilla.olvidados[0].horas)} horas
+                  con la entrada abierta. Nadie está dentro tanto tiempo: hay
+                  que cerrar el registro a mano.
+                </p>
+                <ul className="space-y-1">
+                  {plantilla.olvidados.map((o) => (
+                    <li
+                      key={o.empleadoId}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="font-bold text-ops-ink truncate">
+                        {o.nombre}
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-ops-muted text-[11px] font-bold tabular-nums">
+                          desde{' '}
+                          {new Date(o.desde).toLocaleString('es-MX', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          onClick={() => pedirCierre(o, { olvidado: true })}
+                          aria-label={`Cerrar el registro olvidado de ${o.nombre}`}
+                          title={`Cerrar el registro olvidado de ${o.nombre}`}
+                          className="px-2 py-1 rounded-ui border-2 border-ops-warn/50 text-[10px] font-black uppercase tracking-widest text-ops-warn hover:bg-ops-warn/10 transition-colors"
+                        >
+                          Cerrar
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación del cierre. Modal propio: `window.confirm` está vetado, y
+          aquí además hace falta ENSEÑAR la hora que se va a guardar — de ella
+          depende lo que la nómina paga, así que no puede ser una sorpresa. */}
+      {cierrePendiente && (
+        <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[130] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-7 max-w-sm w-full shadow-2xl border-2 border-ops-border text-center animate-in zoom-in-95">
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                cierrePendiente.olvidado ? 'bg-ops-warn/15' : 'bg-ops-info/15'
+              }`}
+            >
+              {cierrePendiente.olvidado ? (
+                <AlertTriangle className="w-8 h-8 text-ops-warn" />
+              ) : (
+                <LogOut className="w-8 h-8 text-ops-info" />
+              )}
+            </div>
+
+            <h3 className="font-black text-ops-ink text-xl font-syne mb-1">
+              {cierrePendiente.enPlantilla === false && (
+                <span className="block text-ops-muted text-[11px] font-bold normal-case tracking-normal mb-1">
+                  Ya no está en la plantilla — su registro se quedó abierto al
+                  darle de baja.
+                </span>
+              )}
+              {cierrePendiente.olvidado
+                ? 'Cerrar registro olvidado'
+                : 'Registrar salida'}
+            </h3>
+            <p className="text-ops-muted text-sm font-bold mb-4">
+              {cierrePendiente.empleado.nombre}
+            </p>
+
+            {cierrePendiente.olvidado ? (
+              <div className="text-left bg-ops-panel-2 dark:bg-ops-bg rounded-ui p-4 mb-4 space-y-2">
+                <p className="text-ops-muted text-[11px] font-bold">
+                  Entrada abierta desde{' '}
+                  <span className="text-ops-ink">
+                    {new Date(cierrePendiente.registro.desde).toLocaleString(
+                      'es-MX',
+                    )}
+                  </span>
+                </p>
+                <p className="text-ops-muted text-[11px] font-bold">
+                  Se guardará la salida a las{' '}
+                  <span className="text-ops-ink">
+                    {cierrePendiente.sugerido.fecha.toLocaleString('es-MX')}
+                  </span>{' '}
+                  — la jornada configurada de{' '}
+                  <span className="text-ops-ink">
+                    {cierrePendiente.sugerido.horas} hrs
+                  </span>
+                  .
+                </p>
+                <p className="text-ops-warn text-[11px] font-bold">
+                  No se paga el tiempo que estuvo el registro abierto. La hora
+                  real de salida no la sabe nadie; ésta es la jornada que le
+                  corresponde.
+                </p>
+              </div>
+            ) : (
+              <div className="text-left bg-ops-panel-2 dark:bg-ops-bg rounded-ui p-4 mb-4 space-y-2">
+                <p className="text-ops-muted text-[11px] font-bold">
+                  Entró a las{' '}
+                  <span className="text-ops-ink">
+                    {new Date(
+                      cierrePendiente.registro.desde,
+                    ).toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>{' '}
+                  · lleva{' '}
+                  <span className="text-ops-ink">
+                    {cierrePendiente.registro.horas.toFixed(1)} hrs
+                  </span>
+                </p>
+                {cierrePendiente.anticipada && (
+                  <p className="text-ops-warn text-[11px] font-black uppercase tracking-widest">
+                    Salida anticipada — queda en auditoría
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setCierrePendiente(null)}
+                className="py-3 rounded-ui font-black text-xs uppercase tracking-widest text-ops-muted border-2 border-ops-border hover:text-ops-ink transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarCierre}
+                className="py-3 rounded-ui font-black text-xs uppercase tracking-widest bg-ops-ink text-ops-danger-fg transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CANDADO DE JORNADA: salida antes de tiempo requiere PIN del dueño */}
       {salidaPendiente && (

@@ -210,3 +210,27 @@ export function siguienteIdVenta(opciones = {}) {
 export function siguienteIdComanda(opciones = {}) {
   return `CMD-${siguienteIdUnico({ ...opciones, serie: SERIE_COMANDA })}`;
 }
+
+/**
+ * Serie de las marcas del checador.
+ *
+ * No vive en `Folio.js` porque una asistencia **no se imprime**: no es un folio,
+ * es una clave primaria. Se le da serie propia por la misma razón que a las
+ * comandas — que su contador no lo empuje el resto del sistema.
+ *
+ * Importa que no colisione porque `lib/Nominas.js` empareja entradas con salidas
+ * para calcular el pago por horas: dos filas con la misma clave son un turno que
+ * se pierde o se duplica, y en los dos casos es dinero.
+ */
+export const SERIE_ASISTENCIA = 'A';
+
+/**
+ * Serie de las líneas de auditoría.
+ *
+ * La asigna `useAppStore.registrarAuditoria` y **no** quien llama. Siete
+ * pantallas registraban auditoría y cada una ponía su propio `id: Date.now()`:
+ * siete sitios donde escribir la misma decisión, y el store ya tenía que poner
+ * uno por defecto para las que no lo hacían. Con el `id` en el store hay una
+ * sola verdad, y arreglarlo aquí lo arregla para todas a la vez.
+ */
+export const SERIE_AUDITORIA = 'U';

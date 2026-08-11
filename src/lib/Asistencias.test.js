@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { asistenciasDelDia, entradaActiva, horasDesde } from './Asistencias';
+import {
+  asistenciasDelDia,
+  entradaActiva,
+  horasDesde,
+  ultimoRegistro,
+  plantillaActiva,
+  HORAS_PARA_OLVIDO,
+  cierreSugerido,
+} from './Asistencias';
 import { aISOLocal } from './Fechas';
 
 // Construye un registro a una hora LOCAL concreta, guardado en UTC — que es
@@ -123,5 +131,237 @@ describe('horasDesde', () => {
   it('sin entrada da cero, no NaN', () => {
     expect(horasDesde(null)).toBe(0);
     expect(horasDesde({ fecha_hora: 'basura' })).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// «¿Quién está dentro AHORA?» — pedido de Chris el 10-ago.
+//
+// Es otra pregunta que «¿tiene turno abierto hoy?», y la diferencia se nota a
+// una hora concreta: la madrugada. El turno de noche cruza la medianoche, así
+// que su entrada pertenece al día de AYER y cualquier filtro por día local
+// devolvería una plantilla vacía a la 1:00 — el único turno en el que el dueño
+// no está en el local y por tanto el único en el que necesita mirar la lista.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Como `registro`, pero con nombre, que es lo que la vista pinta. */
+const marca = (empleadoId, nombre, tipo, y, m, d, hh, mm = 0) => ({
+  empleado_id: empleadoId,
+  empleado_nombre: nombre,
+  tipo,
+  fecha_hora: new Date(y, m - 1, d, hh, mm, 0).toISOString(),
+});
+
+describe('ultimoRegistro — sin filtro de día', () => {
+  it('cruza la medianoche: encuentra la entrada de ayer a las 22:00', () => {
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 9, 22, 0)];
+    const u = ultimoRegistro(filas, 1);
+    expect(u?.tipo).toBe('entrada');
+  });
+
+  it('devuelve el más reciente aunque las filas lleguen desordenadas', () => {
+    const filas = [
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      marca(1, 'Diego', 'salida', 2026, 8, 10, 16, 0),
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 12, 0),
+    ];
+    expect(ultimoRegistro(filas, 1)?.tipo).toBe('salida');
+  });
+
+  it('ignora fechas corruptas en vez de dejar que ganen la comparación', () => {
+    const filas = [
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      { empleado_id: 1, tipo: 'salida', fecha_hora: 'no-es-una-fecha' },
+    ];
+    expect(ultimoRegistro(filas, 1)?.tipo).toBe('entrada');
+  });
+
+  it('sin id no adivina: devuelve null', () => {
+    expect(
+      ultimoRegistro([marca(1, 'D', 'entrada', 2026, 8, 10, 8)], null),
+    ).toBeNull();
+  });
+});
+
+describe('plantillaActiva', () => {
+  it('A LA 1:00 ve al que entró AYER a las 22:00 — el caso que motiva todo', () => {
+    // Con un filtro por día local, `activos` saldría vacío aquí.
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 9, 22, 0)];
+    const ahora = new Date(2026, 7, 10, 1, 0, 0);
+
+    const { activos } = plantillaActiva(filas, { ahora });
+
+    expect(activos).toHaveLength(1);
+    expect(activos[0].nombre).toBe('Diego');
+    expect(activos[0].horas).toBeCloseTo(3, 1);
+  });
+
+  it('a quien ya marcó salida no lo cuenta', () => {
+    const filas = [
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      marca(1, 'Diego', 'salida', 2026, 8, 10, 16, 0),
+    ];
+    const { activos } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 17, 0),
+    });
+    expect(activos).toHaveLength(0);
+  });
+
+  it('cuenta a quien salió y volvió a entrar', () => {
+    // Comida de dos horas en medio del turno: la última marca es entrada.
+    const filas = [
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      marca(1, 'Diego', 'salida', 2026, 8, 10, 14, 0),
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 16, 0),
+    ];
+    const { activos } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 18, 0),
+    });
+    expect(activos).toHaveLength(1);
+    // Cuenta desde la reentrada, no desde la mañana.
+    expect(activos[0].horas).toBeCloseTo(2, 1);
+  });
+
+  it('ordena de más antiguo a más reciente: primero quien lleva más dentro', () => {
+    const filas = [
+      marca(2, 'Sairi', 'entrada', 2026, 8, 10, 12, 0),
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      marca(3, 'Beto', 'entrada', 2026, 8, 10, 10, 0),
+    ];
+    const { activos } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 14, 0),
+    });
+    expect(activos.map((a) => a.nombre)).toEqual(['Diego', 'Beto', 'Sairi']);
+  });
+
+  it('marca jornada cumplida sólo si hay jornada configurada', () => {
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0)];
+    const ahora = new Date(2026, 7, 10, 17, 0); // 9 horas dentro
+
+    const conCandado = plantillaActiva(filas, { ahora, horasJornada: 8 });
+    expect(conCandado.activos[0].jornadaCumplida).toBe(true);
+
+    // Con el candado apagado (0), nadie se marca: un aviso que sale siempre
+    // deja de ser un aviso.
+    const sinCandado = plantillaActiva(filas, { ahora, horasJornada: 0 });
+    expect(sinCandado.activos[0].jornadaCumplida).toBe(false);
+  });
+
+  it('separa a quien olvidó marcar salida en vez de contarlo como presente', () => {
+    // Inflar la plantilla activa y esconder el error de captura entre los
+    // nombres correctos serían dos fallos a la vez.
+    const filas = [
+      marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0),
+      marca(2, 'Sairi', 'entrada', 2026, 8, 8, 9, 0), // hace dos días
+    ];
+    const { activos, olvidados } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 14, 0),
+    });
+
+    expect(activos.map((a) => a.nombre)).toEqual(['Diego']);
+    expect(olvidados.map((o) => o.nombre)).toEqual(['Sairi']);
+    expect(olvidados[0].horas).toBeGreaterThan(HORAS_PARA_OLVIDO);
+  });
+
+  it('un turno doble largo sigue siendo trabajo, no un olvido', () => {
+    // 15 horas es duro y es real. El corte está en 18 justamente para no
+    // llamar «error de captura» a un turno doble.
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 10, 7, 0)];
+    const { activos, olvidados } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 22, 0),
+    });
+    expect(activos).toHaveLength(1);
+    expect(olvidados).toHaveLength(0);
+  });
+
+  it('funciona sin `staff` cargado — el nombre viaja en la marca', () => {
+    // Es la razón de recorrer las asistencias y no la plantilla: en un teléfono
+    // recién emparejado `staff` puede estar vacío.
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0)];
+    const { activos } = plantillaActiva(filas, {
+      ahora: new Date(2026, 7, 10, 9, 0),
+    });
+    expect(activos[0].nombre).toBe('Diego');
+    expect(activos[0].puesto).toBeNull();
+  });
+
+  it('enriquece con el puesto cuando `staff` sí está', () => {
+    const filas = [marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0)];
+    const { activos } = plantillaActiva(filas, {
+      staff: [{ id: 1, puesto: 'Mesero' }],
+      ahora: new Date(2026, 7, 10, 9, 0),
+    });
+    expect(activos[0].puesto).toBe('Mesero');
+  });
+
+  it('sin asistencias no revienta', () => {
+    expect(plantillaActiva(null)).toEqual({ activos: [], olvidados: [] });
+    expect(plantillaActiva([])).toEqual({ activos: [], olvidados: [] });
+  });
+});
+
+describe('cierreSugerido — porque esto acaba en la nómina', () => {
+  it('un turno normal se cierra AHORA', () => {
+    const entrada = marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0);
+    const ahora = new Date(2026, 7, 10, 16, 0);
+    const c = cierreSugerido(entrada, { horasJornada: 8, ahora });
+    expect(c.tipo).toBe('ahora');
+    expect(c.fecha.getTime()).toBe(ahora.getTime());
+    expect(c.horas).toBeCloseTo(8, 1);
+  });
+
+  it('un OLVIDO se cierra a entrada + jornada, no a la hora actual', () => {
+    // El caso que cuesta dinero: cerrar con now() pagaría ~53 horas.
+    const entrada = marca(1, 'Diego', 'entrada', 2026, 8, 8, 9, 0);
+    const ahora = new Date(2026, 7, 10, 14, 0);
+
+    const c = cierreSugerido(entrada, { horasJornada: 8, ahora });
+
+    expect(c.tipo).toBe('jornada');
+    expect(c.horas).toBe(8);
+    // 8-ago 09:00 + 8 h = 8-ago 17:00, no 10-ago 14:00.
+    expect(c.fecha.getTime()).toBe(new Date(2026, 7, 8, 17, 0).getTime());
+    expect(c.fecha.getTime()).toBeLessThan(ahora.getTime());
+  });
+
+  it('sin jornada configurada NO inventa una hora', () => {
+    // Adivinar aquí sería adivinar sobre el sueldo de alguien.
+    const entrada = marca(1, 'Diego', 'entrada', 2026, 8, 8, 9, 0);
+    const c = cierreSugerido(entrada, {
+      horasJornada: 0,
+      ahora: new Date(2026, 7, 10, 14, 0),
+    });
+    expect(c.tipo).toBe('indeterminable');
+    expect(c.fecha).toBeNull();
+  });
+
+  it('con jornada apagada, un turno normal sigue cerrándose ahora', () => {
+    // El candado apagado no debe impedir marcar una salida corriente.
+    const entrada = marca(1, 'Diego', 'entrada', 2026, 8, 10, 8, 0);
+    const ahora = new Date(2026, 7, 10, 16, 0);
+    expect(cierreSugerido(entrada, { horasJornada: 0, ahora }).tipo).toBe(
+      'ahora',
+    );
+  });
+
+  it('una fecha corrupta no produce una salida inventada', () => {
+    const c = cierreSugerido({ fecha_hora: 'nada' }, { horasJornada: 8 });
+    expect(c.tipo).toBe('indeterminable');
+    expect(c.fecha).toBeNull();
+  });
+
+  it('el corte entre «ahora» y «jornada» es HORAS_PARA_OLVIDO', () => {
+    const entrada = marca(1, 'Diego', 'entrada', 2026, 8, 10, 0, 0);
+    const justoAntes = new Date(2026, 7, 10, 0, 0);
+    justoAntes.setHours(justoAntes.getHours() + HORAS_PARA_OLVIDO - 1);
+    const justoDespues = new Date(2026, 7, 10, 0, 0);
+    justoDespues.setHours(justoDespues.getHours() + HORAS_PARA_OLVIDO + 1);
+
+    expect(
+      cierreSugerido(entrada, { horasJornada: 8, ahora: justoAntes }).tipo,
+    ).toBe('ahora');
+    expect(
+      cierreSugerido(entrada, { horasJornada: 8, ahora: justoDespues }).tipo,
+    ).toBe('jornada');
   });
 });

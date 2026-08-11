@@ -178,7 +178,6 @@ export default function ComprasScreen() {
       }));
 
       registrarAuditoria({
-        id: Date.now(),
         fecha: new Date().toISOString(),
         usuario: user?.nombre || 'Sistema',
         accion: 'EMISIÓN_OC',
@@ -210,7 +209,6 @@ export default function ComprasScreen() {
     }));
 
     registrarAuditoria({
-      id: Date.now(),
       fecha: new Date().toISOString(),
       usuario: user?.nombre || 'Sistema',
       accion: 'CANCELACIÓN_OC',

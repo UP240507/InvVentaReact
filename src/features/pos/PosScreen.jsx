@@ -727,7 +727,6 @@ export default function PosScreen() {
           datosPago.canje.nombre,
         );
         registrarAuditoria({
-          id: Date.now() + 1,
           fecha: new Date().toISOString(),
           usuario: user?.nombre || 'Sistema',
           accion: 'CANJE_RECOMPENSA',
@@ -748,7 +747,6 @@ export default function PosScreen() {
     }
 
     registrarAuditoria({
-      id: Date.now(),
       fecha: new Date().toISOString(),
       usuario: user?.nombre || 'Sistema',
       accion: 'COBRO_TICKET',

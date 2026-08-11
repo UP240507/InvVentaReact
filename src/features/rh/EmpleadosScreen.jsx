@@ -361,7 +361,6 @@ export default function EmpleadosScreen() {
       }
 
       registrarAuditoria({
-        id: Date.now(),
         fecha: new Date().toISOString(),
         usuario: 'Administrador',
         accion: isEditing ? 'EDICIÓN_EMPLEADO' : 'ALTA_EMPLEADO',
