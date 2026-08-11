@@ -79,9 +79,32 @@ el APD expone la impresora al spooler de forma que se le puedan mandar bytes
 ESC/POS **en crudo**. El básico la trata como impresora de documentos y maqueta
 lo que le llega, que para nosotros es basura.
 
-- [ ] Valores por defecto. Si pregunta algo sobre configurar la **interfaz o el
-      puerto del dispositivo**, decir que no.
+- [ ] Valores por defecto durante la instalación.
 - [ ] Reiniciar si lo pide (mejor esta noche que mañana).
+
+### El asistente de registro, y la trampa que trae
+
+Al final sale **«Register, Change and Delete EPSON TM Printer»**. Aquí sí hay que
+tocar, y hay un valor por defecto que rompe la instalación en silencio:
+
+> **`Port Type` viene en `COM`.** Eso es puerto SERIE. Con una TM-T20II por USB,
+> guardar así crea una cola apuntando a `COM3:` que **nunca va a imprimir** — y
+> el COM3 puede pertenecer a otro dispositivo. El baud rate, la paridad y el
+> flow control que aparecen sólo tienen sentido en serie.
+
+- [ ] **`Port Type` → `USB`.**
+- [ ] **`Port` → `Auto setup`.** Resuelve el puerto cuando la impresora aparezca,
+      así que **no hace falta tenerla conectada** para registrar la cola. Por eso
+      este paso cabe en la parte A.
+- [ ] **`Set as Default Printer` DESMARCADO.** Viene así; dejarlo. Cambiar la
+      impresora predeterminada del equipo es de las cosas que más se notan.
+- [ ] Dejar el nombre `EPSON TM-T20II Receipt`. Es el que va a aparecer en el
+      desplegable del hub.
+- [ ] **Save Settings** → sección 5 → **Next**.
+- [ ] **No tocar «Test Print».** Sin impresora no significa nada.
+
+La cola aparecerá en Dispositivos e impresoras marcada como sin conexión. Es
+correcto: no hay aparato al otro lado todavía.
 
 ## A3 · Ver qué añadió el driver, él solo
 
@@ -121,11 +144,14 @@ Todo esto funciona hoy y deja cerrado medio checklist.
       el mismo, pero el directorio de trabajo y los permisos no — y lo que va a
       correr el cliente es el instalador.
 
-- [ ] **El selector se llena.** Ajustes → Hub → Impresora → «USB / Windows» →
-      desplegar «Impresora instalada». Debe listar «Microsoft Print to PDF» y lo
-      que haya. El hub enumera **todas** las colas de Windows, así que ver la
-      lista poblada ya prueba que habla con el spooler. **Es la mitad difícil del
-      paso B3, sin hardware.**
+- [ ] **El paso B3, entero, esta noche.** Ajustes → Hub → Impresora →
+      «USB / Windows» → desplegar «Impresora instalada». Con la cola ya
+      registrada en A2, **`EPSON TM-T20II Receipt` tiene que salir en la lista**.
+      Si sale, B3 está probado y mañana sólo queda enchufar e imprimir.
+
+  > **No mandes a imprimir desde el hub esta noche.** Sin impresora el trabajo se
+  > encola y falla cinco veces con espera creciente, y deja un fallido que luego
+  > hay que descartar a mano. Para probar impresión hoy, usa el simulador (abajo).
 
   > **No intentes imprimir a «Print to PDF».** `WindowsRaw` manda ESC/POS en
   > crudo y ese driver espera un documento: va a fallar o sacar basura, y ese
@@ -245,6 +271,23 @@ Si toca dejarlo:
 - [ ] Devolver la impresora predeterminada a la que estaba.
 - [ ] Anotar en qué paso se quedó y qué se vio.
 
+## Notas del README del APD
+
+Del `APD5_README_EN.TXT`, lo que cambia algo:
+
+- **La 5.11R1 arregló «USB-connected printer may not be recognized».** Es
+  literalmente el síntoma del 7-ago: se conectó la TM-T20II y Windows no la
+  detectó. No era el cable ni el código — era un bug conocido del driver. La 5.13
+  lo lleva incluido.
+- **Desinstalación limpia:** `APD_513_T20II.exe /uninstall`.
+- **§3.7 — si la impresora se comparte por red entre varios equipos, todos deben
+  usar la MISMA versión de APD.** No aplica a una USB que se lleva de un sitio a
+  otro, pero sí si en el restaurante la comparten desde otra PC: conviene saber
+  qué versión tienen antes de mezclar.
+- El paquete instala también **StatusAPI** en
+  `C:\Program Files (x86)\Epson\Advanced Printer Tool\`. No lo usamos —se
+  escribe crudo al spooler— pero sale en el `Compare-Object`.
+
 ## Qué puede y qué no puede desconfigurarse
 
 Hay dos configuraciones distintas y sólo una viaja con la impresora.
@@ -263,10 +306,23 @@ demuestra.
 
 ### Para deshacer lo de Windows
 
+**Lo limpio es el desinstalador de Epson**, que quita driver y StatusAPI de una
+vez (README §3.2):
+
+```
+APD_513_T20II.exe /uninstall
+```
+
+Mejor que ir borrando la cola y el driver a mano. El README además da el orden
+para recuperarse de un error de instalación: `/uninstall`, quitar la causa,
+reinstalar.
+
+A mano, si hiciera falta:
+
 - Configuración → Bluetooth y dispositivos → Impresoras → la cola nueva →
   **Quitar**.
-- Si hace falta el driver: `Get-PrinterDriver` para el nombre exacto y
-  `Remove-PrinterDriver -Name "..."` (con el spooler sin trabajos).
+- `Get-PrinterDriver` para el nombre exacto y `Remove-PrinterDriver -Name "..."`
+  (con el spooler sin trabajos).
 - Devolver la predeterminada a la que estaba.
 
 ---
