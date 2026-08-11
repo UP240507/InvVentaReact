@@ -159,4 +159,64 @@ técnica.
 
 ---
 
+---
+
+## 6 · Quién está dentro ahora mismo (pedido de Chris, 10-ago)
+
+El dueño necesita ver **los trabajadores activos en el reloj checador**: quién
+marcó entrada y no ha marcado salida, desde qué hora, y cuánto lleva.
+
+Hoy el checador sabe eso de UNA persona a la vez —te dice si tú tienes entrada
+abierta cuando teclas tu PIN— pero nadie puede ver la sala completa. Para saber
+quién está trabajando hay que preguntar.
+
+La lógica ya existe y es pura: `lib/Asistencias.js` tiene `entradaActiva()` y
+`horasDesde()`, y ya resuelven el caso difícil (el cruce de medianoche que
+rompía el checador de noche, que es cuando trabaja un restaurante). Falta
+aplicarlas sobre toda la plantilla en vez de sobre un empleado, y una vista.
+
+Dos cosas a decidir antes de escribir: dónde se ve —el checador es un
+dispositivo compartido, así que enseñar ahí la plantilla completa es hacerla
+pública— y si se actualiza sola. `asistencias` no está en el canal de realtime.
+
 _Creado el 5-ago-2026._
+_Punto 6 añadido el 10-ago-2026._
+
+---
+
+## 7 · El `id` de auditoría (10-ago)
+
+`registrarAuditoria` en `useAppStore` pone `id: logInfo.id || Date.now()`. Es la
+misma colisión que se cerró hoy para ventas y comandas, en su variante ruidosa:
+dos dispositivos registrando a la vez dan 23505 y la línea acaba en dead-letter
+—o sea que se pierde el rastro justo del momento con más actividad—.
+
+Hecho ya: las siete pantallas que pasaban su propio `id: Date.now()` ya no lo
+pasan. La decisión vive sólo en el store, así que cambiar ahí la generación lo
+arregla para todas a la vez. Falta ese último paso.
+
+### Una conclusión equivocada, y por qué se anota
+
+Se intentó centralizarlo con `siguienteIdUnico` y se revirtió porque «rompía
+seis pruebas de `useConectividad`». **Eso era falso.** La evidencia fue una
+corrida con el cambio (6 fallos) contra una sin él (en verde), y esa comparación
+no vale nada cuando la prueba es intermitente: minutos después, sin tocar una
+sola línea, la misma tanda dio 484/490 y acto seguido 490/490.
+
+Lo que sí parece pasar: los seis fallos son `waitFor` agotando su segundo por
+defecto, y el volcado del DOM que imprime el error **muestra el elemento
+presente**. Eso no es un fallo de lógica, es una máquina lenta. En el equipo de
+Chris `npm test` pasa; en el contenedor, con 25 archivos y `--isolate=false`,
+no siempre.
+
+La lección, que es la misma del `REVOKE` de esta mañana: una sola observación
+no distingue una causa de una coincidencia. Con un test inestable hace falta
+repetir antes de acusar a un cambio — o el arreglo bueno se descarta y el
+diagnóstico falso queda escrito.
+
+Pendiente entonces: re-aplicar el cambio y verificarlo en la máquina de Chris,
+no aquí.
+
+Va junto con el punto de fondo: `--isolate=false` merece una vuelta propia.
+Cuatro archivos han dado ya fallos dependientes del orden o del tiempo, y una
+suite que falla a ratos deja de ser una red de seguridad.
