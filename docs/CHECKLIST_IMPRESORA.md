@@ -1,5 +1,13 @@
 # Checklist — TM-T20II
 
+> **RESULTADO (11-ago-2026): ✅ pasó.** Los cuatro documentos salen correctos a
+> 48 columnas en una TM-T20II real. Lo que costó no fue el código: fue el
+> `Port Type = COM` por defecto del asistente del APD, que con una USB crea una
+> cola que nunca imprime y no dice por qué. Ese paso es el que hay que vigilar
+> en cada instalación en casa de un cliente.
+>
+> El checklist se conserva para la siguiente impresora, que será de otro modelo.
+
 Partido en dos: **lo que se hace esta noche sin la impresora** y **lo que exige
 tenerla delante**. Casi todo cae en la primera parte, y eso importa porque la
 impresora es de un restaurante que trabaja y no se puede tener secuestrada una
