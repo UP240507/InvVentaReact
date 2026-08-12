@@ -498,7 +498,13 @@ pub fn previsualizar(doc: &Documento, cols: usize) -> String {
     //
     // Se separa cada carácter con un espacio: no es bonito, pero ocupa las
     // columnas que va a ocupar de verdad y se lee como lo que es —texto grande—.
-    fn volcar(out: &mut String, linea: &mut String, alineacion: u8, doble: bool) {
+    fn volcar(
+        out: &mut String,
+        linea: &mut String,
+        alineacion: u8,
+        doble: bool,
+        cols: usize,
+    ) {
         let contenido = linea.trim_end();
         // Sin `trim_end` sobre el resultado: el último glifo también ocupa DOS
         // columnas, y recortarle la segunda dejaría la línea en 31 caracteres
@@ -554,7 +560,7 @@ pub fn previsualizar(doc: &Documento, cols: usize) -> String {
                 i += 3;
             }
             b'\n' => {
-                volcar(&mut out, &mut linea, alineacion, doble);
+                volcar(&mut out, &mut linea, alineacion, doble, cols);
                 i += 1;
             }
             _ => {
@@ -564,7 +570,7 @@ pub fn previsualizar(doc: &Documento, cols: usize) -> String {
         }
     }
     if !linea.is_empty() {
-        volcar(&mut out, &mut linea, alineacion, doble);
+        volcar(&mut out, &mut linea, alineacion, doble, cols);
     }
     out
 }
