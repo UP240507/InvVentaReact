@@ -504,16 +504,49 @@ export async function revocarDispositivo(id) {
  * Cambia la impresora. Solo desde la caja: un teléfono no debe poder
  * reconfigurar el hardware del local.
  */
-export async function configurarImpresora(transporte) {
+export async function configurarImpresora(transporte, anchoPapel = null) {
   if (!enTauri()) {
     return { ok: false, error: 'la impresora solo se configura desde la caja' };
   }
   try {
     return {
       ok: true,
-      transporte: await invocar('hub_configurar_impresora', { transporte }),
+      transporte: await invocar('hub_configurar_impresora', {
+        transporte,
+        // Va junto al transporte y no en su propia llamada porque son la misma
+        // decisión: qué impresora hay y con qué rollo. Guardarlas por separado
+        // permite el estado a medias —impresora nueva, ancho viejo— que se
+        // descubre en el papel.
+        anchoPapel,
+      }),
     };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+/**
+ * Columnas del papel: 32 para 58 mm, 48 para 80 mm.
+ *
+ * ── POR QUÉ NO ES UN AJUSTE DEL DOCUMENTO ───────────────────────────────────
+ * El ancho describe el ROLLO que hay puesto, no el ticket. El mismo documento
+ * sale de 32 o de 48 según en qué impresora caiga, así que meterlo en el JSON
+ * dejaría que un teléfono pidiera un ancho que el papel de la caja no tiene.
+ *
+ * ── EL DEFECTO QUE ESTO CIERRA (11-ago) ─────────────────────────────────────
+ * `ANCHO` estaba fijo en 32 porque el diseño se hizo contra el ticket de 58 mm
+ * de referencia. Al imprimir por primera vez en una TM-T20II real —que es de
+ * 80 mm— el papel salió correcto pero usando dos tercios del rollo. No se
+ * arregló antes a propósito: hacerlo configurable sin ver el resultado era
+ * escribir dos formatos y verificar cero.
+ */
+export const ANCHO_58 = 32;
+export const ANCHO_80 = 48;
+
+export async function configurarAncho(ancho, { origen = null } = {}) {
+  return pedir('/impresora/ancho', {
+    metodo: 'POST',
+    cuerpo: { ancho },
+    origen,
+  });
 }

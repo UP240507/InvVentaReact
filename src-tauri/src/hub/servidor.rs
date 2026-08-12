@@ -70,6 +70,10 @@ struct RespuestaSalud {
     cola: crate::hub::cola::Resumen,
     web: Option<String>,
     web_ms: u128,
+    /// Columnas del papel vigentes. Va aquí y no en una ruta propia porque la
+    /// pantalla del hub ya pide `/salud` cada 5 s: un endpoint más sería una
+    /// petición más para un dato que cabe en la que ya se hace.
+    ancho_papel: usize,
 }
 
 /// Determina la IP del equipo en la LAN abriendo un socket UDP "hacia" una
@@ -140,6 +144,7 @@ async fn salud(State(estado): State<Arc<EstadoHub>>) -> impl IntoResponse {
         cola: estado.cola.resumen(),
         web: estado.web.clone(),
         web_ms: estado.web_ms,
+        ancho_papel: estado.cola.ancho(),
     })
 }
 
@@ -178,11 +183,18 @@ async fn imprimir(
 /// Devuelve el ticket maquetado en texto plano, sin tocar la impresora.
 /// Permite revisar alineación y cortes de palabra sin gastar papel — y sin
 /// tener impresora, que es la situación mientras se escribe esto.
-async fn previsualizar(Json(doc): Json<Documento>) -> impl IntoResponse {
+async fn previsualizar(
+    State(estado): State<Arc<EstadoHub>>,
+    Json(doc): Json<Documento>,
+) -> impl IntoResponse {
+    // El ancho VIVO, no la constante: la vista previa tiene que mentir lo menos
+    // posible sobre lo que va a salir por el papel. Con la constante, cambiar a
+    // 80 mm dejaba la previsualización enseñando 32 columnas para siempre.
+    let cols = estado.cola.ancho();
     Json(json!({
         "ok": true,
-        "ancho": escpos::ANCHO,
-        "texto": escpos::previsualizar(&doc),
+        "ancho": cols,
+        "texto": escpos::previsualizar(&doc, cols),
     }))
 }
 
@@ -278,6 +290,39 @@ async fn listar_dispositivos(State(estado): State<Arc<EstadoHub>>) -> impl IntoR
 }
 
 #[derive(serde::Deserialize)]
+struct PeticionAncho {
+    #[serde(default)]
+    ancho: usize,
+}
+
+async fn configurar_ancho(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+    Json(p): Json<PeticionAncho>,
+) -> impl IntoResponse {
+    if !autorizado_admin(&estado, &headers) {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "ok": false })));
+    }
+    // Sólo los dos anchos que existen. Un número libre aquí produciría tickets
+    // que no caben en ningún rollo, y el fallo se vería en el papel y no antes.
+    let cols = match p.ancho {
+        n if n == escpos::ANCHO_80 => escpos::ANCHO_80,
+        n if n == escpos::ANCHO_58 => escpos::ANCHO_58,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "ok": false,
+                    "error": "ancho no soportado: 32 (58 mm) o 48 (80 mm)"
+                })),
+            )
+        }
+    };
+    estado.cola.cambiar_ancho(cols);
+    (StatusCode::OK, Json(json!({ "ok": true, "ancho": cols })))
+}
+
+#[derive(serde::Deserialize)]
 struct PeticionRevocar {
     #[serde(default)]
     id: String,
@@ -310,6 +355,7 @@ pub fn rutas(estado: Arc<EstadoHub>, dir_web: Option<std::path::PathBuf>) -> Rou
         .route("/cola", get(estado_cola))
         .route("/cola/reintentar", post(reintentar))
         .route("/cola/descartar", post(descartar))
+        .route("/impresora/ancho", post(configurar_ancho))
         .with_state(estado);
 
     let mut app = Router::new().nest("/hub", api).layer(
@@ -388,6 +434,7 @@ mod tests {
                 Box::new(crate::hub::transporte::Simulador::nueva(
                     std::env::temp_dir().join("invventa-srv-imp"),
                 )),
+                escpos::ANCHO_POR_DEFECTO,
                 dir.with_extension("cola.json"),
             ),
             token: token.to_string(),

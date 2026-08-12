@@ -18,8 +18,13 @@
 
 use crate::hub::documento::Documento;
 
-/// Columnas útiles en fuente A sobre papel de 58 mm.
-pub const ANCHO: usize = 32;
+/// Columnas útiles en fuente A. El papel de 58 mm da 32; el de 80 mm, 48.
+pub const ANCHO_58: usize = 32;
+pub const ANCHO_80: usize = 48;
+
+/// El que se usa mientras nadie configure nada. 58 mm es el rollo del
+/// clon barato, que es con lo que se hizo el diseño y lo que más hay.
+pub const ANCHO_POR_DEFECTO: usize = ANCHO_58;
 
 /// Marca estampada al pie de cada ticket de cobro.
 ///
@@ -43,11 +48,18 @@ const GS: u8 = 0x1D;
 
 pub struct Render {
     buf: Vec<u8>,
+    /// Columnas del papel. Es propiedad de LA IMPRESORA, no del documento: el
+    /// mismo ticket sale de 32 o de 48 según dónde se imprima, y meterlo en el
+    /// JSON dejaría que un cliente pidiera un ancho que el papel no tiene.
+    ancho: usize,
 }
 
 impl Render {
-    fn new() -> Self {
-        Self { buf: Vec::with_capacity(1024) }
+    fn new(ancho: usize) -> Self {
+        Self {
+            buf: Vec::with_capacity(1024),
+            ancho,
+        }
     }
 
     fn raw(&mut self, bytes: &[u8]) -> &mut Self {
@@ -92,14 +104,14 @@ impl Render {
     }
 
     fn separador(&mut self) -> &mut Self {
-        self.linea(&"-".repeat(ANCHO))
+        self.linea(&"-".repeat(self.ancho))
     }
 
     /// Regla gruesa. Se usa solo antes de los totales: en una tira de 32
     /// columnas todos los separadores iguales convierten el ticket en una
     /// escalera y el ojo no encuentra dónde empieza lo que hay que pagar.
     fn separador_fuerte(&mut self) -> &mut Self {
-        self.linea(&"=".repeat(ANCHO))
+        self.linea(&"=".repeat(self.ancho))
     }
 
     /// GS V 1 — corte parcial. Parcial y no total a propósito: deja un punto
@@ -236,17 +248,17 @@ pub fn envolver(s: &str, max: usize) -> Vec<String> {
 /// Etiqueta a la izquierda, valor pegado a la derecha, relleno en medio.
 /// Si no caben juntos, se recorta la ETIQUETA y nunca el valor: un total
 /// truncado es un ticket inservible; una etiqueta truncada sigue leyéndose.
-pub fn dos_columnas(izq: &str, der: &str) -> String {
-    let der = recortar(der, ANCHO);
-    let espacio = ANCHO.saturating_sub(ancho(&der));
+pub fn dos_columnas(izq: &str, der: &str, cols: usize) -> String {
+    let der = recortar(der, cols);
+    let espacio = cols.saturating_sub(ancho(&der));
     let izq = recortar(izq, espacio.saturating_sub(1));
-    let relleno = ANCHO.saturating_sub(ancho(&izq) + ancho(&der));
+    let relleno = cols.saturating_sub(ancho(&izq) + ancho(&der));
     format!("{}{}{}", izq, " ".repeat(relleno), der)
 }
 
 /// Convierte un documento en la tira de bytes que se le manda a la impresora.
-pub fn render(doc: &Documento) -> Vec<u8> {
-    let mut r = Render::new();
+pub fn render(doc: &Documento, cols: usize) -> Vec<u8> {
+    let mut r = Render::new(cols);
     r.init().codepage_850();
 
     // ── Encabezado ──────────────────────────────────────────────────────────
@@ -260,15 +272,15 @@ pub fn render(doc: &Documento) -> Vec<u8> {
         // dos renglones gigantes que se comen el encabezado entero. La regla es
         // "grande si cabe entero, normal si no": el nombre completo importa más
         // que el tamaño, pero cuando ambos se pueden tener, se tienen.
-        let grande = doc.tipo == "comanda" || ancho(&doc.titulo) <= ANCHO / 2;
+        let grande = doc.tipo == "comanda" || ancho(&doc.titulo) <= cols / 2;
         r.doble(grande).negrita(true);
-        for l in envolver(&doc.titulo, if grande { ANCHO / 2 } else { ANCHO }) {
+        for l in envolver(&doc.titulo, if grande { cols / 2 } else { cols }) {
             r.linea(&l);
         }
         r.negrita(false).doble(false);
     }
     if !doc.subtitulo.is_empty() {
-        for l in envolver(&doc.subtitulo, ANCHO) {
+        for l in envolver(&doc.subtitulo, cols) {
             r.linea(&l);
         }
     }
@@ -284,7 +296,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
         if dato.trim().is_empty() {
             continue;
         }
-        for l in envolver(dato, ANCHO) {
+        for l in envolver(dato, cols) {
             r.linea(&l);
         }
     }
@@ -295,7 +307,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
         r.separador();
         r.alinear(1).negrita(true);
         for aviso in &doc.avisos {
-            for l in envolver(aviso, ANCHO) {
+            for l in envolver(aviso, cols) {
                 r.linea(&l);
             }
         }
@@ -309,7 +321,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
             if m.valor.is_empty() {
                 continue;
             }
-            r.linea(&dos_columnas(&format!("{}:", m.etiqueta), &m.valor));
+            r.linea(&dos_columnas(&format!("{}:", m.etiqueta), &m.valor, cols));
         }
     }
 
@@ -320,7 +332,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
         // comanda no hay dinero y el nombre ocupa toda la tira, así que un
         // "IMPORTE" ahí sería un título de una columna que no existe.
         if !doc.tipo.is_empty() && doc.tipo != "comanda" {
-            r.linea(&dos_columnas("CANT DESCRIPCION", "IMPORTE"));
+            r.linea(&dos_columnas("CANT DESCRIPCION", "IMPORTE", cols));
             r.separador();
         }
         for linea in &doc.cuerpo {
@@ -332,7 +344,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
                 // todo el ancho. En negrita y con la cantidad delante, que es
                 // lo que cocina busca de un vistazo.
                 r.negrita(true);
-                let disponible = ANCHO.saturating_sub(sangria);
+                let disponible = cols.saturating_sub(sangria);
                 for (i, l) in envolver(&linea.nombre, disponible).iter().enumerate() {
                     if i == 0 {
                         r.linea(&format!("{}{}", cant, l));
@@ -346,14 +358,14 @@ pub fn render(doc: &Documento) -> Vec<u8> {
                 // el nombre, para que nunca se lo coma un platillo de nombre
                 // largo.
                 let ancho_importe = ancho(&linea.importe) + 1;
-                let disponible = ANCHO
+                let disponible = cols
                     .saturating_sub(sangria)
                     .saturating_sub(ancho_importe)
                     .max(1);
                 let partes = envolver(&linea.nombre, disponible);
                 for (i, l) in partes.iter().enumerate() {
                     if i == 0 {
-                        r.linea(&dos_columnas(&format!("{}{}", cant, l), &linea.importe));
+                        r.linea(&dos_columnas(&format!("{}{}", cant, l), &linea.importe, cols));
                     } else {
                         r.linea(&format!("{}{}", " ".repeat(sangria), l));
                     }
@@ -361,7 +373,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
             }
 
             for sub in &linea.sublineas {
-                for l in envolver(sub, ANCHO.saturating_sub(2)) {
+                for l in envolver(sub, cols.saturating_sub(2)) {
                     r.linea(&format!("  {}", l));
                 }
             }
@@ -369,7 +381,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
             if !linea.nota.is_empty() {
                 // La nota va marcada y sangrada: "sin cebolla" perdido entre
                 // nombres de platillo es exactamente lo que cocina no ve.
-                for l in envolver(&linea.nota, ANCHO.saturating_sub(4)) {
+                for l in envolver(&linea.nota, cols.saturating_sub(4)) {
                     r.linea(&format!("  > {}", l));
                 }
             }
@@ -393,14 +405,14 @@ pub fn render(doc: &Documento) -> Vec<u8> {
                 cerrado = true;
                 r.negrita(true).doble(true);
                 // A doble ancho caben la mitad de columnas: si se maquetara
-                // con ANCHO, el total se saldría del papel por la derecha.
-                let der = recortar(&t.valor, ANCHO / 2);
-                let izq = recortar(&t.etiqueta, (ANCHO / 2).saturating_sub(ancho(&der) + 1));
-                let relleno = (ANCHO / 2).saturating_sub(ancho(&izq) + ancho(&der));
+                // con el ancho completo, el total se saldría del papel por la derecha.
+                let der = recortar(&t.valor, cols / 2);
+                let izq = recortar(&t.etiqueta, (cols / 2).saturating_sub(ancho(&der) + 1));
+                let relleno = (cols / 2).saturating_sub(ancho(&izq) + ancho(&der));
                 r.linea(&format!("{}{}{}", izq, " ".repeat(relleno), der));
                 r.doble(false).negrita(false);
             } else {
-                r.linea(&dos_columnas(&t.etiqueta, &t.valor));
+                r.linea(&dos_columnas(&t.etiqueta, &t.valor, cols));
             }
         }
     }
@@ -414,7 +426,7 @@ pub fn render(doc: &Documento) -> Vec<u8> {
                 r.raw(b"\n");
                 continue;
             }
-            for l in envolver(p, ANCHO) {
+            for l in envolver(p, cols) {
                 r.linea(&l);
             }
         }
@@ -462,8 +474,8 @@ pub fn render(doc: &Documento) -> Vec<u8> {
 /// encabezado y la marca están mal centrados cuando en el papel salen bien —
 /// una vista previa que miente sobre el resultado es peor que no tenerla,
 /// porque manda a arreglar algo que no está roto.
-pub fn previsualizar(doc: &Documento) -> String {
-    let bytes = render(doc);
+pub fn previsualizar(doc: &Documento, cols: usize) -> String {
+    let bytes = render(doc, cols);
     let mut out = String::new();
     let mut linea = String::new();
     let mut alineacion: u8 = 0;
@@ -473,7 +485,7 @@ pub fn previsualizar(doc: &Documento) -> String {
     //
     // ── POR QUÉ EL DOBLE ANCHO SE REPRESENTA Y NO SE IGNORA ─────────────────
     // A doble ancho cada glifo ocupa DOS columnas del papel, y por eso el
-    // renderizador maqueta esas líneas contra `ANCHO / 2` (ver los totales con
+    // renderizador maqueta esas líneas contra la mitad del ancho (ver los totales con
     // énfasis). Si la vista previa las pintara a ancho sencillo, «TOTAL
     // $567.00» saldría como 16 caracteres sueltos pegados a la izquierda
     // —pareciendo desalineado y corto— cuando en el papel llena la tira y el
@@ -505,8 +517,8 @@ pub fn previsualizar(doc: &Documento) -> String {
             contenido.chars().count()
         };
         let sangria = match alineacion {
-            1 => ANCHO.saturating_sub(n) / 2,
-            2 => ANCHO.saturating_sub(n),
+            1 => cols.saturating_sub(n) / 2,
+            2 => cols.saturating_sub(n),
             _ => 0,
         };
         out.push_str(&" ".repeat(sangria));
@@ -635,23 +647,23 @@ mod tests {
     fn el_ancho_se_mide_en_caracteres_no_en_bytes() {
         // "Café" son 5 bytes y 4 caracteres. Si se alineara por bytes, cada
         // acento correría la columna de importes un espacio a la izquierda.
-        let l = dos_columnas("Café", "$10.00");
-        assert_eq!(l.chars().count(), ANCHO);
+        let l = dos_columnas("Café", "$10.00", ANCHO_58);
+        assert_eq!(l.chars().count(), ANCHO_58);
     }
 
     #[test]
     fn dos_columnas_siempre_ocupa_el_ancho_exacto() {
         for (a, b) in [("A", "$1.00"), ("", ""), ("Subtotal", "$1,234.50")] {
-            assert_eq!(dos_columnas(a, b).chars().count(), ANCHO, "«{a}» / «{b}»");
+            assert_eq!(dos_columnas(a, b, ANCHO_58).chars().count(), ANCHO_58, "«{a}» / «{b}»");
         }
     }
 
     #[test]
     fn ante_falta_de_espacio_se_recorta_la_etiqueta_no_el_importe() {
         let largo = "Concepto absurdamente largo que no cabe de ninguna manera";
-        let l = dos_columnas(largo, "$1,234,567.89");
+        let l = dos_columnas(largo, "$1,234,567.89", ANCHO_58);
         assert!(l.ends_with("$1,234,567.89"), "el importe debe sobrevivir entero");
-        assert_eq!(l.chars().count(), ANCHO);
+        assert_eq!(l.chars().count(), ANCHO_58);
     }
 
     #[test]
@@ -683,12 +695,12 @@ mod tests {
             }],
             ..Default::default()
         };
-        assert!(!previsualizar(&doc).contains('$'));
+        assert!(!previsualizar(&doc, ANCHO_58).contains('$'));
     }
 
     #[test]
     fn el_ticket_alinea_el_importe_a_la_derecha() {
-        let vista = previsualizar(&doc_ticket());
+        let vista = previsualizar(&doc_ticket(), ANCHO_58);
         let linea = vista
             .lines()
             .find(|l| l.contains("$360.00"))
@@ -698,11 +710,11 @@ mod tests {
 
     #[test]
     fn ninguna_linea_se_pasa_del_ancho_del_papel() {
-        let vista = previsualizar(&doc_ticket());
+        let vista = previsualizar(&doc_ticket(), ANCHO_58);
         for l in vista.lines() {
             assert!(
-                l.chars().count() <= ANCHO,
-                "«{l}» mide {} y el papel da {ANCHO}",
+                l.chars().count() <= ANCHO_58,
+                "«{l}» mide {} y el papel da {ANCHO_58}",
                 l.chars().count()
             );
         }
@@ -712,7 +724,7 @@ mod tests {
     fn el_cajon_se_abre_despues_del_corte() {
         let mut doc = doc_ticket();
         doc.abrir_cajon = true;
-        let bytes = render(&doc);
+        let bytes = render(&doc, ANCHO_58);
         let corte = bytes
             .windows(3)
             .position(|w| w == [GS, b'V', 1])
@@ -726,7 +738,7 @@ mod tests {
 
     #[test]
     fn sin_abrir_cajon_no_se_emite_el_pulso() {
-        let bytes = render(&doc_ticket());
+        let bytes = render(&doc_ticket(), ANCHO_58);
         assert!(bytes.windows(2).all(|w| w != [ESC, b'p']));
     }
 
@@ -736,7 +748,7 @@ mod tests {
 
     #[test]
     fn todo_ticket_lleva_la_marca() {
-        assert!(previsualizar(&doc_ticket()).contains(MARCA));
+        assert!(previsualizar(&doc_ticket(), ANCHO_58).contains(MARCA));
     }
 
     #[test]
@@ -744,7 +756,7 @@ mod tests {
         // Sin título, sin pie, sin configuración, sin nada. Es el documento que
         // armaría un cliente modificado intentando que no salga.
         let doc = Documento { tipo: "ticket".into(), ..Default::default() };
-        assert!(previsualizar(&doc).contains(MARCA));
+        assert!(previsualizar(&doc, ANCHO_58).contains(MARCA));
     }
 
     #[test]
@@ -766,7 +778,7 @@ mod tests {
             etiqueta: "Folio".into(),
             valor: "CAJA-V-000001".into(),
         });
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         let pos_rfc = vista.find("RFC:").expect("el RFC debe salir");
         let pos_folio = vista.find("Folio").expect("el folio debe salir");
         assert!(pos_rfc < pos_folio, "el emisor va antes que la meta");
@@ -781,7 +793,7 @@ mod tests {
             emisor: vec!["".into(), "RFC: XAXX010101000".into(), "   ".into()],
             ..Default::default()
         };
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         // Entre el título y el RFC no puede haber una línea vacía.
         let lineas: Vec<&str> = vista.lines().collect();
         let i = lineas.iter().position(|l| l.contains("RFC:")).unwrap();
@@ -800,7 +812,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         assert!(
             vista.lines().any(|l| l.trim() == "Tel: 449 915 7059"),
             "el telefono va en su propia linea"
@@ -809,7 +821,7 @@ mod tests {
 
     #[test]
     fn la_vista_previa_no_miente_sobre_el_doble_ancho() {
-        // El TOTAL se maqueta contra ANCHO/2 porque a doble ancho cada glifo
+        // El TOTAL se maqueta contra ANCHO_58/2 porque a doble ancho cada glifo
         // ocupa dos columnas. Si la vista previa lo pintara a ancho sencillo,
         // se leería como una línea corta y desalineada y mandaría a arreglar
         // algo que en el papel está bien. Mismo fallo que tuvo con `ESC a`.
@@ -822,13 +834,13 @@ mod tests {
             }],
             ..Default::default()
         };
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         let fila = vista
             .lines()
             .find(|l| l.contains("T O T A L"))
             .expect("el total debe salir separado, que es como ocupa el papel");
         // Ocupa la tira entera: 16 glifos a doble ancho son 32 columnas.
-        assert_eq!(fila.chars().count(), ANCHO);
+        assert_eq!(fila.chars().count(), ANCHO_58);
         // Y el importe termina pegado al borde derecho, como en el papel.
         assert!(fila.trim_end().ends_with('0'));
     }
@@ -839,7 +851,7 @@ mod tests {
         // cuentas y decide la propina. Si la marca vale para el ticket, vale
         // más para éste.
         let doc = Documento { tipo: "precuenta".into(), ..Default::default() };
-        assert!(previsualizar(&doc).contains(MARCA));
+        assert!(previsualizar(&doc, ANCHO_58).contains(MARCA));
     }
 
     #[test]
@@ -851,7 +863,7 @@ mod tests {
             abrir_cajon: false,
             ..Default::default()
         };
-        let bytes = render(&doc);
+        let bytes = render(&doc, ANCHO_58);
         assert!(bytes.windows(2).all(|w| w != [ESC, b'p']));
     }
 
@@ -866,7 +878,7 @@ mod tests {
             importe: "$132.00".into(),
             ..Default::default()
         });
-        assert!(previsualizar(&doc).contains("IMPORTE"));
+        assert!(previsualizar(&doc, ANCHO_58).contains("IMPORTE"));
     }
 
     #[test]
@@ -875,7 +887,7 @@ mod tests {
         // empujarla fuera de vista, sigue siendo la última línea impresa.
         let mut doc = doc_ticket();
         doc.pie = vec!["Gracias".into(), "Vuelva pronto".into()];
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         let ultima = vista
             .lines()
             .filter(|l| !l.trim().is_empty())
@@ -897,7 +909,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        assert!(!previsualizar(&doc).contains(MARCA));
+        assert!(!previsualizar(&doc, ANCHO_58).contains(MARCA));
     }
 
     #[test]
@@ -911,9 +923,9 @@ mod tests {
             }],
             ..Default::default()
         };
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         assert!(!vista.contains("IMPORTE"));
-        assert!(previsualizar(&doc_ticket()).contains("IMPORTE"));
+        assert!(previsualizar(&doc_ticket(), ANCHO_58).contains("IMPORTE"));
     }
 
     #[test]
@@ -923,10 +935,10 @@ mod tests {
         // `previsualizar` puede ver: entero en una sola línea.
         let mut doc = doc_ticket();
         doc.titulo = "Restaurante La Parrilla del Centro".into();
-        let vista = previsualizar(&doc);
+        let vista = previsualizar(&doc, ANCHO_58);
         assert!(vista.lines().any(|l| l.contains("Restaurante La Parrilla")));
         for l in vista.lines() {
-            assert!(l.chars().count() <= ANCHO, "«{l}» se sale del papel");
+            assert!(l.chars().count() <= ANCHO_58, "«{l}» se sale del papel");
         }
     }
 
@@ -934,7 +946,48 @@ mod tests {
     fn siempre_se_reinicia_la_impresora_al_empezar() {
         // Si la impresión anterior murió a media negrita, sin ESC @ esta sale
         // entera en negrita.
-        let bytes = render(&doc_ticket());
+        let bytes = render(&doc_ticket(), ANCHO_58);
         assert_eq!(&bytes[0..2], &[ESC, b'@']);
+    }
+
+    // ── EL PAPEL DE 80 mm ────────────────────────────────────────────────────
+    // El 11-ago se imprimió por primera vez en una TM-T20II real y salió lo que
+    // ya se sabía: correcto pero estrecho, usando dos tercios del rollo. El
+    // diseño se hizo contra el ticket de 58 mm de referencia y `ANCHO` estaba
+    // fijo en 32.
+
+    #[test]
+    fn a_80_mm_las_reglas_ocupan_el_rollo_entero() {
+        let bytes = render(&doc_ticket(), ANCHO_80);
+        let vista = previsualizar(&doc_ticket(), ANCHO_80);
+        assert!(!bytes.is_empty());
+        // El separador es la línea que delata el ancho: si siguiera midiendo 32
+        // en un papel de 48, el ticket se vería centrado en una columna estrecha.
+        assert!(
+            vista.lines().any(|l| l.trim_end().chars().count() == ANCHO_80),
+            "ninguna línea llega a las {ANCHO_80} columnas del papel de 80 mm"
+        );
+    }
+
+    #[test]
+    fn ninguna_linea_se_sale_del_papel_sea_cual_sea_el_ancho() {
+        // La garantía que importa: cambiar el ancho no puede producir una línea
+        // más larga que el rollo. Un desbordamiento no da error — la impresora
+        // parte la línea donde le toca y el ticket sale ilegible.
+        for cols in [ANCHO_58, ANCHO_80] {
+            for l in previsualizar(&doc_ticket(), cols).lines() {
+                assert!(
+                    l.chars().count() <= cols,
+                    "«{l}» mide {} y el papel da {cols}",
+                    l.chars().count()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dos_columnas_respeta_el_ancho_que_se_le_pide() {
+        assert_eq!(dos_columnas("Café", "$10.00", ANCHO_58).chars().count(), ANCHO_58);
+        assert_eq!(dos_columnas("Café", "$10.00", ANCHO_80).chars().count(), ANCHO_80);
     }
 }

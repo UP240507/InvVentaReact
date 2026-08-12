@@ -51,6 +51,8 @@ import {
   reintentarFallidos,
   descartarFallidos,
   configurarImpresora,
+  ANCHO_58,
+  ANCHO_80,
   listarDispositivos,
   revocarDispositivo,
   enlacePairing,
@@ -100,6 +102,7 @@ export default function HubScreen() {
   const [vista, setVista] = useState('');
   const [tipoTransporte, setTipoTransporte] = useState('simulador');
   const [impresora, setImpresora] = useState('');
+  const [anchoElegido, setAnchoElegido] = useState(null);
   const [host, setHost] = useState('');
   const [puerto, setPuerto] = useState('9100');
 
@@ -140,6 +143,16 @@ export default function HubScreen() {
 
   const activo = info?.activo;
   const resumen = info?.cola || info?.resumen || {};
+
+  // El ancho vigente lo dice el hub en `/salud`. Se DERIVA en vez de
+  // sincronizarse con un efecto: `null` significa «lo que diga la caja», y en
+  // cuanto el usuario toca el selector manda su elección.
+  //
+  // Con un `useEffect` que hiciera `setAnchoPapel`, cada refresco de los 5 s
+  // pisaría lo que el usuario acabara de elegir si aún no le ha dado a Guardar.
+  const anchoDelHub =
+    Number(info?.ancho_papel) === ANCHO_80 ? ANCHO_80 : ANCHO_58;
+  const anchoPapel = anchoElegido ?? anchoDelHub;
   const fallidos = info?.fallidos || [];
   const dispositivos = info?.dispositivos || [];
 
@@ -211,7 +224,7 @@ export default function HubScreen() {
       transporte = { tipo: 'simulador', carpeta: null };
     }
 
-    const r = await configurarImpresora(transporte);
+    const r = await configurarImpresora(transporte, Number(anchoPapel));
     if (r.ok) {
       showToast(`Impresora: ${r.transporte}`, 'success');
       refrescar();
@@ -449,7 +462,21 @@ export default function HubScreen() {
               el circuito sin hardware.
             </p>
 
-            <Field label="Cómo se conecta">
+            <Field label="Ancho del papel">
+              {/* No es cosmético: con 32 columnas en un rollo de 80 mm el
+                  ticket sale correcto pero ocupa dos tercios, y con 48 en uno
+                  de 58 mm cada línea se parte. Es la propiedad del ROLLO, no
+                  del documento. */}
+              <Select
+                value={anchoPapel}
+                onChange={(e) => setAnchoElegido(Number(e.target.value))}
+              >
+                <option value={ANCHO_58}>58 mm — 32 columnas</option>
+                <option value={ANCHO_80}>80 mm — 48 columnas</option>
+              </Select>
+            </Field>
+
+            <Field label="Cómo se conecta" className="mt-4">
               <Select
                 value={tipoTransporte}
                 onChange={(e) => setTipoTransporte(e.target.value)}

@@ -40,6 +40,18 @@ pub struct ConfigHub {
     #[serde(default = "puerto_por_defecto")]
     pub puerto: u16,
     pub transporte: ConfigTransporte,
+    /// Columnas del papel: 32 para 58 mm, 48 para 80 mm.
+    ///
+    /// `serde(default)` para que un `hub.json` escrito por una versión anterior
+    /// —que no tenía este campo— siga leyéndose. Sin eso, actualizar la caja
+    /// dejaría el hub sin configuración y arrancando en simulador: la impresora
+    /// «desaparecería» tras una actualización, sin decir por qué.
+    #[serde(default = "ancho_por_defecto")]
+    pub ancho_papel: usize,
+}
+
+fn ancho_por_defecto() -> usize {
+    escpos::ANCHO_POR_DEFECTO
 }
 
 fn puerto_por_defecto() -> u16 {
@@ -55,6 +67,7 @@ impl Default for ConfigHub {
             // hardware, la app entera se quedaría sin servidor por culpa de un
             // periférico.
             transporte: ConfigTransporte::Simulador { carpeta: None },
+            ancho_papel: escpos::ANCHO_POR_DEFECTO,
         }
     }
 }
@@ -97,7 +110,11 @@ pub fn arrancar(
     let config = ConfigHub::leer(&carpeta_datos);
 
     let transporte = config.transporte.construir(&carpeta_datos);
-    let cola = Cola::nueva(transporte, carpeta_datos.join("cola-impresion.json"));
+    let cola = Cola::nueva(
+        transporte,
+        config.ancho_papel,
+        carpeta_datos.join("cola-impresion.json"),
+    );
 
     // El puerto se abre AQUÍ, antes de publicar el estado, para que la
     // pantalla de pairing no llegue a enseñar una URL con el puerto que

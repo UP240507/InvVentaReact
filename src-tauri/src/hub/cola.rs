@@ -87,6 +87,10 @@ pub struct Cola {
     interior: Mutex<Interior>,
     aviso: Condvar,
     transporte: Mutex<Box<dyn Transporte>>,
+    /// Columnas del papel. Vive junto al transporte porque las dos son la
+    /// misma cosa: propiedades de la impresora que hay enchufada hoy, no del
+    /// documento. Se cambia igual que el transporte, sin reiniciar el hub.
+    ancho: Mutex<usize>,
     archivo: PathBuf,
 }
 
@@ -112,7 +116,7 @@ impl Recibo {
 }
 
 impl Cola {
-    pub fn nueva(transporte: Box<dyn Transporte>, archivo: PathBuf) -> Arc<Self> {
+    pub fn nueva(transporte: Box<dyn Transporte>, ancho: usize, archivo: PathBuf) -> Arc<Self> {
         let estado = leer_estado(&archivo);
 
         let cola = Arc::new(Self {
@@ -125,6 +129,7 @@ impl Cola {
             }),
             aviso: Condvar::new(),
             transporte: Mutex::new(transporte),
+            ancho: Mutex::new(ancho),
             archivo,
         });
 
@@ -227,6 +232,21 @@ impl Cola {
         self.aviso.notify_all();
     }
 
+    /// Cambia el ancho del papel en caliente.
+    ///
+    /// Los trabajos que ya estén en la cola se renderizan con el ancho NUEVO,
+    /// no con el que había al encolarlos. Es lo correcto: el ancho describe el
+    /// rollo que hay puesto ahora, y si alguien lo corrige es justamente
+    /// porque lo anterior salía mal.
+    pub fn cambiar_ancho(&self, cols: usize) {
+        *self.ancho.lock().unwrap() = cols;
+        self.aviso.notify_all();
+    }
+
+    pub fn ancho(&self) -> usize {
+        *self.ancho.lock().unwrap()
+    }
+
     /// Detiene el hilo trabajador al cerrar la app. Lo pendiente ya está en
     /// disco, así que no se pierde: sale en el siguiente arranque.
     pub fn detener(&self) {
@@ -274,7 +294,8 @@ impl Cola {
 
             let Some(mut trabajo) = trabajo else { continue };
 
-            let bytes = escpos::render(&trabajo.documento);
+            let cols = *self.ancho.lock().unwrap();
+            let bytes = escpos::render(&trabajo.documento, cols);
             let resultado = {
                 let transporte = self.transporte.lock().unwrap();
                 transporte.enviar(&bytes)
@@ -406,7 +427,7 @@ mod tests {
         }
 
         let archivo = archivo_temp("rapida");
-        let cola = Cola::nueva(Box::new(Lenta), archivo.clone());
+        let cola = Cola::nueva(Box::new(Lenta), escpos::ANCHO_POR_DEFECTO, archivo.clone());
 
         let inicio = Instant::now();
         assert_eq!(cola.encolar(doc("a")), Recibo::Encolado);
@@ -424,6 +445,7 @@ mod tests {
         let archivo = archivo_temp("dup");
         let cola = Cola::nueva(
             Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 0 }),
+            escpos::ANCHO_POR_DEFECTO,
             archivo.clone(),
         );
 
@@ -443,6 +465,7 @@ mod tests {
         let archivo = archivo_temp("reimp");
         let cola = Cola::nueva(
             Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 0 }),
+            escpos::ANCHO_POR_DEFECTO,
             archivo.clone(),
         );
 
@@ -460,6 +483,7 @@ mod tests {
         let archivo = archivo_temp("reintento");
         let cola = Cola::nueva(
             Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 2 }),
+            escpos::ANCHO_POR_DEFECTO,
             archivo.clone(),
         );
 
@@ -484,6 +508,7 @@ mod tests {
         let archivo = archivo_temp("vacio");
         let cola = Cola::nueva(
             Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 0 }),
+            escpos::ANCHO_POR_DEFECTO,
             archivo.clone(),
         );
 
@@ -508,7 +533,7 @@ mod tests {
 
         let archivo = archivo_temp("persistencia");
         {
-            let cola = Cola::nueva(Box::new(Muerta), archivo.clone());
+            let cola = Cola::nueva(Box::new(Muerta), escpos::ANCHO_POR_DEFECTO, archivo.clone());
             cola.encolar(doc("sobrevive"));
             std::thread::sleep(Duration::from_millis(300));
         }
@@ -534,7 +559,7 @@ mod tests {
         }
 
         let archivo = archivo_temp("fallidos");
-        let cola = Cola::nueva(Box::new(Muerta), archivo.clone());
+        let cola = Cola::nueva(Box::new(Muerta), escpos::ANCHO_POR_DEFECTO, archivo.clone());
         cola.encolar(doc("perdido"));
 
         // 2+4+8+16 = 30s de esperas antes del quinto intento.

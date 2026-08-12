@@ -61,8 +61,15 @@ fn hub_imprimir(
 
 /// Ticket maquetado en texto plano, sin gastar papel.
 #[tauri::command]
-fn hub_previsualizar(documento: Documento) -> String {
-    hub::escpos::previsualizar(&documento)
+fn hub_previsualizar(estado: tauri::State<'_, EstadoApp>, documento: Documento) -> String {
+    // Si el hub no está activo se cae al de por defecto en vez de fallar: una
+    // vista previa aproximada vale más que un error en la pantalla de ajustes.
+    let cols = estado
+        .hub
+        .as_ref()
+        .map(|h| h.estado.cola.ancho())
+        .unwrap_or(hub::escpos::ANCHO_POR_DEFECTO);
+    hub::escpos::previsualizar(&documento, cols)
 }
 
 #[tauri::command]
@@ -110,6 +117,7 @@ fn hub_descartar(estado: tauri::State<'_, EstadoApp>) -> Result<usize, String> {
 fn hub_configurar_impresora(
     estado: tauri::State<'_, EstadoApp>,
     transporte: ConfigTransporte,
+    ancho_papel: Option<usize>,
 ) -> Result<String, String> {
     let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
 
@@ -118,6 +126,14 @@ fn hub_configurar_impresora(
     hub.estado.cola.cambiar_transporte(nuevo);
 
     let mut config = ConfigHub::leer(&hub.carpeta_datos);
+
+    // El ancho llega opcional para no romper a quien ya llama a este comando
+    // sólo con el transporte: si no viene, se conserva el guardado.
+    if let Some(cols) = ancho_papel {
+        hub.estado.cola.cambiar_ancho(cols);
+        config.ancho_papel = cols;
+    }
+
     config.transporte = transporte;
     config
         .guardar(&hub.carpeta_datos)
