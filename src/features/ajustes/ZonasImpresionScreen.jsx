@@ -137,6 +137,18 @@ export default function ZonasImpresionScreen() {
           entere cuando la pantalla no puede.
         </p>
 
+        {imprimirComandas !==
+          (configuracion?.imprimir_comandas || 'siempre') && (
+          <div className="flex items-center justify-between gap-3 mb-4 p-3 rounded-ui border-2 border-adm-accent bg-adm-accent/5">
+            <p className="text-xs font-black text-adm-ink">
+              Cambiado — falta guardar para que aplique.
+            </p>
+            <Button icono={Save} onClick={guardar}>
+              Guardar
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-2">
           {[
             {
