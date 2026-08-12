@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { getRolEfectivo, getCapacidades, tieneFlag } from '../../lib/Permisos';
+import { buscarAutorizador } from '../../lib/Autorizacion';
 import { useAuthStore } from '../auth/useAuthStore'; // FIX 3: sesión raíz (tenant)
 
 import {
@@ -89,34 +90,11 @@ export default function RelojChecadorScreen() {
     setTimeout(() => setFeedback(null), tipo === 'success' ? 2500 : 3000);
   };
 
-  /**
-   * Quién es el dueño de este PIN, si además tiene la capacidad que se pide.
-   *
-   * Se extrae porque ya hay dos sitios que preguntan lo mismo —autorizar una
-   * salida anticipada y abrir la plantilla activa— y la comprobación tiene tres
-   * partes fáciles de escribir a medias: el flag, que el empleado siga activo, y
-   * que el PIN puede estar en `pin` o en `pin_acceso` (legado). Dos copias de
-   * esto acabarían divergiendo en la parte que menos se ve, que es la del
-   * empleado dado de baja.
-   */
-  const buscarPorPin = (pinCrudo, flag) => {
-    const p = String(pinCrudo).trim();
-    if (!p) return null;
-    return (
-      (staff || []).find((s) => {
-        const rolS = s.rol || s.puesto || '';
-        const activo =
-          s.activo !== false && s.activo !== 'false' && s.activo !== 0;
-        const p1 = String(s.pin ?? '').trim();
-        const p2 = String(s.pin_acceso ?? '').trim();
-        return (
-          tieneFlag(capDeRol(rolS), flag) &&
-          activo &&
-          ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
-        );
-      }) || null
-    );
-  };
+  // La comprobación vive en `lib/Autorizacion.js`: la hacían tres pantallas por
+  // su cuenta y la parte que se pierde al copiarla —que el empleado siga de
+  // alta— es la única cuyo olvido no se nota probando.
+  const buscarPorPin = (pinCrudo, flag) =>
+    buscarAutorizador({ staff, roles_permisos, pin: pinCrudo, flag });
 
   /**
    * Escribe una marca del checador. Una sola puerta para los cuatro caminos que

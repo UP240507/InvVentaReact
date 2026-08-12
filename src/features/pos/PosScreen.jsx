@@ -43,6 +43,7 @@ import {
   abrirCajon,
 } from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
+import { buscarAutorizador, sesionAutoriza } from '../../lib/Autorizacion';
 import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
 import { useAtajos } from '../../hooks/useAtajos';
@@ -179,6 +180,123 @@ export default function PosScreen() {
   // Aviso de rondas sin entregar: modal PROPIO (window.confirm está vetado).
   const [modalRondasPendientes, setModalRondasPendientes] = useState(false);
 
+  // ── CUENTA CERRADA ───────────────────────────────────────────────────────
+  // Una vez impresa la cuenta, la mesa deja de aceptar cambios. Hasta ahora
+  // `por_cobrar` sólo pintaba la mesa distinta en el mapa y NADIE lo consultaba:
+  // el mesero podía seguir agregando platillos a una cuenta que el cliente ya
+  // tenía en la mano, y el papel dejaba de coincidir con lo que se iba a cobrar.
+  //
+  // Sólo aplica al flujo de un solo papel. Con `precuenta_y_ticket` el papel que
+  // se llevó era una propuesta y añadir después es legítimo: el ticket definitivo
+  // sale al cobrar y recoge lo que haya.
+  const cuentaCerrada =
+    isMesa &&
+    mesaActual?.estado === 'por_cobrar' &&
+    (configuracion?.flujo_cuenta || '') === 'ticket_final';
+
+  const [pinReapertura, setPinReapertura] = useState('');
+  const [pinReaperturaError, setPinReaperturaError] = useState('');
+  const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
+
+  /**
+   * Rechaza una acción sobre una cuenta ya entregada.
+   *
+   * Devuelve `true` si la acción NO debe seguir. Se llama al principio de cada
+   * mutación del carrito en vez de esconder los botones: un botón que
+   * desaparece no explica nada, y el mesero acaba pensando que la app se rompió.
+   * Así el aviso dice qué pasa y dónde está la salida.
+   */
+  const bloqueadoPorCuenta = () => {
+    if (!cuentaCerrada) return false;
+    showToast(
+      'La cuenta ya se imprimió. Para agregar algo, reábrela con PIN.',
+      'info',
+    );
+    return true;
+  };
+
+  /**
+   * Reabre una cuenta ya entregada.
+   *
+   * ── POR QUÉ EL BLOQUEO NECESITA LLAVE ───────────────────────────────────
+   * El cliente que pide la cuenta y luego pide un café pasa todo el tiempo. Sin
+   * salida, el mesero se queda atascado con un cliente delante y el bloqueo
+   * deja de proteger para empezar a estorbar — y lo que se estorba a esa hora
+   * se acaba resolviendo saltándose el sistema.
+   *
+   * La capacidad es `autoriza_descuentos` y no `gestion`: es la que ya
+   * significa «autoriza una excepción EN LA MESA», y la tienen Admin, Gerente y
+   * Capitán de Meseros. `gestion` dejaría fuera al Capitán, que es justamente
+   * quien está en el piso cuando esto ocurre.
+   *
+   * Quien ya tiene la capacidad no teclea nada: pedirle al encargado que se
+   * autorice a sí mismo es fricción sin ganancia. Ver `sesionAutoriza`.
+   */
+  const puedeReabrirSinPin = sesionAutoriza({
+    usuario: user,
+    roles_permisos,
+    flag: 'autoriza_descuentos',
+  });
+
+  const reabrirCuenta = (autorizador) => {
+    const mesaReabierta = {
+      ...mesaActual,
+      estado: 'ocupada',
+      // El folio NO se toca. El cliente tiene ese número en la mano; una cuenta
+      // reabierta sigue siendo la misma cuenta, y darle otro folio dejaría dos
+      // papeles distintos para un solo consumo.
+      orden_actual: { ...(mesaActual?.orden_actual || {}) },
+    };
+    enqueueAction('mesas', 'upsert', mesaReabierta);
+    useAppStore.setState((prev) => ({
+      mesas: prev.mesas.map((m) =>
+        m.id === mesaActual.id ? mesaReabierta : m,
+      ),
+    }));
+
+    registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: autorizador?.nombre || user?.nombre || 'Gestión',
+      accion: 'REAPERTURA_CUENTA',
+      modulo: 'POS',
+      nivel: 'warning',
+      detalles:
+        `Mesa ${mesaActual?.nombre ?? mesaActual?.id} reabierta tras imprimir la cuenta` +
+        `${mesaActual?.orden_actual?.folio ? ` (folio ${mesaActual.orden_actual.folio})` : ''}. ` +
+        `Autorizó: ${autorizador?.nombre || user?.nombre || 'sesión con permiso'}.`,
+    });
+
+    setPidiendoReapertura(false);
+    setPinReapertura('');
+    setPinReaperturaError('');
+    showToast('Cuenta reabierta. Se puede volver a agregar.', 'success');
+  };
+
+  const intentarReabrir = () => {
+    if (puedeReabrirSinPin) {
+      reabrirCuenta(null);
+      return;
+    }
+    setPinReapertura('');
+    setPinReaperturaError('');
+    setPidiendoReapertura(true);
+  };
+
+  const confirmarReapertura = () => {
+    const quien = buscarAutorizador({
+      staff,
+      roles_permisos,
+      pin: pinReapertura,
+      flag: 'autoriza_descuentos',
+    });
+    if (!quien) {
+      setPinReaperturaError('PIN inválido para reabrir la cuenta.');
+      setPinReapertura('');
+      return;
+    }
+    reabrirCuenta(quien);
+  };
+
   const continuarCobro = () => {
     setModalRondasPendientes(false);
     // MESA: el inventario ya se corroboró y descontó al mandar A PRODUCCIÓN.
@@ -306,6 +424,7 @@ export default function PosScreen() {
   const [modalElecciones, setModalElecciones] = useState(null);
 
   const agregarAlCarrito = (producto) => {
+    if (bloqueadoPorCuenta()) return;
     // Paquete con grupos "elige 1 de N" → primero se resuelven las elecciones.
     if (esPaquete(producto) && tieneElecciones(producto)) {
       setModalElecciones({ paquete: producto, seleccion: {} });
@@ -380,6 +499,7 @@ export default function PosScreen() {
   };
 
   const modificarCantidad = (id, delta) => {
+    if (bloqueadoPorCuenta()) return;
     setCarrito((prev) =>
       prev.map((item) => {
         if (item.id === id) {
@@ -426,6 +546,7 @@ export default function PosScreen() {
     );
 
   const removerDelCarrito = (id) => {
+    if (bloqueadoPorCuenta()) return;
     const itemEnCarrito = carrito.find((i) => i.id === id);
     if (itemEnCarrito && (itemEnCarrito.cantidad_enviada || 0) > 0) {
       showToast(
@@ -441,6 +562,7 @@ export default function PosScreen() {
   // MESA: al mandar A PRODUCCIÓN se corrobora inventario y se descuenta el stock
   // del DELTA (solo lo nuevo de esta ronda). El insumo se consume al cocinar.
   const handleGuardarEnMesa = () => {
+    if (bloqueadoPorCuenta()) return;
     if (!isMesa || carrito.length === 0) return;
 
     // Delta: lo aún no enviado, preservando la estructura del item para que el
@@ -1330,29 +1452,52 @@ export default function PosScreen() {
 
           <div className="grid grid-cols-1 gap-3">
             {isMesa && (
-              <div className="grid grid-cols-2 gap-3">
-                <OpsButton
-                  tamano="lg"
-                  icono={ChefHat}
-                  tecla="F2"
-                  onClick={handleGuardarEnMesa}
-                  disabled={carrito.length === 0}
-                  className="w-full"
-                >
-                  A Producción
-                </OpsButton>
+              <>
+                {/* La cuenta ya está en la mesa: se dice, y se ofrece la salida.
+                  Un botón que simplemente no responde se lee como una app rota;
+                  un aviso con su llave al lado se lee como una regla. */}
+                {cuentaCerrada && (
+                  <div className="mb-3 p-3 rounded-ui border-2 border-ops-warn bg-ops-warn/10">
+                    <p className="text-xs font-black text-ops-ink mb-2">
+                      Cuenta impresa y entregada
+                      {mesaActual?.orden_actual?.folio
+                        ? ` · ${mesaActual.orden_actual.folio}`
+                        : ''}
+                    </p>
+                    <p className="text-[11px] font-bold text-ops-muted mb-3">
+                      No se puede agregar hasta cobrarla. Si el cliente pidió
+                      algo más, reábrela.
+                    </p>
+                    <OpsButton tamano="sm" onClick={intentarReabrir}>
+                      Reabrir cuenta
+                    </OpsButton>
+                  </div>
+                )}
 
-                <OpsButton
-                  tamano="lg"
-                  icono={BellRing}
-                  tecla="F4"
-                  onClick={handlePedirCuenta}
-                  disabled={carrito.length === 0}
-                  className="w-full"
-                >
-                  Pedir Cuenta
-                </OpsButton>
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <OpsButton
+                    tamano="lg"
+                    icono={ChefHat}
+                    tecla="F2"
+                    onClick={handleGuardarEnMesa}
+                    disabled={carrito.length === 0 || cuentaCerrada}
+                    className="w-full"
+                  >
+                    A Producción
+                  </OpsButton>
+
+                  <OpsButton
+                    tamano="lg"
+                    icono={BellRing}
+                    tecla="F4"
+                    onClick={handlePedirCuenta}
+                    disabled={carrito.length === 0 || cuentaCerrada}
+                    className="w-full"
+                  >
+                    Pedir Cuenta
+                  </OpsButton>
+                </div>
+              </>
             )}
 
             {!(isMesa && esMesero) && (
@@ -1422,6 +1567,68 @@ export default function PosScreen() {
             entregan. Si cobras ahora, el cliente paga algo que todavía no
             recibió.
           </p>
+        </OpsModal>
+      )}
+
+      {/* PIN para reabrir una cuenta ya entregada. Modal propio: window.confirm
+          está vetado, y esto además pide un dato. */}
+      {pidiendoReapertura && (
+        <OpsModal
+          titulo="Reabrir la cuenta"
+          icono={ReceiptText}
+          ancho="max-w-sm"
+          onClose={() => setPidiendoReapertura(false)}
+          pie={
+            <>
+              <OpsButton
+                className="flex-1"
+                onClick={() => setPidiendoReapertura(false)}
+              >
+                Cancelar
+              </OpsButton>
+              <OpsButton
+                variante="cobro"
+                className="flex-1"
+                disabled={pinReapertura.length < 4}
+                onClick={confirmarReapertura}
+              >
+                Reabrir
+              </OpsButton>
+            </>
+          }
+        >
+          <p className="text-ops-muted font-bold text-sm mb-1">
+            El cliente ya tiene la cuenta
+            {mesaActual?.orden_actual?.folio
+              ? ` ${mesaActual.orden_actual.folio}`
+              : ''}
+            . Reabrirla queda registrado.
+          </p>
+          <p className="text-ops-muted font-bold text-xs mb-4">
+            PIN de quien autoriza (encargado, gerente o capitán):
+          </p>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            maxLength={6}
+            value={pinReapertura}
+            onChange={(e) => {
+              setPinReapertura(e.target.value.replace(/\D/g, ''));
+              setPinReaperturaError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && pinReapertura.length >= 4)
+                confirmarReapertura();
+            }}
+            className="w-full text-center text-3xl tracking-[0.4em] font-black bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-border rounded-ui py-3 text-ops-ink"
+            placeholder="••••••"
+          />
+          {pinReaperturaError && (
+            <p className="text-ops-danger text-xs font-black mt-2">
+              {pinReaperturaError}
+            </p>
+          )}
         </OpsModal>
       )}
 
