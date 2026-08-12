@@ -23,12 +23,15 @@ import {
   CreditCard,
   AlertTriangle,
   ShoppingCart,
+  User,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useShellStore } from '../store/useShellStore';
 import { usePermisos } from '../hooks/usePermisos';
 import { tituloDeRuta, grupoDeRuta } from '../lib/Navegacion';
 import { useAcoplado } from '../hooks/useAcoplado';
+import { useAuthStore } from '../features/auth/useAuthStore';
+import { useSessionStore } from '../store/useSessionStore';
 
 // Estados de comanda que cuentan como "lista para entregar" (mismo criterio que
 // tenía el sidebar; si cambia el flujo del KDS, se cambia en un solo lugar).
@@ -51,6 +54,32 @@ export default function Topbar() {
   const comandasActivas = useAppStore((s) => s.comandas_activas);
 
   const [verAlertas, setVerAlertas] = useState(false);
+
+  // ── QUIÉN ESTÁ USANDO ESTE TELÉFONO ──────────────────────────────────────
+  // En el teléfono NO había forma de cerrar sesión. El logout vive en el pie
+  // del riel de escritorio, y ese riel sólo se renderiza con pantalla ancha
+  // (`SidebarLayout`), así que en móvil quedaba inalcanzable: la barra de
+  // pestañas no lo trae y `/perfil` no está en el catálogo de navegación.
+  //
+  // El botón lleva a Perfil y NO llama a `logout()` directamente. Es
+  // deliberado: el logout de `PerfilScreen` pasa por el candado de jornada
+  // —quien no ha cumplido sus horas necesita autorización— y un botón que
+  // llamara al logout a pelo sería la puerta de atrás que ese candado cierra
+  // por delante. Mismo criterio que la reapertura de cuenta con PIN.
+  //
+  // Al final del turno esto no hace falta: marcar salida en el checador ya
+  // cierra la sesión del empleado. Esto cubre lo demás — pasarle el teléfono a
+  // un compañero a media jornada, o corregir un inicio de sesión equivocado.
+  const { user } = useAuthStore();
+  const empleadoActivo = useSessionStore((s) => s.empleadoActivo);
+  const quien = empleadoActivo?.nombre || user?.nombre || '';
+  const iniciales = quien
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join('')
+    .toUpperCase();
 
   // ── Centro de alertas (mismas reglas de rol que tenía el sidebar) ──────────
   const esGestion = flag('gestion');
@@ -170,6 +199,29 @@ export default function Topbar() {
           </>
         )}
       </button>
+
+      {/* ── QUIÉN ESTÁ DENTRO, Y LA SALIDA ── */}
+      {quien && (
+        <button
+          onClick={() => navigate('/perfil')}
+          aria-label={`${quien} — abrir perfil y cerrar sesión`}
+          title={`${quien} — perfil y cerrar sesión`}
+          className="shrink-0 flex items-center gap-2 h-9 pl-1 pr-2 rounded-ui hover:bg-adm-bg transition-colors"
+        >
+          <span className="w-7 h-7 rounded-full bg-adm-accent/15 text-adm-accent grid place-items-center text-[11px] font-black">
+            {iniciales || <User className="w-4 h-4" />}
+          </span>
+          {/* El nombre sólo con sitio: en un teléfono el ancho es para el
+              trabajo, y las iniciales ya identifican a quien tiene el aparato
+              en la mano. El nombre completo sigue disponible para el lector de
+              pantalla y al posar el cursor. */}
+          {acoplado && (
+            <span className="text-sm font-bold text-adm-ink truncate max-w-32">
+              {quien}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* ── CENTRO DE ALERTAS ── */}
       <div className="relative shrink-0">
