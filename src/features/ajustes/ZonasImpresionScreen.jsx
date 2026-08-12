@@ -4,6 +4,7 @@ import { PageShell, PageHeader, Button } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import {
   Printer,
+  ReceiptText,
   Plus,
   X,
   Save,
@@ -37,6 +38,12 @@ export default function ZonasImpresionScreen() {
   // esperando. Gastar rollo de más se descubre mirando el rollo.
   const [imprimirComandas, setImprimirComandas] = useState('siempre');
 
+  // Cuántos papeles se entregan por mesa. Los dos flujos existen de verdad:
+  // hay locales que dan una pre-cuenta para revisar y luego un ticket de pago,
+  // y hay locales —AZUL— que entregan uno solo. Imponer cualquiera de los dos
+  // obligaría a la mitad a trabajar como no trabaja.
+  const [flujoCuenta, setFlujoCuenta] = useState('precuenta_y_ticket');
+
   // Categorías REALES: las del menú (recetas activas), no solo config.categorias.
   // Es la fuente de verdad de qué se enruta. Une ambas por si acaso.
   const categoriasMenu = useMemo(() => {
@@ -69,6 +76,9 @@ export default function ZonasImpresionScreen() {
       }
       if (configuracion.imprimir_comandas) {
         setImprimirComandas(configuracion.imprimir_comandas);
+      }
+      if (configuracion.flujo_cuenta) {
+        setFlujoCuenta(configuracion.flujo_cuenta);
       }
       if (configuracion.enrutamiento) {
         setEnrutamiento(configuracion.enrutamiento);
@@ -110,6 +120,7 @@ export default function ZonasImpresionScreen() {
       zonas_produccion: zonas,
       enrutamiento,
       imprimir_comandas: imprimirComandas,
+      flujo_cuenta: flujoCuenta,
     });
     showToast('Enrutamiento de KDS actualizado', 'success');
   };
@@ -126,6 +137,57 @@ export default function ZonasImpresionScreen() {
           </Button>
         }
       />
+
+      {/* CUÁNTOS PAPELES POR MESA ──────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm mb-8">
+        <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-2 flex items-center gap-2">
+          <ReceiptText className="w-4 h-4" /> La cuenta de la mesa
+        </h3>
+        <p className="text-sm text-adm-muted font-medium mb-4">
+          Qué se imprime cuando el mesero pide la cuenta, y qué al cobrar.
+        </p>
+
+        <div className="space-y-2">
+          {[
+            {
+              v: 'ticket_final',
+              t: 'Un solo papel — el ticket final',
+              d: 'Al pedir la cuenta sale el ticket con folio y es el comprobante. Al cobrar no se imprime nada más; sólo se registra la propina.',
+            },
+            {
+              v: 'precuenta_y_ticket',
+              t: 'Dos papeles — pre-cuenta y ticket',
+              d: 'Primero una pre-cuenta para que el cliente revise, y el ticket de pago al cobrar.',
+            },
+          ].map((o) => (
+            <label
+              key={o.v}
+              className={`flex gap-3 p-3 rounded-ui border-2 cursor-pointer transition-colors ${
+                flujoCuenta === o.v
+                  ? 'border-adm-accent bg-adm-accent/5'
+                  : 'border-adm-border hover:border-adm-muted'
+              }`}
+            >
+              <input
+                type="radio"
+                name="flujo_cuenta"
+                value={o.v}
+                checked={flujoCuenta === o.v}
+                onChange={(e) => setFlujoCuenta(e.target.value)}
+                className="mt-1"
+              />
+              <span>
+                <span className="block font-black text-adm-ink text-sm">
+                  {o.t}
+                </span>
+                <span className="block text-xs text-adm-muted font-medium">
+                  {o.d}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
 
       {/* CUÁNDO SALE PAPEL ────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm mb-8">

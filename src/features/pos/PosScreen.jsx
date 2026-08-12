@@ -535,10 +535,31 @@ export default function PosScreen() {
   const handlePedirCuenta = () => {
     if (!isMesa || carrito.length === 0) return;
 
+    // ── EL FOLIO NACE AQUÍ CUANDO LA CUENTA ES EL DOCUMENTO FINAL ───────────
+    // Si el papel que se lleva a la mesa es el ticket, tiene que llevar folio, y
+    // el folio tiene que existir antes de imprimirlo. Se guarda en la mesa para
+    // que el cobro use EL MISMO: reimprimir o reabrir no puede cambiar el número
+    // de una cuenta que el cliente ya tiene en la mano.
+    const flujo = configuracion?.flujo_cuenta || 'precuenta_y_ticket';
+    const esTicketFinal = flujo === 'ticket_final';
+
+    const folioCuenta = esTicketFinal
+      ? mesaActual?.orden_actual?.folio ||
+        siguienteFolio({
+          serie: SERIE_VENTA,
+          nombreLocal: configuracion?.nombre_empresa,
+        })
+      : null;
+
     const mesaActualizada = {
       ...mesaActual,
       estado: 'por_cobrar',
-      orden_actual: { items: carrito, subtotal, total: granTotal },
+      orden_actual: {
+        items: carrito,
+        subtotal,
+        total: granTotal,
+        ...(folioCuenta ? { folio: folioCuenta } : {}),
+      },
     };
     enqueueAction('mesas', 'upsert', mesaActualizada);
     useAppStore.setState((prev) => ({
@@ -556,21 +577,35 @@ export default function PosScreen() {
     // impresión es que la impresora nunca detiene la operación: la mesa ya
     // quedó marcada como `por_cobrar` arriba, y eso —que es lo que sostiene el
     // cobro— no depende de que haya papel.
-    enviarPreCuenta(
-      {
-        items: carrito,
-        subtotal,
-        iva: totalIva,
-        descuento: 0,
-        total: granTotal,
-        mesa_id: mesaActual.id,
-        mesa_nombre: mesaActual.nombre,
-        comensales: safeNumber(mesaActual.comensales_reales, 0),
-        usuario: user?.nombre ?? 'Mesero',
-        fecha: new Date().toISOString(),
-      },
-      configuracion,
-    ).then((r) => {
+    const datosCuenta = {
+      items: carrito,
+      subtotal,
+      iva: totalIva,
+      descuento: 0,
+      total: granTotal,
+      mesa_id: mesaActual.id,
+      mesa_nombre: mesaActual.nombre,
+      comensales: safeNumber(mesaActual.comensales_reales, 0),
+      usuario: user?.nombre ?? 'Mesero',
+      fecha: new Date().toISOString(),
+    };
+
+    // Un papel o dos, según el local. Con `ticket_final` el que se lleva a la
+    // mesa YA es el comprobante —lleva folio y no lleva método de pago, que es
+    // opcional— y al cobrar no se imprime nada más.
+    // `abrirCajon: false` EXPLÍCITO, y es lo más importante de esta línea.
+    // `construirTicket` decide el pulso por el método de pago, y aquí todavía no
+    // hay pago: sin este `false` el cajón se abriría cada vez que una mesa pide
+    // la cuenta —varias veces por turno y por mesa— dejando el dinero expuesto
+    // sin nadie delante. Es exactamente lo que la pre-cuenta evitaba, y al
+    // reusar el ticket había que volver a decirlo.
+    const enviar = esTicketFinal
+      ? enviarTicket({ ...datosCuenta, folio: folioCuenta }, configuracion, {
+          abrirCajon: false,
+        })
+      : enviarPreCuenta(datosCuenta, configuracion);
+
+    enviar.then((r) => {
       // Sólo se avisa si falló, y sin tono de error: no imprimir la cuenta no
       // rompe nada, sólo obliga a dictarla.
       if (!r?.ok) {
@@ -667,10 +702,15 @@ export default function PosScreen() {
       // el anterior —los últimos 5 dígitos de `Date.now()`— daba la vuelta cada
       // 100 segundos, así que dos ventas del mismo servicio podían compartir
       // folio (~18 % con 200 tickets) y además la serie no ordenaba.
-      folio: siguienteFolio({
-        serie: SERIE_VENTA,
-        nombreLocal: configuracion?.nombre_empresa,
-      }),
+      // El folio de la cuenta si ya se imprimió una (flujo `ticket_final`): el
+      // cliente tiene ese número en la mano y la venta tiene que llevar el
+      // mismo. Sólo se emite uno nuevo si no había.
+      folio:
+        mesaActual?.orden_actual?.folio ||
+        siguienteFolio({
+          serie: SERIE_VENTA,
+          nombreLocal: configuracion?.nombre_empresa,
+        }),
       items: itemsTicket,
       subtotal: subtotalTicket,
       iva: ivaTicket,
@@ -734,9 +774,19 @@ export default function PosScreen() {
     // al cajero mirando una rueda mientras el cliente espera.
     // El ticket tampoco espera, pero ahora sí avisa: antes fallaba en silencio
     // y el cajero se quedaba mirando la impresora sin saber por qué.
-    void enviarTicket(ventaVisual, configuracion).then((r) => {
-      if (!r?.ok) showToast(avisoDeImpresion('El ticket'), 'info');
-    });
+    //
+    // ── EL SEGUNDO PAPEL, CUANDO NO TOCA ────────────────────────────────────
+    // Con `ticket_final` el comprobante ya salió al pedir la cuenta y lo tiene
+    // el cliente en la mano: imprimir otro es el duplicado que este cambio vino
+    // a quitar. En mostrador NO aplica —ahí no hay «pedir cuenta», así que el
+    // ticket del cobro es el único papel que existe.
+    const yaSeImprimioLaCuenta =
+      isMesa && (configuracion?.flujo_cuenta || '') === 'ticket_final';
+
+    if (!yaSeImprimioLaCuenta)
+      void enviarTicket(ventaVisual, configuracion).then((r) => {
+        if (!r?.ok) showToast(avisoDeImpresion('El ticket'), 'info');
+      });
     // CRM: acumular visita/gasto/puntos DESPUÉS de encolar la venta (la cola
     // es FIFO: la fila de ventas ya existirá cuando la RPC corra en el server).
     if (nuevaVentaBD.cliente_id) {
