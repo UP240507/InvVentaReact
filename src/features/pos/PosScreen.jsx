@@ -37,6 +37,7 @@ import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 import DescuentoLineaModal from './components/DescuentoLineaModal';
 import { etiquetaDescuento } from '../../lib/Descuentos';
 import { enviarComanda, enviarTicket, enviarPreCuenta } from '../../lib/Hub';
+import { debeImprimirComanda } from '../../lib/Comanda';
 import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
 import { useAtajos } from '../../hooks/useAtajos';
@@ -89,10 +90,36 @@ export default function PosScreen() {
 
   const {
     enqueueAction,
+    llegoALaNube,
     descontarStockVenta,
     registrarVisitaCliente,
     canjearPuntosCliente,
   } = useSyncStore();
+
+  /**
+   * El papel de cocina sólo si hace falta.
+   *
+   * `enqueueAction` devuelve el id de la tarea; `llegoALaNube` espera un poco a
+   * ver si sube. Si subió, el KDS ya la tiene por realtime y el papel sobra —
+   * salvo que el local no tenga pantallas, que es lo que dice el ajuste.
+   *
+   * Nada de esto bloquea al mesero: se resuelve en segundo plano mientras la
+   * comanda ya viajó al KDS y quedó en Dexie.
+   */
+  const imprimirComandaSiHaceFalta = (comanda, idTarea) => {
+    void (async () => {
+      const modo = configuracion?.imprimir_comandas || 'siempre';
+      // Con `siempre` no se espera a nadie: el papel sale ya, que es lo que
+      // necesita una cocina sin pantalla.
+      const llego = modo === 'sin_nube' ? await llegoALaNube(idTarea) : false;
+      if (!debeImprimirComanda(modo, llego)) return;
+
+      const r = await enviarComanda(comanda, configuracion);
+      if (!r?.ok && r?.total > 0) {
+        showToast(avisoDeImpresion('La comanda'), 'info');
+      }
+    })();
+  };
   const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -465,7 +492,6 @@ export default function PosScreen() {
       items: itemsParaCocina,
       estado: 'preparando',
     };
-    enqueueAction('comandas', 'insert', nuevaComanda);
     registrarComandaKDS(nuevaComanda);
 
     // IMPRESIÓN (fase 3): una comanda por estación, sin precios. No se espera
@@ -473,11 +499,12 @@ export default function PosScreen() {
     // frágil del local y no puede retrasar el envío a cocina, que ya viajó por
     // el KDS. Si falla, el aviso es informativo y el trabajo queda en la cola
     // del hub, visible en /hub.
-    void enviarComanda(nuevaComanda, configuracion).then((r) => {
-      if (!r.ok && r.total > 0) {
-        showToast(avisoDeImpresion('La comanda'), 'info');
-      }
-    });
+    //
+    // Y desde el 11-ago sólo sale si hace falta: con pantallas de KDS, la
+    // comanda que SÍ llegó a la nube ya se está viendo, y el papel sobraba.
+    void enqueueAction('comandas', 'insert', nuevaComanda).then((idTarea) =>
+      imprimirComandaSiHaceFalta(nuevaComanda, idTarea),
+    );
 
     // Inventario: se descuenta AL PRODUCIR (no al cobrar). Solo el delta.
     descontarStockVenta(deltaCarrito, subs);
@@ -696,9 +723,10 @@ export default function PosScreen() {
         ),
         estado: 'preparando',
       };
-      enqueueAction('comandas', 'insert', comandaDirecta);
       registrarComandaKDS(comandaDirecta);
-      void enviarComanda(comandaDirecta, configuracion);
+      void enqueueAction('comandas', 'insert', comandaDirecta).then((idTarea) =>
+        imprimirComandaSiHaceFalta(comandaDirecta, idTarea),
+      );
     }
 
     // TICKET DE COBRO. También sin esperar: el dinero ya entró y la venta ya

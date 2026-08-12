@@ -8,6 +8,7 @@ import {
   datosDelEmisor,
   money,
   MARCA,
+  debeImprimirComanda,
 } from './Comanda';
 
 const config = {
@@ -650,5 +651,41 @@ describe('los datos del emisor', () => {
     // No sale del local y nadie de fuera la ve: ahí el RFC sólo gastaría papel.
     const doc = construirComandas(comandaBase, { configuracion: config })[0];
     expect(doc.emisor ?? []).toEqual([]);
+  });
+});
+
+describe('debeImprimirComanda — cuándo sale papel de cocina', () => {
+  it('«siempre» imprime aunque la comanda haya llegado a la nube', () => {
+    // Cocina sin pantalla: el papel es el único canal y no depende de la red.
+    expect(debeImprimirComanda('siempre', true)).toBe(true);
+    expect(debeImprimirComanda('siempre', false)).toBe(true);
+  });
+
+  it('«sin_nube» sólo imprime lo que NO llegó', () => {
+    // El caso que motivó el cambio: con KDS, la comanda que subió ya se está
+    // viendo en la pantalla y el papel sobraba.
+    expect(debeImprimirComanda('sin_nube', true)).toBe(false);
+    expect(debeImprimirComanda('sin_nube', false)).toBe(true);
+  });
+
+  it('«nunca» no imprime ni sin nube', () => {
+    // No es redundante con `sin_nube`: un local con KDS por LAN ve las comandas
+    // aunque no haya internet, así que imprimir al caerse la nube sería gastar
+    // papel por un problema que no le afecta.
+    expect(debeImprimirComanda('nunca', false)).toBe(false);
+    expect(debeImprimirComanda('nunca', true)).toBe(false);
+  });
+
+  it('un modo desconocido o vacío cae en «siempre»', () => {
+    // Degradación segura: ante un dato corrupto, papel de más. Lo contrario es
+    // una cocina que deja de recibir comandas sin que nada falle.
+    for (const modo of [undefined, null, '', 'Sí', 'xyz']) {
+      expect(debeImprimirComanda(modo, true)).toBe(true);
+    }
+  });
+
+  it('no distingue mayúsculas', () => {
+    expect(debeImprimirComanda('SIN_NUBE', true)).toBe(false);
+    expect(debeImprimirComanda('Nunca', false)).toBe(false);
   });
 });

@@ -564,3 +564,38 @@ export function documentoDePrueba({ configuracion = {} } = {}) {
     _restaurante: nombreDelLocal(configuracion),
   };
 }
+
+/**
+ * ¿Hay que sacar la comanda en papel?
+ *
+ * ── EL PROBLEMA (11-ago) ────────────────────────────────────────────────────
+ * `PosScreen` llamaba a `enviarComanda` sin ninguna condición, así que en un
+ * local con pantallas de KDS la comanda salía dos veces: en la pantalla y en
+ * papel. El papel es el modo isla v1 —el respaldo para que cocina se entere
+ * cuando el KDS no puede— pero nunca se ató a que hiciera falta.
+ *
+ * ── LOS TRES MODOS, Y POR QUÉ NO BASTAN DOS ─────────────────────────────────
+ *   · `siempre`   — cocina sin pantalla. El papel es el ÚNICO canal.
+ *   · `sin_nube`  — hay pantallas; el papel sólo si la comanda no llegó.
+ *   · `nunca`     — hay pantallas y se confía en ellas.
+ *
+ * `nunca` parece redundante con `sin_nube` y no lo es: un local con KDS por LAN
+ * (fase 3.6) verá las comandas aunque no haya internet, así que para él imprimir
+ * al caerse la nube sería gastar papel por un problema que no le afecta.
+ *
+ * ── POR QUÉ EL DEFECTO ES `siempre` ─────────────────────────────────────────
+ * Es el lado ruidoso del fallo. Una cocina sin pantalla que deja de recibir
+ * papel no prepara el pedido, y eso se descubre con el cliente esperando.
+ * Gastar rollo de más se descubre mirando el rollo.
+ *
+ * @param {string}  modo          `configuracion.imprimir_comandas`
+ * @param {boolean} llegoALaNube  ¿la comanda se sincronizó con Supabase?
+ */
+export function debeImprimirComanda(modo, llegoALaNube) {
+  const m = String(modo || 'siempre').toLowerCase();
+  if (m === 'nunca') return false;
+  if (m === 'sin_nube') return !llegoALaNube;
+  // Cualquier valor desconocido cae en `siempre`: ante un dato corrupto, el
+  // papel de más es la degradación segura.
+  return true;
+}

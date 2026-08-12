@@ -29,6 +29,14 @@ export default function ZonasImpresionScreen() {
   const [nuevaZona, setNuevaZona] = useState('');
   const [enrutamiento, setEnrutamiento] = useState({});
 
+  // Cuándo sale papel de cocina. Vive en esta pantalla y no en Configuración
+  // porque es la misma decisión que el enrutamiento: cómo se entera cocina.
+  //
+  // `siempre` de fábrica y no `sin_nube`: una cocina SIN pantalla que deja de
+  // recibir papel no prepara el pedido, y eso se descubre con el cliente
+  // esperando. Gastar rollo de más se descubre mirando el rollo.
+  const [imprimirComandas, setImprimirComandas] = useState('siempre');
+
   // Categorías REALES: las del menú (recetas activas), no solo config.categorias.
   // Es la fuente de verdad de qué se enruta. Une ambas por si acaso.
   const categoriasMenu = useMemo(() => {
@@ -58,6 +66,9 @@ export default function ZonasImpresionScreen() {
     if (configuracion) {
       if (configuracion.zonas_produccion?.length > 0) {
         setZonas(configuracion.zonas_produccion);
+      }
+      if (configuracion.imprimir_comandas) {
+        setImprimirComandas(configuracion.imprimir_comandas);
       }
       if (configuracion.enrutamiento) {
         setEnrutamiento(configuracion.enrutamiento);
@@ -98,6 +109,7 @@ export default function ZonasImpresionScreen() {
       ...configuracion,
       zonas_produccion: zonas,
       enrutamiento,
+      imprimir_comandas: imprimirComandas,
     });
     showToast('Enrutamiento de KDS actualizado', 'success');
   };
@@ -114,6 +126,63 @@ export default function ZonasImpresionScreen() {
           </Button>
         }
       />
+
+      {/* CUÁNDO SALE PAPEL ────────────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm mb-8">
+        <h3 className="text-xs font-black text-adm-muted uppercase tracking-widest mb-2 flex items-center gap-2">
+          <Printer className="w-4 h-4" /> Cuándo imprimir las comandas
+        </h3>
+        <p className="text-sm text-adm-muted font-medium mb-4">
+          El KDS es el canal principal. El papel existe para que cocina se
+          entere cuando la pantalla no puede.
+        </p>
+
+        <div className="space-y-2">
+          {[
+            {
+              v: 'siempre',
+              t: 'Siempre',
+              d: 'La cocina no tiene pantalla, o se quiere papel de todos modos.',
+            },
+            {
+              v: 'sin_nube',
+              t: 'Sólo cuando no llegó a la nube',
+              d: 'Con pantallas de KDS: el papel sale únicamente si la comanda no pudo sincronizarse y nadie la vio.',
+            },
+            {
+              v: 'nunca',
+              t: 'Nunca',
+              d: 'Se confía en las pantallas incluso sin internet.',
+            },
+          ].map((o) => (
+            <label
+              key={o.v}
+              className={`flex gap-3 p-3 rounded-ui border-2 cursor-pointer transition-colors ${
+                imprimirComandas === o.v
+                  ? 'border-adm-accent bg-adm-accent/5'
+                  : 'border-adm-border hover:border-adm-muted'
+              }`}
+            >
+              <input
+                type="radio"
+                name="imprimir_comandas"
+                value={o.v}
+                checked={imprimirComandas === o.v}
+                onChange={(e) => setImprimirComandas(e.target.value)}
+                className="mt-1"
+              />
+              <span>
+                <span className="block font-black text-adm-ink text-sm">
+                  {o.t}
+                </span>
+                <span className="block text-xs text-adm-muted font-medium">
+                  {o.d}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1">
         {/* PANEL IZQUIERDO: ESTACIONES */}

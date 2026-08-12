@@ -114,8 +114,9 @@ export const useSyncStore = create((set, get) => ({
 
     // 3. Encolar. Si esto falla, el dato local ya quedó (paso 2), pero hay que
     //    saberlo: lanzamos para que el llamador no crea que se encoló si no fue así.
+    let idTarea;
     try {
-      await localDB.sync_queue.add(queueItem);
+      idTarea = await localDB.sync_queue.add(queueItem);
       set({ pendingTasks: await localDB.sync_queue.count() });
     } catch (e) {
       console.error(
@@ -136,6 +137,40 @@ export const useSyncStore = create((set, get) => ({
           e?.message,
         ),
       );
+
+    // El id de la tarea, para quien necesite saber si ESTA llegó a la nube.
+    // Ver `llegoALaNube`. Devolverlo no cambia nada para los demás llamadores.
+    return idTarea;
+  },
+
+  /**
+   * ¿Llegó esta tarea a Supabase?
+   *
+   * ── POR QUÉ SE SONDEA Y NO SE ESPERA A `processQueue` ───────────────────
+   * `enqueueAction` ya dispara `processQueue` en segundo plano, y esa función
+   * lleva un guardia contra ejecuciones en paralelo: un segundo `await
+   * processQueue()` desde aquí volvería de INMEDIATO sin haber hecho nada,
+   * porque la primera sigue corriendo. Se leería como «no llegó» cuando la
+   * subida está en curso.
+   *
+   * Así que se mira el hecho en vez de la promesa: `processQueue` BORRA la
+   * tarea de `sync_queue` cuando sube bien, de modo que «ya no está» es la
+   * prueba de que llegó. Se comprueba cada `pasoMs` hasta agotar `esperaMs`.
+   *
+   * El tope importa: quien llama a esto está decidiendo si sacar un papel para
+   * cocina, y cocina no puede esperar. Mejor un papel de más a los dos segundos
+   * que un pedido que nadie prepara.
+   */
+  llegoALaNube: async (idTarea, { esperaMs = 2000, pasoMs = 150 } = {}) => {
+    if (idTarea == null) return false;
+    const limite = Date.now() + esperaMs;
+    while (Date.now() < limite) {
+      const sigue = await localDB.sync_queue.get(idTarea);
+      if (!sigue) return true; // subió y se borró
+      if (sigue.estado === 'dead') return false; // permanente: no va a llegar
+      await new Promise((r) => setTimeout(r, pasoMs));
+    }
+    return false;
   },
 
   // ✅ Sprint 3: encola una llamada RPC atómica (no es un CRUD de tabla).
