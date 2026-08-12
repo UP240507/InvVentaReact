@@ -60,8 +60,18 @@ describe('carrilDispositivo', () => {
     // llaves de identidad y podrían desincronizarse al limpiar a medias.
     const a = almacenFalso();
     carrilDispositivo({ almacen: a });
+    // Lo que se afirma es la INTENCIÓN: `IdVenta` no crea ninguna llave de
+    // identidad propia. Todo lo escrito pertenece a `Folio` —el prefijo y su
+    // marca de provisional—, que es quien decide quién es este dispositivo.
+    //
+    // Antes esto comparaba contra la lista literal de llaves y se rompió el
+    // 11-ago al añadir `folio:prefijo-provisional`, que es un cambio correcto
+    // de otro módulo. Una prueba que falla porque el vecino creció bien está
+    // afirmando de más.
     const llaves = Object.keys(a._datos);
-    expect(llaves).toEqual(['folio:prefijo-dispositivo']);
+    expect(llaves.length).toBeGreaterThan(0);
+    expect(llaves.every((k) => k.startsWith('folio:'))).toBe(true);
+    expect(llaves.some((k) => k.startsWith('idunico:'))).toBe(false);
   });
 
   it('dos dispositivos con el MISMO sufijo comparten carril (limitación asumida)', () => {
@@ -252,8 +262,12 @@ describe('las series no se empujan entre sí', () => {
     const a = almacenFalso();
     siguienteIdUnico({ serie: SERIE_VENTA, almacen: a });
     siguienteIdUnico({ serie: SERIE_COMANDA, almacen: a });
-    expect(Object.keys(a._datos).sort()).toEqual([
-      'folio:prefijo-dispositivo',
+    // Un candado por serie, y ninguno compartido. No se compara la lista entera
+    // de llaves para no romperse cuando `Folio` añada las suyas.
+    const candados = Object.keys(a._datos).filter((k) =>
+      k.startsWith('idunico:'),
+    );
+    expect(candados.sort()).toEqual([
       `idunico:ultimo:${SERIE_COMANDA}`,
       `idunico:ultimo:${SERIE_VENTA}`,
     ]);

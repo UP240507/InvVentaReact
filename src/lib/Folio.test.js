@@ -17,6 +17,8 @@ import {
   ANCHO_CONSECUTIVO,
   SERIE_VENTA,
   SERIE_COMANDA,
+  LETRAS_LOCAL,
+  LETRAS_DISPOSITIVO,
 } from './Folio';
 
 /** Un almacén de mentira por dispositivo: dos instancias = dos dispositivos. */
@@ -222,5 +224,93 @@ describe('el caso en que este esquema SÍ falla', () => {
     const mudo = almacenMudo();
     expect(siguienteConsecutivo({ almacen: mudo })).toBe(1);
     expect(siguienteConsecutivo({ almacen: mudo })).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// El prefijo provisional — salió en el primer ticket impreso de verdad
+// (11-ago): decía `PTKL…` en un restaurante llamado AZUL RESTAURANTE, con el
+// nombre puesto en la configuración desde hacía semanas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('prefijo acuñado sin nombre del local', () => {
+  it('sin nombre, sortea las letras y lo marca como provisional', () => {
+    const a = almacenFalso();
+    const p = prefijoDispositivo({ nombreLocal: undefined, almacen: a });
+    expect(p).toHaveLength(LETRAS_LOCAL + LETRAS_DISPOSITIVO);
+    expect(a._datos['folio:prefijo-provisional']).toBe('1');
+  });
+
+  it('con nombre NO se marca provisional', () => {
+    const a = almacenFalso();
+    expect(
+      prefijoDispositivo({ nombreLocal: 'AZUL RESTAURANTE', almacen: a }),
+    ).toMatch(/^AZUL/);
+    expect(a._datos['folio:prefijo-provisional']).toBe('0');
+  });
+
+  it('EL CASO REAL: se repara en cuanto aparece el nombre', () => {
+    const a = almacenFalso();
+    // Primera venta antes de que hidrate el store: `configuracion` es undefined.
+    const provisional = prefijoDispositivo({ almacen: a });
+    const sufijo = provisional.slice(-LETRAS_DISPOSITIVO);
+
+    // Ya con la configuración cargada.
+    const reparado = prefijoDispositivo({
+      nombreLocal: 'AZUL RESTAURANTE',
+      almacen: a,
+    });
+
+    expect(reparado).toBe(`AZUL${sufijo}`);
+    // El sufijo de dispositivo se conserva: ahí vive la unicidad entre
+    // terminales, y tocarlo sería reintroducir la colisión que el módulo evita.
+    expect(reparado.slice(-LETRAS_DISPOSITIVO)).toBe(sufijo);
+  });
+
+  it('se repara UNA vez: después ya no se toca aunque cambie el nombre', () => {
+    // Es la regla que separa reparar de renombrar. Un restaurante que se cambia
+    // el nombre NO parte su serie de folios en dos.
+    const a = almacenFalso();
+    prefijoDispositivo({ almacen: a });
+    const reparado = prefijoDispositivo({
+      nombreLocal: 'AZUL RESTAURANTE',
+      almacen: a,
+    });
+    const trasRenombrar = prefijoDispositivo({
+      nombreLocal: 'OTRO NOMBRE',
+      almacen: a,
+    });
+    expect(trasRenombrar).toBe(reparado);
+  });
+
+  it('un prefijo bueno nunca se toca al renombrar', () => {
+    const a = almacenFalso();
+    const original = prefijoDispositivo({
+      nombreLocal: 'AZUL RESTAURANTE',
+      almacen: a,
+    });
+    expect(
+      prefijoDispositivo({ nombreLocal: 'BURGER PALACE', almacen: a }),
+    ).toBe(original);
+  });
+
+  it('un dispositivo anterior a la marca se respeta', () => {
+    // Sin la llave `provisional`, se lee como no provisional: no se toca lo que
+    // ya está emitiendo folios. Lectura conservadora a propósito.
+    const a = almacenFalso({ 'folio:prefijo-dispositivo': 'PTKL7K' });
+    expect(
+      prefijoDispositivo({ nombreLocal: 'AZUL RESTAURANTE', almacen: a }),
+    ).toBe('PTKL7K');
+  });
+
+  it('reparar no altera el contador ya emitido', () => {
+    // La serie se ve partida —PTKL7K-V-000001, luego AZUL7K-V-000002— pero el
+    // consecutivo no retrocede ni salta: no hay folio reemitido.
+    const a = almacenFalso();
+    const uno = siguienteFolio({ almacen: a });
+    const dos = siguienteFolio({ nombreLocal: 'AZUL RESTAURANTE', almacen: a });
+    expect(uno).toMatch(/-V-000001$/);
+    expect(dos).toMatch(/^AZUL/);
+    expect(dos).toMatch(/-V-000002$/);
   });
 });

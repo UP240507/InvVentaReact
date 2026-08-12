@@ -50,6 +50,20 @@
 const LLAVE_PREFIJO = 'folio:prefijo-dispositivo';
 
 /**
+ * ¿El prefijo guardado se acuñó SIN nombre del local?
+ *
+ * Distingue un prefijo legítimo de un marcador de posición. Sin esta marca no
+ * hay forma de saberlo: `PTKL` y `AZUL` son cuatro letras igual de válidas, y
+ * adivinar por su aspecto —«esto no parece un nombre»— sería renombrar series
+ * buenas de restaurantes con nombres raros.
+ *
+ * Un dispositivo de antes de esta marca no la tiene, así que se lee como `'0'`
+ * (no provisional) y su prefijo se respeta. Es la lectura conservadora: no
+ * tocar lo que ya está emitiendo folios.
+ */
+const LLAVE_PROVISIONAL = 'folio:prefijo-provisional';
+
+/**
  * Cada SERIE lleva su propio contador.
  *
  * Hay dos documentos numerados y no son lo mismo: el ticket de venta (`V`) y la
@@ -173,13 +187,49 @@ export function prefijoDispositivo({
   almacen = almacenLocal,
 } = {}) {
   const guardado = almacen.leer(LLAVE_PREFIJO);
-  if (guardado) return guardado;
+  const letrasBuenas = letrasDelLocal(nombreLocal);
+
+  if (guardado) {
+    // ── REPARACIÓN DE UN PREFIJO PROVISIONAL (11-ago) ────────────────────────
+    // Salió en el primer ticket impreso de verdad: el folio decía `PTKL…` en un
+    // restaurante que se llama AZUL. Cuatro letras al azar significan que el
+    // prefijo se acuñó SIN nombre del local — y aquí el nombre estaba puesto
+    // desde hacía semanas.
+    //
+    // La causa: `PosScreen` pasa `configuracion?.nombre_empresa`, y si la
+    // primera venta o comanda cae antes de que el store hidrate, ese valor es
+    // `undefined`. Entonces se sortean cuatro letras… y como el prefijo se
+    // guarda y no se vuelve a mirar, ese marcador de posición queda para
+    // siempre. Es un fallo de los que no dan error: el folio funciona, ordena y
+    // no colisiona. Sólo es ilegible, que era justo la mitad que el prefijo
+    // venía a resolver.
+    //
+    // Se repara UNA vez, y sólo las letras del local. Los dos caracteres del
+    // dispositivo se conservan intactos, y eso es lo que hace segura la
+    // reparación: la unicidad entre terminales vive ahí, no en el nombre. Dos
+    // dispositivos que ya no colisionaban siguen sin colisionar.
+    //
+    // No contradice la regla de «el prefijo no cambia al renombrar el
+    // restaurante»: aquí no se está renombrando nada. Se está sustituyendo un
+    // marcador por el dato que debió estar desde el principio.
+    const provisional = almacen.leer(LLAVE_PROVISIONAL) === '1';
+    if (provisional && letrasBuenas) {
+      const sufijo = guardado.slice(-LETRAS_DISPOSITIVO);
+      const reparado = `${letrasBuenas}${sufijo}`;
+      almacen.escribir(LLAVE_PREFIJO, reparado);
+      almacen.escribir(LLAVE_PROVISIONAL, '0');
+      return reparado;
+    }
+    return guardado;
+  }
 
   // Sin nombre configurado se usan cuatro al azar en su sitio: un prefijo
   // ilegible es peor que uno legible, pero mucho mejor que uno que colisiona.
-  const letras = letrasDelLocal(nombreLocal) || alAzar(LETRAS_LOCAL);
+  // Se marca como provisional para poder repararlo en cuanto haya nombre.
+  const letras = letrasBuenas || alAzar(LETRAS_LOCAL);
   const nuevo = `${letras}${alAzar(LETRAS_DISPOSITIVO)}`;
   almacen.escribir(LLAVE_PREFIJO, nuevo);
+  almacen.escribir(LLAVE_PROVISIONAL, letrasBuenas ? '0' : '1');
   return nuevo;
 }
 
