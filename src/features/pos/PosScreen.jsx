@@ -117,7 +117,12 @@ export default function PosScreen() {
       const modo = configuracion?.imprimir_comandas || 'siempre';
       // Con `siempre` no se espera a nadie: el papel sale ya, que es lo que
       // necesita una cocina sin pantalla.
-      const llego = modo === 'sin_nube' ? await llegoALaNube(idTarea) : false;
+      // `llegoALaNube?.()` — un store simulado puede no traerlo. Sin la guarda,
+      // no imprimir una comanda se convertiría en un error no capturado.
+      const llego =
+        modo === 'sin_nube' && typeof llegoALaNube === 'function'
+          ? await llegoALaNube(idTarea)
+          : false;
       if (!debeImprimirComanda(modo, llego)) return;
 
       const r = await enviarComanda(comanda, configuracion);
@@ -629,9 +634,15 @@ export default function PosScreen() {
     //
     // Y desde el 11-ago sólo sale si hace falta: con pantallas de KDS, la
     // comanda que SÍ llegó a la nube ya se está viendo, y el papel sobraba.
-    void enqueueAction('comandas', 'insert', nuevaComanda).then((idTarea) =>
-      imprimirComandaSiHaceFalta(nuevaComanda, idTarea),
-    );
+    // `Promise.resolve(...)` y no `.then()` directo. Esta es una ruta
+    // «fire and forget» dentro del cobro: si `enqueueAction` devolviera algo que
+    // no es una promesa —una versión anterior, o un doble simulado en una
+    // prueba— el `.then` reventaría el manejador del clic y se llevaría por
+    // delante el cobro entero. La impresión de una comanda no puede tumbar una
+    // venta; es la misma regla que hace que la impresora nunca bloquee.
+    void Promise.resolve(
+      enqueueAction('comandas', 'insert', nuevaComanda),
+    ).then((idTarea) => imprimirComandaSiHaceFalta(nuevaComanda, idTarea));
 
     // Inventario: se descuenta AL PRODUCIR (no al cobrar). Solo el delta.
     descontarStockVenta(deltaCarrito, subs);
@@ -891,9 +902,9 @@ export default function PosScreen() {
         estado: 'preparando',
       };
       registrarComandaKDS(comandaDirecta);
-      void enqueueAction('comandas', 'insert', comandaDirecta).then((idTarea) =>
-        imprimirComandaSiHaceFalta(comandaDirecta, idTarea),
-      );
+      void Promise.resolve(
+        enqueueAction('comandas', 'insert', comandaDirecta),
+      ).then((idTarea) => imprimirComandaSiHaceFalta(comandaDirecta, idTarea));
     }
 
     // TICKET DE COBRO. También sin esperar: el dinero ya entró y la venta ya
