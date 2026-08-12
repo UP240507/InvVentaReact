@@ -234,12 +234,13 @@ describe('construirTicket — dinero', () => {
     expect(doc.cuerpo[0].sublineas.join(' ')).toContain('Cortesía');
   });
 
-  it('los totales van en el orden en que un cliente los revisa', () => {
+  it('el TOTAL va PRIMERO; el desglose baja al pie (formato AZUL, 11-ago)', () => {
+    // Cambio de orden deliberado, medido contra un ticket físico de AZUL: quien
+    // recibe el papel busca CUÁNTO PAGA, no cómo se descompone. Con el desglose
+    // arriba, el ojo recorre tres cifras antes de llegar a la que importa.
     const doc = construirTicket(venta, { configuracion: config });
     expect(doc.totales.map((t) => t.etiqueta)).toEqual([
-      'Subtotal',
-      'Descuento',
-      'IVA',
+      // La propina sí queda arriba: no es desglose, es parte de lo que se paga.
       'Propina',
       'TOTAL',
       // Lo entregado y el cambio van DESPUÉS del total: no son desglose de la
@@ -249,6 +250,20 @@ describe('construirTicket — dinero', () => {
       'Recibido',
       'Cambio',
     ]);
+  });
+
+  it('subtotal e IVA van en el pie, en UNA línea', () => {
+    const doc = construirTicket(venta, { configuracion: config });
+    const linea = doc.pie.find((p) => p.includes('SUBTOTAL:'));
+    expect(linea).toBeTruthy();
+    expect(linea).toContain('IVA:');
+    // En 32 columnas dos renglones para dos cifras secundarias son caros.
+    expect(doc.pie.filter((p) => p.includes('IVA:'))).toHaveLength(1);
+  });
+
+  it('el descuento se ve, aunque haya bajado al desglose', () => {
+    const doc = construirTicket(venta, { configuracion: config });
+    expect(doc.pie.some((p) => p.includes('DESC:'))).toBe(true);
   });
 
   it('sólo el TOTAL va enfatizado, y nada antes de él', () => {
@@ -262,12 +277,11 @@ describe('construirTicket — dinero', () => {
     const simple = { ...venta, descuento: 0, propina: 0 };
     const doc = construirTicket(simple, { configuracion: config });
     expect(doc.totales.map((t) => t.etiqueta)).toEqual([
-      'Subtotal',
-      'IVA',
       'TOTAL',
       'Recibido',
       'Cambio',
     ]);
+    expect(doc.pie.some((p) => p.includes('DESC:'))).toBe(false);
   });
 
   it('pagando con tarjeta no hay recibido ni cambio que enseñar', () => {
@@ -312,14 +326,21 @@ describe('construirTicket — dinero', () => {
 
   it('dice que no es comprobante fiscal — el timbrado aún no existe', () => {
     const doc = construirTicket(venta, { configuracion: config });
-    expect(doc.pie.join(' ')).toContain('no es comprobante fiscal');
+    expect(doc.pie.join(' ').toLowerCase()).toContain(
+      'no es un comprobante fiscal',
+    );
   });
 
   it('la advertencia fiscal cabe en una línea de papel de 58 mm', () => {
     // 32 columnas. Partida en dos renglones se lee como letra chica, y ésta
     // es justo la que conviene que se lea.
     const doc = construirTicket(venta, { configuracion: config });
-    const aviso = doc.pie.find((p) => p.includes('comprobante fiscal'));
+    const aviso = doc.pie.find((p) =>
+      p.toLowerCase().includes('comprobante fiscal'),
+    );
+    // `ESTE NO ES UN COMPROBANTE FISCAL` mide exactamente 32. Justo, y a
+    // propósito: es el texto del ticket de AZUL y cabe en el papel estrecho.
+    expect(aviso).toBeTruthy();
     expect(aviso.length).toBeLessThanOrEqual(32);
   });
 });
@@ -544,10 +565,27 @@ describe('construirPreCuenta', () => {
     expect(cuerpo[1]).toMatchObject({ cantidad: '3', importe: '$132.00' });
   });
 
-  it('el descuento aparece sólo si lo hay', () => {
-    expect(pre().totales.map((t) => t.etiqueta)).not.toContain('Descuento');
-    expect(pre({ descuento: 50 }).totales.map((t) => t.etiqueta)).toContain(
-      'Descuento',
+  it('el descuento aparece sólo si lo hay, y ahora en el desglose del pie', () => {
+    expect(pre().pie.some((p) => p.includes('DESC:'))).toBe(false);
+    expect(pre({ descuento: 50 }).pie.some((p) => p.includes('DESC:'))).toBe(
+      true,
+    );
+  });
+
+  it('el desglose fiscal va en el pie, en una línea', () => {
+    const linea = pre().pie.find((p) => p.includes('SUBTOTAL:'));
+    expect(linea).toBeTruthy();
+    expect(linea).toContain('IVA:');
+  });
+
+  it('«PROPINA NO INCLUIDA» sólo cuando la propina NO está incluida', () => {
+    // Se decide por el dato y no por el tipo de documento: el mismo constructor
+    // sirve para la cuenta de la mesa (sin propina) y —en el flujo de un solo
+    // papel— para el ticket. Decirlo en un papel que ya la cobró sería falso, y
+    // podría hacer que el cliente la pague dos veces.
+    expect(pre().pie.join(' ')).toContain('PROPINA NO INCLUIDA');
+    expect(pre({ propina: 40 }).pie.join(' ')).not.toContain(
+      'PROPINA NO INCLUIDA',
     );
   });
 
@@ -687,5 +725,51 @@ describe('debeImprimirComanda — cuándo sale papel de cocina', () => {
   it('no distingue mayúsculas', () => {
     expect(debeImprimirComanda('SIN_NUBE', true)).toBe(false);
     expect(debeImprimirComanda('Nunca', false)).toBe(false);
+  });
+});
+
+describe('el ticket sin pago — la cuenta que se lleva a la mesa', () => {
+  // Con el flujo de un solo papel, `construirTicket` se usa ANTES de cobrar.
+  // Todo lo que hable de un pago que no ha ocurrido está mal en ese papel.
+  const base = {
+    folio: 'AZUL7K-V-000001',
+    mesa_nombre: '9',
+    usuario: 'Sairi',
+    comensales: 3,
+    fecha: new Date(2026, 7, 6, 13, 42).toISOString(),
+    subtotal: 488.79,
+    iva: 78.21,
+    total: 567,
+    items: [{ cantidad: 1, nombre: 'Mestizos', precio_venta: 110 }],
+  };
+  const sinPago = () => construirTicket(base, { configuracion: config });
+
+  it('no inventa «Recibido» ni «Cambio» de $0.00', () => {
+    // Antes `metodo` caía a 'efectivo' por defecto y el papel afirmaba un pago
+    // inexistente: «Recibido: $0.00 / Cambio: $0.00» en una cuenta sin pagar.
+    const etiquetas = sinPago().totales.map((t) => t.etiqueta);
+    expect(etiquetas).not.toContain('Recibido');
+    expect(etiquetas).not.toContain('Cambio');
+  });
+
+  it('no dice cómo se pagó, porque todavía no se ha pagado', () => {
+    expect(sinPago().pie.join(' ')).not.toContain('Pago:');
+  });
+
+  it('con pago sí aparecen las dos cosas', () => {
+    const doc = construirTicket(
+      { ...base, metodo_pago: 'efectivo', efectivo: 600, cambio_entregado: 33 },
+      { configuracion: config },
+    );
+    expect(doc.totales.map((t) => t.etiqueta)).toContain('Recibido');
+    expect(doc.pie.join(' ')).toContain('Pago:');
+  });
+
+  it('la mesa va primero en la meta, y las personas si las hay', () => {
+    // Quien revisa una pila de cuentas busca la mesa; el folio se usa después.
+    const meta = sinPago().meta.map((m) => m.etiqueta);
+    expect(meta[0]).toBe('Mesa');
+    expect(meta).toContain('Personas');
+    expect(meta).toContain('Folio');
   });
 });

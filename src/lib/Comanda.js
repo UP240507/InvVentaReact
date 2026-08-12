@@ -143,6 +143,45 @@ export function datosDelEmisor(configuracion) {
 }
 
 /** Dinero como texto. Vive aquí porque el hub no formatea ni redondea. */
+/**
+ * El desglose fiscal, en UNA línea, para el pie.
+ *
+ * ── POR QUÉ ABAJO Y PEQUEÑO, Y NO ARRIBA ────────────────────────────────────
+ * Es el orden del ticket real de AZUL, y es mejor para este papel: quien lo
+ * recibe busca **cuánto paga**, no cómo se descompone. Con el desglose arriba,
+ * el ojo recorre tres cifras antes de llegar a la que importa. Con el TOTAL
+ * primero y grande, la cifra que se busca está donde se busca, y el desglose
+ * queda donde corresponde — disponible para quien lo necesite, sin estorbar a
+ * quien no.
+ *
+ * ── POR QUÉ UNA SOLA LÍNEA ──────────────────────────────────────────────────
+ * En 32 columnas dos renglones para dos cifras secundarias son caros. Cabe
+ * `SUBTOTAL:$1,488.79  IVA:$238.21` justo en 32; con importes mayores el
+ * renderizador lo envuelve por el espacio y degrada a dos líneas, que es
+ * exactamente lo que había antes. No se rompe, sólo deja de ahorrar.
+ */
+function desgloseFiscal({ subtotal, iva, descuento = 0 }) {
+  const partes = [`SUBTOTAL:${money(subtotal)}`];
+  if (num(descuento) > 0) partes.push(`DESC:${money(descuento)}`);
+  partes.push(`IVA:${money(iva)}`);
+  return partes.join('  ');
+}
+
+/**
+ * Las dos advertencias del pie, en el orden del ticket de AZUL.
+ *
+ * La de propina **sólo si la propina no está incluida**. En un ticket que ya la
+ * cobró, decir «PROPINA NO INCLUIDA» sería falso y podría hacer que el cliente
+ * la pague dos veces. Se decide por el dato, no por el tipo de documento: el
+ * mismo constructor sirve para la cuenta que se lleva a la mesa (sin propina) y
+ * para el ticket de mostrador (con ella).
+ */
+function advertenciasDelPie(propina) {
+  const avisos = ['ESTE NO ES UN COMPROBANTE FISCAL'];
+  if (num(propina) <= 0) avisos.push('PROPINA NO INCLUIDA');
+  return avisos;
+}
+
 export function money(v) {
   return `$${num(v).toLocaleString('es-MX', {
     minimumFractionDigits: 2,
@@ -302,20 +341,13 @@ export function construirTicket(
     });
   }
 
-  const totales = [
-    { etiqueta: 'Subtotal', valor: money(venta.subtotal), enfasis: false },
-  ];
+  // El TOTAL va PRIMERO y grande; el desglose baja al pie. Ver
+  // `desgloseFiscal`: es el orden del ticket real de AZUL y el que pone la
+  // cifra que se busca donde se busca.
+  const totales = [];
 
-  if (num(venta.descuento) > 0) {
-    totales.push({
-      etiqueta: 'Descuento',
-      valor: `−${money(venta.descuento)}`,
-      enfasis: false,
-    });
-  }
-
-  totales.push({ etiqueta: 'IVA', valor: money(venta.iva), enfasis: false });
-
+  // La propina sí queda arriba: no es desglose, es parte de lo que se paga, y
+  // el cliente tiene que verla antes del total y no enterrada abajo.
   if (num(venta.propina) > 0) {
     totales.push({
       etiqueta: 'Propina',
@@ -326,14 +358,20 @@ export function construirTicket(
 
   totales.push({ etiqueta: 'TOTAL', valor: money(venta.total), enfasis: true });
 
-  const metodo = String(venta.metodo_pago || 'efectivo');
+  // Sin `|| 'efectivo'`. Ese valor por defecto era inofensivo mientras el ticket
+  // se imprimía SIEMPRE después de cobrar; con el flujo de un solo papel el
+  // mismo documento sale al PEDIR la cuenta, y entonces afirmaba en papel un
+  // pago que no había ocurrido: «Recibido: $0.00 / Cambio: $0.00» en una cuenta
+  // que el cliente todavía no ha pagado.
+  const metodo = String(venta.metodo_pago || '');
+  const hayPago = metodo !== '';
 
   // Lo recibido y el cambio son DINERO, y el dinero va en la columna del
   // dinero. Antes viajaban como una frase suelta en el pie —"Recibido: $X
   // Cambio: $Y"— y con un billete de $1,200 esa línea pasaba de 32 columnas y
   // se partía en dos justo por donde el cliente comprueba que no le robaron.
   // Como filas de total, la impresora las alinea a la derecha y nunca se parten.
-  if (metodo === 'efectivo') {
+  if (hayPago && metodo === 'efectivo') {
     totales.push({
       etiqueta: 'Recibido',
       valor: money(venta.efectivo),
@@ -346,23 +384,44 @@ export function construirTicket(
     });
   }
 
-  const pie = [`Pago: ${metodo.toUpperCase()}`];
+  const pie = [];
 
+  // El importe en letra va PRIMERO, pegado a los totales: es la línea que
+  // impide alterar la cifra a mano, y separada del total no protege nada.
+  pie.push(`SON: ${importeEnLetra(venta.total)}`);
   pie.push('');
+  pie.push(
+    desgloseFiscal({
+      subtotal: venta.subtotal,
+      iva: venta.iva,
+      descuento: venta.descuento,
+    }),
+  );
+  pie.push('');
+
+  // El método de pago sólo si lo hay. Es OPCIONAL: en el flujo de un solo papel
+  // este mismo ticket se imprime ANTES de cobrar, cuando nadie sabe todavía
+  // cómo va a pagar el cliente. Poner «Pago: EFECTIVO» por defecto sería
+  // afirmar en papel algo que no ha pasado.
+  if (venta.metodo_pago) pie.push(`Pago: ${metodo.toUpperCase()}`);
+
   pie.push('¡GRACIAS POR SU VISITA!');
   // Se dice explícitamente porque el timbrado no existe todavía. Un ticket que
-  // parece factura y no lo es genera un reclamo en la mesa siguiente. Cabe en
-  // 32 columnas a propósito: una advertencia partida en dos renglones se lee
-  // como letra chica, y esta advertencia conviene que se lea.
-  pie.push('Este no es comprobante fiscal.');
+  // parece factura y no lo es genera un reclamo en la mesa siguiente.
+  pie.push(...advertenciasDelPie(venta.propina));
 
+  // Orden del ticket de AZUL: la mesa primero. Quien revisa una pila de cuentas
+  // busca la mesa; el folio se usa después, para referenciar.
   const meta = [
-    { etiqueta: 'Folio', valor: String(venta.folio || '') },
-    { etiqueta: 'Fecha', valor: fechaDe(venta.fecha) },
-    { etiqueta: 'Hora', valor: horaDe(venta.fecha) },
-    { etiqueta: 'Atendió', valor: venta.usuario || 'Cajero' },
     { etiqueta: 'Mesa', valor: venta.mesa_nombre || 'Mostrador' },
+    { etiqueta: 'Atendió', valor: venta.usuario || 'Cajero' },
   ];
+  if (num(venta.comensales) > 0) {
+    meta.push({ etiqueta: 'Personas', valor: String(num(venta.comensales)) });
+  }
+  meta.push({ etiqueta: 'Folio', valor: String(venta.folio || '') });
+  meta.push({ etiqueta: 'Fecha', valor: fechaDe(venta.fecha) });
+  meta.push({ etiqueta: 'Hora', valor: horaDe(venta.fecha) });
 
   return {
     id: `ticket::${venta.id ?? venta.folio}${sufijoCopia(copia)}`,
@@ -461,28 +520,25 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
     });
   }
 
+  // Mismo orden que el ticket: TOTAL primero y grande, desglose al pie. Ver
+  // `desgloseFiscal`.
   const totales = [
-    { etiqueta: 'Subtotal', valor: money(cuenta.subtotal), enfasis: false },
+    {
+      etiqueta: 'TOTAL',
+      valor: money(cuenta.total),
+      enfasis: true,
+    },
   ];
-
-  if (num(cuenta.descuento) > 0) {
-    totales.push({
-      etiqueta: 'Descuento',
-      valor: `−${money(cuenta.descuento)}`,
-      enfasis: false,
-    });
-  }
-
-  totales.push({ etiqueta: 'IVA', valor: money(cuenta.iva), enfasis: false });
-  totales.push({
-    etiqueta: 'TOTAL',
-    valor: money(cuenta.total),
-    enfasis: true,
-  });
 
   // Nada de Propina, Recibido ni Cambio: no hay pago todavía. Ver arriba.
 
   const meta = [{ etiqueta: 'Mesa', valor: cuenta.mesa_nombre || 'Mostrador' }];
+  // El folio hace que este papel se pueda REFERENCIAR, y es lo que lo convierte
+  // en documento final en el flujo de un solo papel. Sin él, un cliente que
+  // llama al día siguiente no tiene nada que citar.
+  if (cuenta.folio) {
+    meta.push({ etiqueta: 'Folio', valor: String(cuenta.folio) });
+  }
   if (num(cuenta.comensales) > 0) {
     meta.push({ etiqueta: 'Personas', valor: String(num(cuenta.comensales)) });
   }
@@ -496,9 +552,17 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
   // impide alterar la cifra a mano, y separada del total no protege nada.
   pie.push(`SON: ${importeEnLetra(cuenta.total)}`);
   pie.push('');
-  // Las dos advertencias que hacen que este papel se lea como lo que es.
-  pie.push('PROPINA NO INCLUIDA');
-  pie.push('Este no es comprobante fiscal.');
+  pie.push(
+    desgloseFiscal({
+      subtotal: cuenta.subtotal,
+      iva: cuenta.iva,
+      descuento: cuenta.descuento,
+    }),
+  );
+  pie.push('');
+  // Las dos advertencias que hacen que este papel se lea como lo que es, en el
+  // orden del ticket de AZUL: primero la fiscal, después la de propina.
+  pie.push(...advertenciasDelPie(cuenta.propina));
 
   return {
     // El instante Y un contador: una pre-cuenta pedida dos veces se imprime dos

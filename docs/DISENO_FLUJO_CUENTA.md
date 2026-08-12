@@ -1,6 +1,7 @@
 # Diseño — la cuenta como documento final
 
-**Estado:** diseñado, sin escribir. 10-ago-2026, para empezar el 11.
+**Estado:** A, B, C y E hechos. Faltan **D** (bloqueo con PIN) y **F** (parcial
+al pedir la cuenta). Diseñado el 10-ago; se empezó el 11.
 **Origen:** el flujo real de AZUL, descrito por Chris y contrastado con un ticket
 físico del 06/08/2026 (folio 8588).
 
@@ -40,7 +41,7 @@ Verificado contra el código, no supuesto:
 
 ## 3 · Los cambios
 
-### A · La cuenta es el documento final — y el ticket se queda para mostrador
+### A · La cuenta es el documento final — ✅ HECHO 11-ago
 
 El papel que hoy llamamos «pre-cuenta» pasa a ser el documento definitivo de una
 mesa. No es un cambio de formato: es dejar de imprimir un segundo papel al
@@ -56,7 +57,7 @@ cada uno en su flujo:
 
 Conviene revisar el nombre: `construirPreCuenta` ya no describe lo que hace.
 
-### B · Maquetado, según el ticket real de AZUL
+### B · Maquetado, según el ticket real de AZUL — ✅ HECHO 12-ago
 
 Cuatro diferencias medidas contra el papel físico:
 
@@ -82,7 +83,7 @@ Meta de AZUL, en orden: `MESA`, `MESERO`, `PERSONAS`, `ORDEN`, `FOLIO`, fecha.
 > un contador diario de aperturas de mesa — «la cuarta mesa del día». Si es eso,
 > es un campo nuevo por tenant que se reinicia cada día.
 
-### C · El folio se asigna al imprimir, y se conserva
+### C · El folio se asigna al imprimir, y se conserva — ✅ HECHO 11-ago
 
 Hoy el folio nace al cobrar (`siguienteFolio({serie: SERIE_VENTA})` en
 `PosScreen`). Si la cuenta es el documento final, el folio tiene que existir
@@ -125,7 +126,7 @@ inventa un segundo camino.
 
 La reapertura deja rastro en auditoría: quién reabrió, qué mesa, con qué folio.
 
-### E · El cajón se desacopla del papel
+### E · El cajón se desacopla del papel — ✅ HECHO 12-ago
 
 **Este es el cambio que hay que hacer sí o sí, o el cajón deja de abrirse.**
 
