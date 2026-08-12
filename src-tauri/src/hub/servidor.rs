@@ -289,6 +289,33 @@ async fn listar_dispositivos(State(estado): State<Arc<EstadoHub>>) -> impl IntoR
     Json(json!({ "ok": true, "dispositivos": estado.dispositivos.listar() }))
 }
 
+/// Abre el cajón sin imprimir nada.
+///
+/// `autorizado()` y no `autorizado_admin()`: abrir el cajón es una operación de
+/// cobro, y quien cobra puede ser un teléfono emparejado. Reconfigurar el
+/// hardware sigue siendo cosa de la caja; usarlo, no.
+async fn abrir_cajon(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !autorizado(&estado, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "token inválido o ausente" })),
+        );
+    }
+    match estado.cola.abrir_cajon() {
+        Ok(()) => (StatusCode::OK, Json(json!({ "ok": true }))),
+        // 200 con `ok:false` y no un 5xx: que el cajón no abra NO es un fallo
+        // del servidor ni algo que el cliente deba reintentar. Es información
+        // para el cajero, que tiene una llave.
+        Err(e) => (
+            StatusCode::OK,
+            Json(json!({ "ok": false, "error": e.to_string() })),
+        ),
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct PeticionAncho {
     #[serde(default)]
@@ -356,6 +383,7 @@ pub fn rutas(estado: Arc<EstadoHub>, dir_web: Option<std::path::PathBuf>) -> Rou
         .route("/cola/reintentar", post(reintentar))
         .route("/cola/descartar", post(descartar))
         .route("/impresora/ancho", post(configurar_ancho))
+        .route("/cajon", post(abrir_cajon))
         .with_state(estado);
 
     let mut app = Router::new().nest("/hub", api).layer(

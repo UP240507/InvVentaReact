@@ -247,6 +247,28 @@ impl Cola {
         *self.ancho.lock().unwrap()
     }
 
+    /// Abre el cajón AHORA, saltándose la cola.
+    ///
+    /// ── POR QUÉ NO SE ENCOLA, QUE ES LO IMPORTANTE ──────────────────────────
+    /// La cola reintenta cinco veces con espera creciente, y para un ticket eso
+    /// es exactamente lo que se quiere: el papel puede salir tarde. Para un
+    /// cajón es peligroso. Un pulso encolado se ejecutaría cuando la impresora
+    /// vuelva —veinte minutos después, o al día siguiente al encenderla— y
+    /// abriría un cajón con dinero dentro sin nadie delante.
+    ///
+    /// Intento único. Si falla, el cajero lo abre con la llave, que es lo que ya
+    /// hace hoy cuando la impresora está apagada. Un cajón que no se abre es un
+    /// incordio; uno que se abre solo de madrugada es otra cosa.
+    ///
+    /// Toma el mismo cerrojo del transporte que usa el hilo de impresión, así
+    /// que si hay un ticket saliendo espera a que termine. La impresora es un
+    /// recurso físico: dos escrituras entrelazadas serían basura en el papel.
+    pub fn abrir_cajon(&self) -> Result<(), crate::hub::transporte::ErrorImpresion> {
+        let bytes = escpos::pulso_cajon();
+        let transporte = self.transporte.lock().unwrap();
+        transporte.enviar(&bytes)
+    }
+
     /// Detiene el hilo trabajador al cerrar la app. Lo pendiente ya está en
     /// disco, así que no se pierde: sale en el siguiente arranque.
     pub fn detener(&self) {

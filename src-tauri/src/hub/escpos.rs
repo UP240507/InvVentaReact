@@ -256,6 +256,27 @@ pub fn dos_columnas(izq: &str, der: &str, cols: usize) -> String {
     format!("{}{}{}", izq, " ".repeat(relleno), der)
 }
 
+/// Sólo el pulso del cajón, sin papel.
+///
+/// ── POR QUÉ EXISTE (11-ago) ─────────────────────────────────────────────────
+/// Hasta hoy el pulso viajaba DENTRO de un documento (`doc.abrir_cajon`), y eso
+/// bastaba mientras al cobrar siempre se imprimiera un ticket. Con el flujo de
+/// un solo papel deja de ser cierto: la cuenta sale al PEDIRLA —cuando todavía
+/// no se sabe si el cliente pagará en efectivo, así que no puede abrir nada— y
+/// al cobrar ya no hay segundo documento. Resultado: el cajón no se abría nunca.
+///
+/// El cajón es una ACCIÓN, no un documento. Abrirlo no debería exigir gastar
+/// papel, igual que imprimir no debería exigir mover dinero.
+///
+/// Se emite `init` antes del pulso porque la impresora puede venir de un estado
+/// raro —una impresión cortada a media tira— y `ESC @` es lo que la deja en
+/// condiciones de atender el siguiente comando.
+pub fn pulso_cajon() -> Vec<u8> {
+    let mut r = Render::new(ANCHO_POR_DEFECTO);
+    r.init().abrir_cajon();
+    r.buf.clone()
+}
+
 /// Convierte un documento en la tira de bytes que se le manda a la impresora.
 pub fn render(doc: &Documento, cols: usize) -> Vec<u8> {
     let mut r = Render::new(cols);

@@ -36,7 +36,12 @@ import {
 import ConfirmacionStockModal from './components/ConfirmacionStockModal';
 import DescuentoLineaModal from './components/DescuentoLineaModal';
 import { etiquetaDescuento } from '../../lib/Descuentos';
-import { enviarComanda, enviarTicket, enviarPreCuenta } from '../../lib/Hub';
+import {
+  enviarComanda,
+  enviarTicket,
+  enviarPreCuenta,
+  abrirCajon,
+} from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
 import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
@@ -782,6 +787,27 @@ export default function PosScreen() {
     // ticket del cobro es el único papel que existe.
     const yaSeImprimioLaCuenta =
       isMesa && (configuracion?.flujo_cuenta || '') === 'ticket_final';
+
+    // ── EL CAJÓN, CUANDO NO HAY TICKET QUE LO LLEVE ─────────────────────────
+    // El pulso viaja DENTRO del ticket (`construirTicket` lo decide por el
+    // método de pago). Con el flujo de un solo papel no se imprime ninguno al
+    // cobrar, así que sin esto el cajón NO SE ABRIRÍA NUNCA — un fallo que
+    // introdujo el propio cambio de un papel y que sólo se ve con dinero en la
+    // mano.
+    //
+    // Se dispara SÓLO en ese caso: cuando sí hay ticket, él lleva el pulso y
+    // mandar otro sería un segundo golpe al solenoide sin ganar nada.
+    //
+    // Fuera de la cola a propósito: un pulso reintentado abriría el cajón
+    // cuando la impresora vuelva, con dinero dentro y nadie delante. Si falla,
+    // el cajero tiene una llave. Ver `abrirCajon` en lib/Hub.js.
+    if (
+      yaSeImprimioLaCuenta &&
+      (nuevaVentaBD.metodo_pago === 'efectivo' ||
+        nuevaVentaBD.metodo_pago === 'mixto')
+    ) {
+      void abrirCajon();
+    }
 
     if (!yaSeImprimioLaCuenta)
       void enviarTicket(ventaVisual, configuracion).then((r) => {

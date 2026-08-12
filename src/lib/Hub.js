@@ -543,6 +543,27 @@ export async function configurarImpresora(transporte, anchoPapel = null) {
 export const ANCHO_58 = 32;
 export const ANCHO_80 = 48;
 
+/**
+ * Abre el cajón. Sin papel.
+ *
+ * ── POR QUÉ ES UNA LLAMADA PROPIA Y NO UN DOCUMENTO ─────────────────────────
+ * Hasta el 11-ago el pulso viajaba dentro del ticket, y funcionaba porque al
+ * cobrar siempre se imprimía uno. Con el flujo de un solo papel eso deja de ser
+ * cierto: la cuenta sale al pedirla —cuando aún no se sabe si el cliente pagará
+ * en efectivo— y al cobrar ya no hay segundo documento. El cajón dejaba de
+ * abrirse.
+ *
+ * Abrir el cajón no debería exigir gastar papel, igual que imprimir no debería
+ * exigir mover dinero.
+ *
+ * **No se encola ni se reintenta.** Un pulso reintentado abriría el cajón
+ * cuando la impresora vuelva —veinte minutos después, o al día siguiente— con
+ * dinero dentro y nadie delante. Si falla, el cajero tiene una llave.
+ */
+export async function abrirCajon({ origen = null } = {}) {
+  return pedir('/cajon', { metodo: 'POST', origen });
+}
+
 export async function configurarAncho(ancho, { origen = null } = {}) {
   return pedir('/impresora/ancho', {
     metodo: 'POST',
