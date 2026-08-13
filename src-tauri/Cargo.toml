@@ -26,6 +26,18 @@ serde_json = "1"
 # en `tauri dev` sale con el nombre y el icono de powershell.
 tauri-plugin-notification = "2"
 
+# Descubrimiento en la LAN (3.3). Sin esto, si el router rota la IP por DHCP
+# TODOS los telefonos del local dejan de encontrar el hub a la vez, y hay que
+# reescanear el QR en cada aparato. Es una comodidad, no un requisito: si el
+# anuncio falla, el hub sigue funcionando por IP.
+mdns-sd = "0.21"
+
+# Auto-actualizacion (3.12). Sin firma de codigo, la reputacion de SmartScreen
+# se acumula por hash de archivo, asi que cada version vuelve a cero y saldra el
+# aviso. Por eso el updater NO puede actualizar en silencio: ver plugins.updater
+# en tauri.conf.json y docs/CHECKLIST_ACTUALIZACIONES.md.
+tauri-plugin-updater = "2"
+
 # ─── Hub LAN ────────────────────────────────────────────────────────────────
 # axum embebido en el propio proceso, NO un sidecar Node/Go: un solo binario,
 # sin runtime extra que instalar ni proceso huérfano que siga vivo si la app

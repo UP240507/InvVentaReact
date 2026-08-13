@@ -278,3 +278,64 @@ contra algo que se sabe bueno.
 - `mesas.mesero_id` sigue muerto: bloquea tres de las cinco propuestas de sala.
 - Queda por localizar el archivo que ensucia `matchMedia` entre ficheros. No
   rompe nada con aislamiento; sólo estorba al correr sin él.
+
+---
+
+## 10 · Lo del 13-ago — TODO EL RUST ESTÁ SIN COMPILAR
+
+Tres módulos nuevos de Rust se escribieron sin toolchain a mano. **Antes que
+nada:**
+
+- [ ] `cd src-tauri && cargo test`
+
+  Toca `respaldo.rs` (12 pruebas), `anuncio.rs` (2) y el plugin del updater.
+  Además `cargo` va a bajar tres dependencias nuevas: `tauri-plugin-notification`,
+  `mdns-sd` y `tauri-plugin-updater`.
+
+- [ ] `scripts/pruebas-rust.sh` — ahora incluye `respaldo`, así que la lógica
+      del respaldo se puede verificar también fuera de Windows.
+
+### El respaldo de ventas
+
+- [ ] En **Ajustes → Hub** aparece el bloque **«Respaldo de ventas»**.
+- [ ] Cobrar en la caja → **«Sin confirmar» sube y vuelve a bajar** en unos
+      segundos, cuando la venta llega a Supabase.
+- [ ] Existe `%APPDATA%\app.invventa.pos\respaldo-ventas.ndjson`.
+
+La prueba que de verdad demuestra que esto sirve, y la única que vale:
+
+- [ ] Cobrar **desde el teléfono, sin internet** (wifi del local sí, datos no).
+- [ ] **Cerrar la pestaña del teléfono y borrar sus datos de sitio** — o sea,
+      simular que el teléfono murió con la venta dentro.
+- [ ] Esperar 15 minutos (o revocar el dispositivo desde la caja para acelerar).
+- [ ] En la caja, **«Por adoptar» marca 1** → pulsar **Recuperar ahora**.
+- [ ] La venta está en Supabase, con su folio y su total.
+
+> Sin ese último paso, lo escrito hoy es una suposición. Es exactamente el tipo
+> de cosa que parece funcionar hasta el día que hace falta.
+
+### El descuento de inventario, que ahora es idempotente
+
+- [ ] Mandar a producción una mesa → el stock baja **una vez**.
+- [ ] Cortar la red justo después y dejar que la cola reintente → **no vuelve a
+      bajar**.
+- [ ] En Supabase, `stock_salidas` tiene una fila por comanda (o por venta en
+      mostrador).
+
+> Esto arregla un fallo que **ya existía**: hasta hoy, un reintento tras un
+> timeout post-commit descontaba dos veces sin decir nada.
+
+### mDNS
+
+- [ ] En la consola de la caja sale `[hub] anunciado como
+      http://invventa-caja.local:3000`.
+- [ ] Desde un **iPhone** o desde otra PC, esa dirección abre la app.
+- [ ] Desde **Android puede que no funcione**, y no es un fallo: Chrome resuelve
+      `.local` de forma irregular. Por eso el QR sigue llevando la IP.
+
+### El updater
+
+Ver `docs/CHECKLIST_ACTUALIZACIONES.md`: **no funciona hasta que generes las
+llaves y pegues la pública en `tauri.conf.json`**. Hoy dice
+`PEGA_AQUI_LA_CLAVE_PUBLICA`, así que la compilación del bundle fallará al
+firmar si no se hace.

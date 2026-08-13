@@ -42,8 +42,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "resources": ["../dist"],
+    "targets": [
+      "nsis"
+    ],
+    "resources": [
+      "../dist"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -52,8 +56,22 @@
     ],
     "windows": {
       "nsis": {
-        "languages": ["Spanish"],
+        "languages": [
+          "Spanish"
+        ],
         "installMode": "currentUser"
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/UP240507/InvVentaReact/releases/latest/download/latest.json"
+      ],
+      "pubkey": "PEGA_AQUI_LA_CLAVE_PUBLICA",
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

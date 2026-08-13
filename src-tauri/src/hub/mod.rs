@@ -15,6 +15,7 @@
 //!   dispositivos— quién está emparejado y con qué token propio
 //!   servidor    — rutas HTTP y servido de la app
 
+pub mod anuncio;
 pub mod cola;
 pub mod dispositivos;
 pub mod documento;
@@ -26,6 +27,7 @@ pub mod transporte;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anuncio::Anuncio;
 use cola::Cola;
 use dispositivos::Registro;
 use respaldo::Respaldo;
@@ -95,6 +97,11 @@ impl ConfigHub {
 pub struct HubVivo {
     pub estado: Arc<EstadoHub>,
     pub carpeta_datos: PathBuf,
+    /// Anuncio mDNS. Se GUARDA aunque nadie lo lea: al soltarse retira el
+    /// servicio de la red, así que descartarlo aquí haría que la caja se
+    /// anunciara durante una línea y desapareciera. `Option` porque una red que
+    /// no permita mDNS no puede impedir que el restaurante cobre.
+    pub _anuncio: Option<Anuncio>,
 }
 
 /// Arranca el hub: cola, servidor y hilo de impresión.
@@ -190,8 +197,15 @@ pub fn arrancar(
             });
         })?;
 
+    // Se anuncia DESPUÉS de levantar el servidor: publicar un servicio que
+    // todavía no escucha es invitar a un teléfono a un puerto cerrado.
+    let anuncio_mdns = estado
+        .ip_lan
+        .and_then(|ip| anuncio::arrancar(ip, puerto_real));
+
     Ok(HubVivo {
         estado,
         carpeta_datos,
+        _anuncio: anuncio_mdns,
     })
 }

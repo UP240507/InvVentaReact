@@ -9,7 +9,7 @@
 
 ---
 
-## DÓNDE ESTAMOS — ~96% (6-ago-2026)
+## DÓNDE ESTAMOS — ~98% (13-ago-2026)
 
 | Fase                                       | Aporta      | Estado                                        |
 | ------------------------------------------ | ----------- | --------------------------------------------- |
@@ -17,7 +17,7 @@
 | 1 · Monetización                           | 74 → 84     | ✅ completada (25-jul)                        |
 | 2 · Proyecto D (rediseño)                  | 84 → 92     | ✅ completada (27-jul) — los 6 ítems cerrados |
 | 2.5 · Gastos y costos fijos                | intercalada | ✅ cerrada (26-jul)                           |
-| 3 · Caja-hub, impresión, multi-dispositivo | 92 → 98     | 🔨 ~⅔ — ver abajo                             |
+| 3 · Caja-hub, impresión, multi-dispositivo | 92 → 98     | 🔨 escrita entera; **falta compilar y probar** |
 | 4 · Hardening y lanzamiento                | 98 → 100    | ⬜ sin empezar                                |
 
 **El número importa menos que la naturaleza de lo que queda.** El 96 % se
@@ -27,24 +27,30 @@ parte que no admite atajos y la que suele tardar más de lo que aparenta.
 
 ### Lo que falta, en concreto
 
-**Fase 3 — lo que queda (por orden de riesgo):**
+**Fase 3 — al 13-ago no queda nada por ESCRIBIR salvo un punto.** Lo que queda
+es compilar, y probarlo en el restaurante:
 
-| Ítem                                | Qué falta                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Riesgo                                                                                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Impresión en papel**              | **✅ CERRADO 11-ago.** Primera impresión en una TM-T20II real: los cuatro documentos —prueba, cuenta, ticket y comanda— salen correctos a **48 columnas**. El ancho pasó de constante fija a configurable por impresora (`ConfigHub.ancho_papel`, selector en Ajustes → Hub, 32 para 58 mm y 48 para 80 mm). Quedó comprobado lo que sólo se podía comprobar en papel: tabla de caracteres, corte y ancho. El driver es **APD v5.13** y su asistente viene con `Port Type = COM` por defecto, que con una USB crea una cola muerta — documentado en `docs/CHECKLIST_IMPRESORA.md` porque se repetirá en cada instalación. | —                                                                                                                                                                                                    |
-| **3.12 Shell desktop**              | El instalador NSIS **ya se genera y se probó (11-ago)**. Falta el **auto-updater**. La **firma de código se descarta** — decisión de Chris, 11-ago: ver 3.12 abajo.                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **Medio** — ya no hay nada con plazo ajeno.                                                                                                                                                          |
-| **3.4 / 3.5 — encolado por el hub** | **No existen.** El hub sólo imprime y empareja: no hay endpoint de encolado ni worker que drene a Supabase. Hoy cada dispositivo guarda en su propio Dexie y sincroniza cuando ÉL tiene internet.                                                                                                                                                                                                                                                                                                                                                                                                                         | **Medio** — funciona, pero si a un teléfono se le acaba la batería o se le limpia el navegador antes de que vuelva la red, esas ventas se pierden. Con la cola en la caja estarían a salvo en disco. |
-| **3.3 mDNS**                        | Si el router rota la IP por DHCP hay que reescanear el QR.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | **Bajo** — se mitiga fijando la IP en el router.                                                                                                                                                     |
-| **3.10 responsive**                 | Métricas/Dashboard y las reglas globales del ERP.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | **Bajo** — todo lo demás de operación está cerrado.                                                                                                                                                  |
-| **3.6 relay KDS**                   | Declarado **v2**, fuera del lanzamiento.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —                                                                                                                                                                                                    |
+| Ítem | Estado |
+|---|---|
+| **Impresión en papel** | ✅ **CERRADO 11-ago** en una TM-T20II real, a 48 columnas. El ancho es configurable (`ConfigHub.ancho_papel`). Driver **APD v5.13**; su asistente viene con `Port Type = COM` por defecto, que con una USB crea una cola muerta — en `docs/CHECKLIST_IMPRESORA.md`, porque se repetirá en cada instalación. |
+| **3.4 / 3.5 · respaldo en la caja** | ✅ **ESCRITO 13-ago.** La caja guarda una copia de cada cobro y adopta lo de los dispositivos que dejan de dar señales. Diseño y hallazgos en `docs/DISENO_3.4_3.5_RESPALDO_HUB.md`. **Rust sin compilar.** |
+| **3.3 · mDNS** | ✅ **ESCRITO 13-ago** (`hub/anuncio.rs`). La caja se anuncia como `invventa-caja.local`. Es un respaldo, no el camino principal: Chrome en Android resuelve `.local` de forma irregular, así que el QR sigue llevando la IP. **Sin compilar.** |
+| **3.12 · auto-updater** | 🔨 **Código puesto, faltan tus llaves.** Plugin, capacidad, endpoint a GitHub Releases y `lib/Actualizacion.js` con la regla de no actualizar en silencio. Los pasos que sólo puedes dar tú están en `docs/CHECKLIST_ACTUALIZACIONES.md`. |
+| **3.10 · responsive de Métricas** | ⬜ **LO ÚNICO QUE QUEDA POR ESCRIBIR.** Rejilla de 12 columnas en tablet y las reglas globales del ERP. Riesgo bajo: toda la operación está cerrada. |
+| **3.6 · relay KDS** | Declarado **v2**, fuera del lanzamiento. |
+
+**Y la deuda de verificación, que ahora es la que manda.** Nada de lo del 11, 12
+y 13 de agosto se ha visto funcionar en el restaurante, y hay **Rust que no se
+ha compilado nunca**: el respaldo, el mDNS, el updater y el pulso del cajón. El
+guion está en `docs/CHECKLIST_VERIFICACION.md`.
 
 **Fase 4 — sin empezar (4.1 a 4.4):** QA con un segundo inquilino real, E2E
 ampliado, telemetría y runbook, y la landing con instalador descargable.
 
 ### Deuda viva que no cuelga de ninguna fase
 
-- **El `id` de la venta** sigue siendo `Date.now()` pisando la secuencia de
-  Postgres. Dos dispositivos en el mismo milisegundo colisionan en la PK.
+- **El `id` de la venta** ya NO es `Date.now()`: lo resuelve `lib/IdVenta.js`
+  (10-ago). Queda el de `auditoria`, que sí lo sigue siendo (backlog §7).
 - **Sin `UNIQUE` en `folio`** (decisión consciente de Chris, 6-ago).
 - **`sinPersistencia()`** escrita y sin cablear.
 - **Datos fiscales del emisor sin capturar** en Configuración.

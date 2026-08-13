@@ -298,6 +298,12 @@ pub fn run() {
         // API web porque WebView2 no la implementa: `Notification.permission`
         // nunca llega a 'granted' y el aviso se pierde sin decir nada.
         .plugin(tauri_plugin_notification::init())
+        // Auto-actualizacion. El plugin sólo EXPONE la capacidad; quién y
+        // cuándo la dispara lo decide el front, a propósito: sin firma de
+        // código Windows enseña su aviso en cada versión nueva, así que una
+        // actualización silenciosa se convertiría en una llamada de soporte a
+        // media comida. Ver `lib/Actualizacion.js`.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             hub_estado,
             hub_imprimir,
