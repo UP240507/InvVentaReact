@@ -297,6 +297,9 @@ Decisión pendiente tuya, explicada en el diseño: **APK con los archivos dentro
 caja) o **APK como cascarón que carga desde la caja** (la conserva, pero hay que
 autorizar acceso IPC a un origen remoto).
 
-Hoy, sobre `http`, el teléfono **ya suena y ya enseña el cartel** — el audio no
-exige contexto seguro. Lo único que falta es el aviso cuando están fuera de la
-app.
+**APARCADO (Chris, 12-ago).** No se programa. En el teléfono **el sonido ya
+suena aunque no estés dentro de la app** —el audio no exige contexto seguro y el
+navegador mantiene viva la pestaña—, así que la parte de enterarse ya funciona.
+Se prueba en el restaurante cuando esté todo al 99% y se decide con el feedback
+de la gente. El dato que lo reabriría: que el sonido deje de salir tras un rato
+largo con la pantalla apagada.

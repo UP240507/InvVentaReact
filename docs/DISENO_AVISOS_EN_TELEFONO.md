@@ -1,5 +1,27 @@
 # Avisos de comanda nueva en el teléfono — qué se puede y qué cuesta
 
+> ## 🅿️ APARCADO POR DECISIÓN (Chris, 12-ago) — no se programa nada de aquí
+>
+> **Por qué se puede aparcar sin perder nada: en el teléfono el sonido ya suena
+> aunque no estés dentro de la app.** Chris lo comprobó. El pitido no necesita
+> contexto seguro y el navegador mantiene la pestaña viva en segundo plano, así
+> que la parte que de verdad importaba —enterarse— ya funciona. La notificación
+> del sistema sólo añadiría el texto de qué mesa.
+>
+> Además, el pitido sintetizado **juega a favor precisamente por raro**: no se
+> parece a ningún tono de teléfono, así que en una cocina no se confunde con el
+> WhatsApp de nadie.
+>
+> **Cuándo volver a abrir este documento:** cuando el sistema esté al 99% y haya
+> pasado por el restaurante con gente de verdad usándolo. Si de ese uso sale que
+> el sonido no basta, aquí está el análisis hecho y la decisión a medio tomar.
+>
+> **Lo único que conviene mirar en esa prueba de campo:** que el sonido siga
+> saliendo **después de un rato largo** con la pantalla del teléfono apagada. Que
+> funcione a los dos minutos no garantiza que funcione a los veinte —Android
+> puede congelar la pestaña para ahorrar batería—, y ése es justo el hueco que
+> taparía la notificación del sistema. Es el dato que decide si esto se retoma.
+
 **Pregunta de Chris (12-ago):** «¿cómo hacemos para que en los teléfonos salgan
 las notificaciones? En la compu ya salen.»
 
