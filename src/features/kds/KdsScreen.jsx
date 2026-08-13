@@ -5,6 +5,9 @@ import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { useAtajos } from '../../hooks/useAtajos';
+import { useAvisoKds } from '../../hooks/useAvisoKds';
+import { puedeRecibirAvisos } from '../../lib/AvisoKds';
+import { getRolEfectivo, getCapacidades } from '../../lib/Permisos';
 import {
   OpsHeader,
   OpsTabs,
@@ -25,6 +28,8 @@ import {
   Coffee,
   UtensilsCrossed,
   CheckCheck,
+  BellRing,
+  X,
 } from 'lucide-react';
 
 // ── Helpers de modelo de item (compat hacia atrás) ──────────────────────────
@@ -151,6 +156,31 @@ export default function KdsScreen() {
         (a, b) => new Date(a.fecha_hora || 0) - new Date(b.fecha_hora || 0),
       );
   }, [comandas_activas, estacionActiva]);
+
+  // ── Aviso de comanda nueva (sonido + notificación) ───────────────────────
+  // Sólo a quien tiene el KDS de puesto: Chef y Barista. Un Gerente que entra a
+  // mirar no debe llevarse un pitido por cada comanda. El detalle del criterio
+  // está en lib/AvisoKds.js.
+  const empleadoActivo = useSessionStore((s) => s.empleadoActivo);
+  const roles_permisos = useAppStore((s) => s.roles_permisos);
+  const avisosParaMi = useMemo(() => {
+    if (!empleadoActivo) return false; // sesión de dueño por correo
+    return puedeRecibirAvisos(
+      getCapacidades(getRolEfectivo(empleadoActivo), roles_permisos),
+    );
+  }, [empleadoActivo, roles_permisos]);
+
+  const {
+    pop: popAviso,
+    descartarPop,
+    activarAvisos,
+    faltaActivar,
+    permiso: permisoAvisos,
+  } = useAvisoKds({
+    comandas: comandasDeEstacion,
+    estacion: estacionActiva,
+    activo: avisosParaMi,
+  });
 
   // Conteo de items pendientes por estación (badges de las pestañas).
   const conteoPorEstacion = useMemo(() => {
@@ -304,6 +334,36 @@ export default function KdsScreen() {
         }}
       ></div>
 
+      {/* AVISO DE COMANDA NUEVA (dentro de la página) ─────────────────────
+          Abajo y no arriba: en el KDS la parte alta es la que se mira, y un
+          cartel encima del header taparía la pestaña de la estación justo
+          cuando se necesita. `aria-live` para que un lector de pantalla lo
+          anuncie sin robar el foco de las manos que están marcando items. */}
+      {popAviso && (
+        <div
+          key={popAviso.id}
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-lg border-2 border-ops-accent bg-ops-panel px-5 py-4 shadow-2xl"
+        >
+          <BellRing className="w-6 h-6 text-ops-accent shrink-0" />
+          <div>
+            <p className="text-xs uppercase tracking-wider text-ops-ink-2">
+              Comanda nueva
+            </p>
+            <p className="text-lg font-bold text-ops-ink">{popAviso.texto}</p>
+          </div>
+          <button
+            type="button"
+            onClick={descartarPop}
+            aria-label="Cerrar aviso"
+            className="ml-2 p-1 text-ops-ink-2 hover:text-ops-ink"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="border-b-2 border-ops-border pb-6 mb-6 relative z-10">
         <OpsHeader
@@ -314,6 +374,27 @@ export default function KdsScreen() {
           scopeAtajos="kds"
           acciones={
             <>
+              {/* El navegador no deja sonar hasta que alguien toca la pantalla.
+                  En vez de fallar callado —que es como no tener aviso— se pide
+                  el toque a la vista. Desaparece en cuanto queda activado. */}
+              {faltaActivar && (
+                <OpsButton
+                  variante="primario"
+                  icono={BellRing}
+                  onClick={activarAvisos}
+                >
+                  Activar avisos
+                </OpsButton>
+              )}
+              {/* Suena, pero el sistema no avisará si salen de la pantalla. Se
+                  dice, porque el aviso al que se le confía «voy por un café»
+                  es justo el que no está funcionando. */}
+              {avisosParaMi && !faltaActivar && permisoAvisos === 'denied' && (
+                <span className="self-center text-xs text-ops-ink-2 max-w-[14rem] leading-tight">
+                  Suena, pero sin notificación fuera de la pantalla (bloqueada
+                  en el sistema)
+                </span>
+              )}
               <OpsButton
                 icono={isDarkMode ? Sun : Moon}
                 onClick={toggleTheme}

@@ -41,6 +41,12 @@ Todos los fallos venían de compartir estado global entre archivos con
 y queda al menos uno más sin localizar entre los archivos que simulan
 `matchMedia`.
 
+> **Medido el 12-ago, para que no vuelva a costar dos días:** `npm run
+> test:rapido` da **6 fallos en `useConectividad.test.jsx`**. Ese archivo solo
+> pasa **11 de 11**. La contaminación sigue ahí y **no es una regresión**: se
+> comprobó excluyendo lo escrito ese día y los seis fallos siguen apareciendo
+> igual. Si aparece un séptimo, ESE sí es nuevo.
+
 **La conclusión práctica: ese atajo dejó de pagarse solo.** Se adoptó para que la
 suite cupiera en el tiempo de una llamada, y a cambio produjo tres falsas
 alarmas, mandó a revertir un cambio correcto y ocultó durante dos días que en
@@ -134,6 +140,38 @@ localStorage.setItem('folio:prefijo-provisional', '1');
       el panel lo dice y no deja. Configúralo antes.
 - [ ] Al cerrar un olvido, la hora que se guarda es **entrada + jornada**, no la
       actual. Compruébalo en Asistencias: una salida de hace semanas, no de hoy.
+
+## 8 · El aviso del KDS — sonido y notificaciones
+
+Se prueba **con una sesión de Chef o Barista** (por PIN). Con la sesión de dueño
+por correo no debe sonar nada, y eso también se verifica.
+
+- [ ] Entrar al KDS como **Chef** → arriba aparece **«Activar avisos»**.
+
+> Sale a propósito. El navegador no deja sonar hasta que alguien toca la
+> pantalla, así que en vez de fallar callado —que es igual a no tener aviso— se
+> pide el toque a la vista. **Si no aparece ese botón y tampoco suena, eso sí es
+> un fallo.**
+
+- [ ] Pulsarlo → Windows pide permiso de notificaciones. **Aceptar.** El botón
+      desaparece.
+- [ ] Desde el POS, mandar una comanda a **Cocina** → suena y sale el cartel
+      abajo a la derecha con la mesa y cuántos platillos. Se va solo a los 6 s.
+- [ ] Marcar un item listo → **no vuelve a sonar**. Es el error clásico: la
+      lista se recalcula y cualquier cambio parece una llegada.
+- [ ] **Recargar el KDS con comandas en curso → NO suena.** Lo que ya estaba en
+      pantalla al abrir no acaba de llegar.
+- [ ] Cambiar a la pestaña **Barra** → tampoco suena por lo que ya había.
+- [ ] Mandar una comanda **sólo de barra** estando en la pestaña Cocina → **no
+      suena**; el aviso es de la estación que se está mirando, como se acordó.
+
+- [ ] **Minimizar la ventana** (o irse a otra app) y mandar una comanda → sale
+      la **notificación de Windows**, no el cartel.
+- [ ] Mandar dos seguidas estando fuera → **una sola notificación**, no dos
+      apiladas. Al volver, lo que importa es la pantalla.
+
+- [ ] Entrar al KDS como **Gerente o Admin** → **no aparece el botón y no suena
+      nada.** Entran a supervisar; un pitido por comanda es ruido.
 
 ---
 
