@@ -59,6 +59,23 @@ fn hub_imprimir(
     Ok(hub.estado.cola.encolar(documento).etiqueta().to_string())
 }
 
+/// Abre el cajón sin imprimir nada.
+///
+/// ── POR QUÉ HACE FALTA ADEMÁS DE LA RUTA HTTP ──────────────────────────────
+/// `lib/Hub.js` bifurca en todas sus operaciones: dentro de Tauri invoca un
+/// comando, fuera hace HTTP. La caja ES Tauri, y el cobro ocurre en la caja, así
+/// que una función que sólo hablara HTTP no dispararía nunca el pulso donde más
+/// importa. Fue exactamente el fallo del 12-ago: el código estaba, compilaba,
+/// las pruebas pasaban, y el cajón no se abría al cobrar.
+#[tauri::command]
+fn hub_abrir_cajon(estado: tauri::State<'_, EstadoApp>) -> Result<(), String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    hub.estado
+        .cola
+        .abrir_cajon()
+        .map_err(|e| format!("no se pudo abrir el cajón: {e}"))
+}
+
 /// Ticket maquetado en texto plano, sin gastar papel.
 #[tauri::command]
 fn hub_previsualizar(estado: tauri::State<'_, EstadoApp>, documento: Documento) -> String {
@@ -209,6 +226,7 @@ pub fn run() {
             hub_reintentar,
             hub_descartar,
             hub_configurar_impresora,
+            hub_abrir_cajon,
             app_lista,
         ])
         .setup(|app| {

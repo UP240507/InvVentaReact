@@ -561,6 +561,18 @@ export const ANCHO_80 = 48;
  * dinero dentro y nadie delante. Si falla, el cajero tiene una llave.
  */
 export async function abrirCajon({ origen = null } = {}) {
+  // Bifurca igual que `imprimir`. Sin esto, en la CAJA —que es donde se cobra—
+  // la llamada salía por HTTP hacia un sitio al que Tauri no llega, y el pulso
+  // no se disparaba nunca. Compilaba, las pruebas pasaban, y el cajón no se
+  // abría: el fallo del 12-ago.
+  if (enTauri()) {
+    try {
+      await invocar('hub_abrir_cajon');
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
   return pedir('/cajon', { metodo: 'POST', origen });
 }
 
