@@ -39,22 +39,27 @@ export const TABLAS_RESPALDADAS = ['ventas', 'comandas', 'movimientos'];
  * condición, no una casualidad: sin clave no hay deduplicado, y sin deduplicado
  * la caja podría ejecutar dos veces algo que ya corrió.
  *
- * ── POR QUÉ `decrementar_stock` NO ESTÁ AQUÍ ───────────────────────────────
- * Porque **no es idempotente**: resta cada vez que se le llama. Sus argumentos
- * son `p_items` y `p_restaurante_id`, y su `p_referencia` es una etiqueta para
- * el humano («Venta: Pizza x1»), no una identidad — hay filas de noviembre y de
- * febrero con la misma. Así que hoy no existe clave con la que reconocer que ya
- * se ejecutó.
+ * ── LA HISTORIA DE `decrementar_stock`, QUE VALE LA PENA ───────────────────
+ * Estuvo fuera de esta lista un rato, y por una buena razón: **no era
+ * idempotente**. Restaba cada vez que se le llamaba, y el `p_referencia` que
+ * parecía su clave resultó ser una etiqueta para el humano —en la base de AZUL
+ * hay dos filas «Venta: Pizza x1» separadas por tres meses—.
  *
- * Respaldarla sin eso significaría que la caja, al adoptar una venta, volviera
- * a descontar un inventario ya descontado. No daría error: dejaría el almacén
- * mal y nadie se enteraría hasta el conteo. Se queda fuera hasta que la RPC
- * tenga su propio ledger por venta, igual que ya lo tienen
- * `registrar_visita_cliente` (`crm_visitas`) y `canjear_puntos` (`crm_canjes`).
+ * Respaldarla así habría hecho que la caja, al adoptar una venta, descontara un
+ * inventario ya descontado. Sin dar error. Hasta el conteo.
+ *
+ * Se arregló en la migración `decrementar_stock_ledger_por_origen`: ahora tiene
+ * su propio ledger (`stock_salidas`), igual que `registrar_visita_cliente` y
+ * `canjear_puntos`. De paso tapó un fallo que **ya existía**: un reintento de
+ * la cola tras un timeout post-commit descontaba dos veces.
+ *
+ * Su clave es `p_origen` y es TEXTO: en mesa quien dispara el descuento es la
+ * comanda (`CMD-7`) al mandar a producción, no la venta, que aún no existe.
  */
 export const RPCS_RESPALDADAS = {
   registrar_visita_cliente: 'p_venta_id',
   canjear_puntos: 'p_canje_id',
+  decrementar_stock: 'p_origen',
 };
 
 /**

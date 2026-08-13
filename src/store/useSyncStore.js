@@ -5,7 +5,7 @@ import { useAuthStore } from '../features/auth/useAuthStore';
 import { construirDeltasStock } from '../lib/Inventario';
 import { sinCamposDerivados } from '../lib/Payload';
 import { anotacionesDe, claveDeRespaldo } from '../lib/Respaldo';
-import { respaldar, confirmarRespaldo } from '../lib/Hub';
+import { respaldar, confirmarRespaldo, respaldoPendiente } from '../lib/Hub';
 
 // ── Respaldo en la caja (3.4 / 3.5) ─────────────────────────────────────────
 // Segunda copia de los cobros en el disco de la caja, para que las ventas de un
@@ -263,7 +263,21 @@ export const useSyncStore = create((set, get) => ({
   // ✅ Sprint 3: decremento de stock vía RPC atómica (reemplaza el viejo descontarStock).
   // 1) Calcula deltas expandiendo recetas → insumos. 2) Aplica optimista en Dexie + RAM.
   // 3) Encola la RPC 'decrementar_stock' (sube online o al reconectar → no se pierde offline).
-  descontarStockVenta: async (itemsVendidos, sustituciones = {}) => {
+  //
+  // `origen` (4º argumento) es la IDENTIDAD del descuento y es obligatorio en
+  // el camino del cobro: la RPC lo usa como clave de idempotencia. Sin él, un
+  // reintento de la cola tras un timeout post-commit descuenta dos veces —y no
+  // da error, sólo deja el almacén mal hasta el conteo—.
+  //
+  // Es texto y no un id de venta porque en MESA quien dispara el descuento es
+  // la comanda (`CMD-7`) al mandar a producción, no la venta, que todavía no
+  // existe. Se descubrió al cablearlo: la primera versión del ledger tenía la
+  // columna en `bigint` y no habría admitido una comanda.
+  descontarStockVenta: async (
+    itemsVendidos,
+    sustituciones = {},
+    origen = null,
+  ) => {
     const restauranteId = useAuthStore.getState().restauranteId;
     const deltas = construirDeltasStock(itemsVendidos, sustituciones);
     if (deltas.length === 0) return;
@@ -301,6 +315,7 @@ export const useSyncStore = create((set, get) => ({
     await get().enqueueRpc('decrementar_stock', {
       p_items: deltas,
       p_restaurante_id: restauranteId,
+      p_origen: origen ? String(origen) : null,
     });
   },
 
@@ -639,6 +654,81 @@ export const useSyncStore = create((set, get) => ({
       console.warn('[respaldo] no se pudo barrer la cola:', e?.message);
       return 0;
     }
+  },
+
+  /**
+   * Adopta las ventas de los dispositivos que ya no dan señales y las sube.
+   *
+   * ── SÓLO LA CAJA ────────────────────────────────────────────────────────
+   * El hub responde a `/respaldo/pendientes` únicamente con el token de la
+   * caja: ese endpoint entrega los cobros de todo el local. Un teléfono recibe
+   * 401 y esta función devuelve 0 sin ruido, que es lo correcto.
+   *
+   * ── POR QUÉ `upsert` Y NO `insert` ──────────────────────────────────────
+   * Puede darse una carrera real: el teléfono revive con red justo cuando la
+   * caja lo daba por muerto, y las dos suben la misma venta. Con `insert` eso
+   * es un 23505 que acaba en dead-letter — un error rojo por algo que salió
+   * bien. Con `upsert` sobre una clave que ya es única entre dispositivos
+   * (`lib/IdVenta.js`), la segunda escritura es inofensiva.
+   *
+   * Las tres RPC son idempotentes por su cuenta desde que `decrementar_stock`
+   * tiene su ledger; si no lo fueran, esto descontaría inventario dos veces.
+   */
+  drenarRespaldo: async () => {
+    let anotaciones;
+    try {
+      const r = await respaldoPendiente();
+      if (!r?.ok) return 0;
+      anotaciones = Array.isArray(r.anotaciones) ? r.anotaciones : [];
+    } catch {
+      return 0;
+    }
+    if (anotaciones.length === 0) return 0;
+
+    const subidas = [];
+
+    for (const a of anotaciones) {
+      const t = a?.tarea;
+      if (!t) continue;
+      try {
+        let res;
+        if (t.metodo === 'rpc' && t.rpc) {
+          res = await supabase.rpc(t.rpc, t.data);
+        } else if (t.tabla) {
+          res = await supabase.from(t.tabla).upsert(t.data);
+        } else {
+          continue;
+        }
+        if (res?.error) throw res.error;
+        subidas.push(a.clave);
+      } catch (e) {
+        // Una que falle NO detiene a las demás: son ventas independientes y no
+        // hay FK entre ellas (comprobado el 10-ago). Se queda sin confirmar, o
+        // sea que sigue en el disco de la caja para el siguiente intento —que
+        // es exactamente lo que se quiere.
+        console.warn(
+          `[respaldo] no se pudo adoptar ${a?.clave}:`,
+          e?.message || e,
+        );
+      }
+    }
+
+    if (subidas.length > 0) {
+      await confirmarRespaldo(subidas).catch(() => {});
+      try {
+        const { useAppStore } = await import('./useAppStore');
+        useAppStore
+          .getState()
+          .showToast?.(
+            `${subidas.length} venta${subidas.length === 1 ? '' : 's'} recuperada${subidas.length === 1 ? '' : 's'} de un dispositivo desconectado.`,
+            'success',
+          );
+      } catch {
+        /* noop */
+      }
+    }
+
+    return subidas.length;
   },
 
   // ── Gestión de dead-letter ───────────────────────────────────────────────

@@ -23,6 +23,8 @@ import {
   QrCode,
   Smartphone,
   Ban,
+  ShieldCheck,
+  CloudUpload,
 } from 'lucide-react';
 
 import {
@@ -57,7 +59,9 @@ import {
   revocarDispositivo,
   enlacePairing,
   enTauri,
+  respaldoPendiente,
 } from '../../lib/Hub';
+import { useSyncStore } from '../../store/useSyncStore';
 import { generar, aSvg } from '../../lib/QR';
 
 /**
@@ -106,12 +110,48 @@ export default function HubScreen() {
   const [host, setHost] = useState('');
   const [puerto, setPuerto] = useState('9100');
 
+  // Respaldo de ventas (3.4/3.5). El número tiene que VERSE: el drenaje
+  // automático está bien, pero lo que hace que alguien se dé cuenta de que algo
+  // lleva días atascado es un contador delante, no un log.
+  const [respaldo, setRespaldo] = useState(null);
+  const [drenando, setDrenando] = useState(false);
+  const drenarRespaldo = useSyncStore((s) => s.drenarRespaldo);
+
   const refrescar = useCallback(async () => {
     setCargando(true);
     const r = await leerTodo();
     setInfo(r);
     setCargando(false);
   }, []);
+
+  // El estado del respaldo se pide aparte y con el error tragado: sólo responde
+  // al token de la CAJA, así que en un teléfono devuelve 401 y el bloque
+  // simplemente no se pinta. Es lo correcto — ese endpoint entrega los cobros
+  // de todo el local.
+  const refrescarRespaldo = useCallback(async () => {
+    try {
+      const r = await respaldoPendiente();
+      setRespaldo(r?.ok ? r : null);
+    } catch {
+      setRespaldo(null);
+    }
+  }, []);
+
+  const ejecutarDrenaje = useCallback(async () => {
+    setDrenando(true);
+    try {
+      const n = await drenarRespaldo();
+      showToast(
+        n > 0
+          ? `${n} venta${n === 1 ? '' : 's'} recuperada${n === 1 ? '' : 's'}.`
+          : 'No había nada que recuperar.',
+        n > 0 ? 'success' : 'info',
+      );
+      await refrescarRespaldo();
+    } finally {
+      setDrenando(false);
+    }
+  }, [drenarRespaldo, showToast, refrescarRespaldo]);
 
   useEffect(() => {
     // El sondeo es una SUSCRIPCIÓN a un sistema externo (el hub), no un
@@ -130,6 +170,15 @@ export default function HubScreen() {
       if (!vivo) return;
       setInfo(r);
       setCargando(false);
+
+      // El respaldo va en el mismo latido: es un dato del hub y pedirlo con su
+      // propio intervalo sería un segundo reloj para el mismo sondeo.
+      try {
+        const rr = await respaldoPendiente();
+        if (vivo) setRespaldo(rr?.ok ? rr : null);
+      } catch {
+        if (vivo) setRespaldo(null);
+      }
     };
 
     sondear();
@@ -567,6 +616,71 @@ export default function HubScreen() {
             )}
           </CardBody>
         </Card>
+
+        {/* ── Respaldo de ventas (3.4/3.5) ───────────────────────────────── */}
+        {respaldo && (
+          <Card>
+            <CardBody>
+              <h2 className="font-fraunces font-bold text-lg mb-1 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-adm-ok" />
+                Respaldo de ventas
+              </h2>
+              <p className="text-sm text-adm-muted mb-4">
+                Cada cobro deja una copia en el disco de esta caja y se borra
+                cuando llega a la nube. Si a un teléfono se le acaba la batería
+                antes de recuperar internet, sus ventas siguen aquí.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <Metrica
+                  etiqueta="Sin confirmar"
+                  valor={respaldo.resumen?.pendientes ?? 0}
+                  // Se alerta por ANTIGÜEDAD y no por cantidad: veinte copias de
+                  // hace un minuto son la hora de la comida funcionando bien;
+                  // una sola de hace dos días es dinero que nadie subió.
+                  alerta={(respaldo.resumen?.mas_vieja_ms ?? 0) > 86400000}
+                />
+                <Metrica
+                  etiqueta="Por adoptar"
+                  valor={(respaldo.anotaciones || []).length}
+                  alerta={(respaldo.anotaciones || []).length > 0}
+                />
+              </div>
+
+              {(respaldo.resumen?.mas_vieja_ms ?? 0) > 86400000 && (
+                <div className="flex items-start gap-2 text-sm text-adm-danger mb-4">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="min-w-0">
+                    Hay una copia de hace más de un día sin confirmar. Eso es
+                    una venta que quizá nunca llegó a la nube.
+                  </span>
+                </div>
+              )}
+
+              {(respaldo.anotaciones || []).length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-adm-muted">
+                  <CheckCircle2 className="w-4 h-4 text-adm-ok" />
+                  Ningún dispositivo dejó ventas huérfanas.
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-adm-muted mb-3">
+                    Estas ventas son de dispositivos que llevan más de 15
+                    minutos sin dar señales. Adoptarlas las sube desde esta
+                    caja.
+                  </p>
+                  <Button
+                    onClick={ejecutarDrenaje}
+                    disabled={drenando}
+                    icono={CloudUpload}
+                  >
+                    {drenando ? 'Recuperando…' : 'Recuperar ahora'}
+                  </Button>
+                </>
+              )}
+            </CardBody>
+          </Card>
+        )}
 
         {/* ── Cola ───────────────────────────────────────────────────────── */}
         <Card>

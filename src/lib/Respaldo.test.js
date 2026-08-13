@@ -91,10 +91,22 @@ describe('claveDeRespaldo · las RPC', () => {
     ).toBe('canjear_puntos::cj-1');
   });
 
-  it('decrementar_stock NO se respalda, y es a propósito', () => {
-    // No es idempotente: resta cada vez que se le llama, y su `p_referencia`
-    // es una etiqueta para el humano, no una identidad. Adoptarla descontaría
-    // dos veces un inventario ya descontado, sin dar error.
+  it('decrementar_stock usa su origen, que puede ser una COMANDA', () => {
+    // Texto y no un id de venta: en mesa el descuento lo dispara la comanda al
+    // mandar a producción, cuando la venta todavía no existe.
+    expect(
+      claveDeRespaldo({
+        metodo: 'rpc',
+        rpc: 'decrementar_stock',
+        data: { p_items: [], p_origen: 'CMD-7' },
+      }),
+    ).toBe('decrementar_stock::CMD-7');
+  });
+
+  it('un decrementar_stock SIN origen no se respalda', () => {
+    // Sin origen la RPC no es idempotente —vuelve al comportamiento viejo— así
+    // que adoptarla descontaría dos veces. Mejor sin copia que con copia
+    // peligrosa. Que el POS siempre lo mande lo fija la prueba del cobro.
     expect(
       claveDeRespaldo({
         metodo: 'rpc',
@@ -168,7 +180,7 @@ describe('LA PRUEBA QUE IMPORTA · un cobro entero cae dentro de la lista', () =
     {
       metodo: 'rpc',
       rpc: 'decrementar_stock',
-      data: { p_items: [], p_restaurante_id: 'r' },
+      data: { p_items: [], p_restaurante_id: 'r', p_origen: 'CMD-1' },
     },
     {
       metodo: 'rpc',
@@ -187,15 +199,16 @@ describe('LA PRUEBA QUE IMPORTA · un cobro entero cae dentro de la lista', () =
     expect(seRespalda(LO_QUE_EMITE_UN_COBRO[2])).toBe(false);
   });
 
-  it('queda UNA cosa del cobro sin respaldar, y está anotada', () => {
-    // Si este número baja, es que se arregló `decrementar_stock` y hay que
-    // meterlo en la lista. Si sube, es que el cobro emite algo nuevo que nadie
-    // decidió respaldar — y eso es lo que esta prueba viene a cazar.
+  it('el descuento de inventario también, desde que tiene ledger', () => {
+    expect(seRespalda(LO_QUE_EMITE_UN_COBRO[3])).toBe(true);
+  });
+
+  it('lo ÚNICO del cobro sin respaldar es la mesa', () => {
+    // Si esta lista crece, es que el cobro emite algo nuevo que nadie decidió
+    // respaldar. Eso es lo que esta prueba viene a cazar: el fallo no daría
+    // error, sólo dejaría un trozo del cobro sin segunda copia.
     const fuera = LO_QUE_EMITE_UN_COBRO.filter((t) => !seRespalda(t));
-    expect(fuera.map((t) => t.rpc ?? t.tabla)).toEqual([
-      'mesas',
-      'decrementar_stock',
-    ]);
+    expect(fuera.map((t) => t.rpc ?? t.tabla)).toEqual(['mesas']);
   });
 });
 
@@ -204,9 +217,10 @@ describe('las listas no se editan sin querer', () => {
     expect(TABLAS_RESPALDADAS).toEqual(['ventas', 'comandas', 'movimientos']);
   });
 
-  it('y las RPC, estas dos', () => {
+  it('y las RPC, estas tres', () => {
     expect(Object.keys(RPCS_RESPALDADAS).sort()).toEqual([
       'canjear_puntos',
+      'decrementar_stock',
       'registrar_visita_cliente',
     ]);
   });

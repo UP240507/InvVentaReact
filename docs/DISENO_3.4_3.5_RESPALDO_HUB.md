@@ -1,6 +1,6 @@
 # 3.4 / 3.5 — Respaldo de ventas en el hub
 
-**Estado (13-ago):** 🔨 **la copia está montada; la adopción no.**
+**Estado (13-ago):** ✅ **completo, pendiente de compilar el Rust y de la prueba en caliente.**
 **Prerrequisito:** ✅ resuelto el 10-ago (`lib/IdVenta.js`).
 
 | Paso del §8 | Estado |
@@ -9,7 +9,7 @@
 | 2 · Rutas y cableado | ✅ tres rutas + **tres comandos de Tauri** (ver abajo) |
 | 3 · `Hub.js` | ✅ `respaldar` · `confirmarRespaldo` · `respaldoPendiente` |
 | 4 · `useSyncStore` respaldar y confirmar | ✅ + `lib/Respaldo.js` con 22 pruebas |
-| 5 · `drenarRespaldo()` y el bloque en `HubScreen` | ⬜ **bloqueado, ver §10** |
+| 5 · `drenarRespaldo()` y el bloque en `HubScreen` | ✅ desbloqueado por el ledger — ver §10 |
 | 6 · Prueba extremo a extremo | ⬜ |
 
 **Un añadido al §4.2 del diseño original:** no bastan las rutas HTTP. La caja
@@ -21,61 +21,32 @@ evitó por acordarse de él.
 
 ---
 
-## 10 · Lo que apareció al escribirlo, y por qué la adopción no entra todavía
+## 10 · Lo que apareció al escribirlo (13-ago) — RESUELTO
 
 El diseño (§6) daba por hecho que `decrementar_stock` podía respaldarse usando
-«la clave de la venta que lo originó». Al ir a implementarlo se miró la función
-de verdad, y **no hay tal clave**:
+«la clave de la venta que lo originó». Al implementarlo se miró la función de
+verdad y **no había tal clave**: su `p_referencia` es una etiqueta para el
+humano, no una identidad —en AZUL hay dos filas `'Venta: Pizza x1'` separadas
+por tres meses, y 74 de 339 movimientos la tienen nula porque el front ni la
+mandaba—.
 
-```
-decrementar_stock(p_items jsonb, p_restaurante_id uuid,
-                  p_referencia text, p_usuario text)
-```
+O sea que la RPC **no era idempotente y no había con qué hacerla idempotente**.
+Adoptar una venta habría descontado un inventario ya descontado, sin dar error.
 
-`p_referencia` **no es un identificador: es una etiqueta para el humano.** En la
-base de AZUL hay dos filas de `movimientos` con `referencia = 'Venta: Pizza x1'`
-—una de noviembre y otra de febrero, tres meses de diferencia—. Son dos ventas
-distintas del mismo platillo. Además, hoy el front **ni siquiera la manda**:
-`descontarStockVenta` llama a la RPC sin `p_referencia`, así que 74 de los 339
-movimientos no tienen referencia ninguna.
+**Resuelto** en la migración `decrementar_stock_ledger_por_origen`: ledger
+propio (`stock_salidas`), como `crm_visitas` y `crm_canjes`. De paso tapa un
+fallo que **ya existía**: un reintento de la cola tras un timeout post-commit
+descontaba dos veces.
 
-O sea: **la función no es idempotente y no hay con qué hacerla idempotente.**
+Un detalle que sólo apareció al cablearlo, y por eso hubo dos migraciones: la
+primera versión declaró la columna `venta_id bigint`. **En mesa el descuento lo
+dispara la COMANDA** (`CMD-7`, texto) al mandar a producción, cuando la venta
+todavía no existe. La columna es `origen text`.
 
-Si la caja adoptara una venta huérfana y reejecutara su decremento, descontaría
-un inventario ya descontado. **No daría error.** Dejaría el almacén mal y nadie
-se enteraría hasta el conteo — exactamente el tipo de fallo que este proyecto
-lleva dos semanas persiguiendo.
+Verificado contra la base real, no contra un `success: true`: cuatro casos —
+descuenta la primera vez, el reintento no vuelve a descontar, un origen distinto
+sí descuenta, y sin origen se comporta como antes— y la prueba no dejó rastro.
 
-**Decisión:** `decrementar_stock` se queda **fuera** de `SE_RESPALDA`, y con ello
-la adopción entera se aparca. Respaldar la venta pero no su descuento sería
-peor que no respaldar: la venta adoptada entraría sin tocar inventario y el
-kardex mentiría en silencio, que es justo lo que el §5 advertía.
-
-### Lo que hace falta para desbloquearlo
-
-Una migración que le dé a `decrementar_stock` **su propio ledger por venta**,
-igual que ya lo tienen `registrar_visita_cliente` (`crm_visitas`) y
-`canjear_puntos` (`crm_canjes`). En concreto:
-
-1. Un parámetro `p_venta_id` de verdad (hay que **DROP y recrear**: añadir un
-   parámetro con valor por defecto crea una sobrecarga y deja la llamada
-   ambigua).
-2. Guarda de idempotencia al principio: si ya hay salida registrada para esa
-   venta, devolver el estado actual sin restar.
-3. Que `descontarStockVenta` pase el id de la venta.
-
-Es media sesión y arregla **un fallo que ya existe hoy**, independiente del
-respaldo: si la cola reintenta un `decrementar_stock` tras un timeout
-post-commit, hoy se descuenta dos veces. Los otros dos RPC ya se defienden de
-eso; éste no.
-
-### Lo que sí protege ya lo escrito
-
-La copia existe: cada venta, comanda y movimiento que un teléfono encola queda
-también en el disco de la caja, y se borra de allí cuando sube. Si un teléfono
-muere, **el dato ya no se va con él**. Lo que falta es el brazo automático que
-lo recoja — mientras tanto está en `respaldo-ventas.ndjson`, legible, y no se
-pierde.
 
 ---
 

@@ -661,7 +661,11 @@ export default function PosScreen() {
     ).then((idTarea) => imprimirComandaSiHaceFalta(nuevaComanda, idTarea));
 
     // Inventario: se descuenta AL PRODUCIR (no al cobrar). Solo el delta.
-    descontarStockVenta(deltaCarrito, subs);
+    //
+    // El id de la comanda va como ORIGEN, y no es opcional: la RPC lo usa como
+    // clave de idempotencia. Sin él, un reintento de la cola tras un timeout
+    // post-commit descontaría el mismo platillo dos veces, sin dar error.
+    descontarStockVenta(deltaCarrito, subs, nuevaComanda.id);
 
     const carritoMarcado = carrito.map((item) => ({
       ...item,
@@ -996,7 +1000,8 @@ export default function PosScreen() {
     // Inventario: en MESA ya se descontó al mandar a producción. Solo la VENTA
     // DIRECTA descuenta aquí (se vende, se corrobora y luego se prepara).
     if (!isMesa) {
-      descontarStockVenta(itemsTicket, subsVenta);
+      // Aquí el origen es la venta: en mostrador no hay comanda previa.
+      descontarStockVenta(itemsTicket, subsVenta, nuevaVentaBD.id);
     }
 
     registrarAuditoria({
