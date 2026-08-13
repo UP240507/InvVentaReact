@@ -8,6 +8,7 @@ import { useAtajos } from '../../hooks/useAtajos';
 import { useAvisoKds } from '../../hooks/useAvisoKds';
 import { puedeRecibirAvisos } from '../../lib/AvisoKds';
 import { getRolEfectivo, getCapacidades } from '../../lib/Permisos';
+import { rutaDeEscape, escapeEsPerfil } from '../../lib/Escape';
 import {
   OpsHeader,
   OpsTabs,
@@ -30,6 +31,7 @@ import {
   CheckCheck,
   BellRing,
   X,
+  UserCircle,
 } from 'lucide-react';
 
 // ── Helpers de modelo de item (compat hacia atrás) ──────────────────────────
@@ -84,30 +86,29 @@ export default function KdsScreen() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  // Salida por rol (deuda del roadmap: /dashboard hardcodeado expulsaba a
-  // Chef/Barista/Mesero a una ruta que su guard rechaza → rebote al login).
-  // Admin (sin empleadoActivo) → /dashboard. Empleado → su ruta inicial.
+  // ── LA SALIDA ────────────────────────────────────────────────────────────
+  // El 12-ago un barista quedó encerrado aquí: `/kds` es pantalla completa —sin
+  // riel— y este botón llamaba a `getRutaInicial()`, que para Chef y Barista ES
+  // `/kds`. Navegaba a donde ya estaban.
   //
-  // ── EL ENCIERRO DEL 12-ago ─────────────────────────────────────────────────
-  // Para Chef y Barista `getRutaInicial()` ES `/kds`, así que este botón
-  // navegaba a la pantalla en la que ya estaban. Se dejó anotado como «no-op
-  // consciente» y no lo era: sus rutas son ['kds', 'perfil'] y **el logout vive
-  // en /perfil**, así que sin este botón no había NINGUNA forma de cerrar la
-  // sesión de barista. Quedó atrapado en producción.
-  //
-  // La regla ahora es la que faltaba: si la ruta inicial es donde ya estoy, el
-  // botón lleva a /perfil, que toda capacidad tiene y es de donde se sale.
-  const salirDelKds = () => {
-    let destino = '/dashboard';
-    try {
-      const { empleadoActivo, getRutaInicial } = useSessionStore.getState();
-      if (empleadoActivo) destino = getRutaInicial?.() || '/mesas';
-    } catch {
-      /* sesión admin o store no hidratado: /dashboard */
-    }
-    if (destino === '/kds') destino = '/perfil';
-    navigate(destino);
-  };
+  // El destino ya NO se decide en esta pantalla. Lo calcula `lib/Escape.js`, que
+  // se prueba contra todos los roles y contra roles inventados, incluidos los
+  // que cada restaurante creará después. Aquí sólo se pregunta.
+  const capDeLaSesion = useMemo(() => {
+    const empleado = useSessionStore.getState().empleadoActivo;
+    return getCapacidades(
+      getRolEfectivo(empleado || user),
+      useAppStore.getState().roles_permisos,
+    );
+  }, [user]);
+
+  const destinoSalida = useMemo(
+    () => rutaDeEscape({ cap: capDeLaSesion, rutaActual: '/kds' }),
+    [capDeLaSesion],
+  );
+  const salidaEsPerfil = escapeEsPerfil(destinoSalida);
+
+  const salirDelKds = () => navigate(destinoSalida);
 
   // Gancho de rol (preparado, inactivo hoy): cuando exista el sistema de PIN,
   // user.estacion restringirá a una sola estación. Hoy (admin) es null → ve todo.
@@ -378,6 +379,11 @@ export default function KdsScreen() {
         <OpsHeader
           className="mb-0"
           icono={ChefHat}
+          // El gorro lleva a la salida (Chris, 12-ago). Es un extra de
+          // escritorio: el bloque del título está oculto en teléfono, así que
+          // el botón de abajo sigue siendo la salida de verdad.
+          onIcono={salirDelKds}
+          iconoTitulo={salidaEsPerfil ? 'Mi perfil' : 'Salir del monitor'}
           titulo="Monitor de Producción"
           subtitulo={`${comandasDeEstacion.length} pendiente${comandasDeEstacion.length !== 1 ? 's' : ''} en ${estacionActiva}`}
           scopeAtajos="kds"
@@ -413,8 +419,17 @@ export default function KdsScreen() {
                 aria-label="Cambiar entre modo claro y oscuro"
                 className="px-3"
               />
-              <OpsButton icono={ArrowLeft} onClick={salirDelKds} tecla="Esc">
-                Salir
+              {/* El texto sigue al destino. Para quien vive en el KDS —Chef,
+                  Barista— este botón NO es «salir del programa»: es la puerta a
+                  su perfil, que es de donde se cierra sesión. Llamarlo «Salir»
+                  cuando lleva al perfil es mentir en pequeño, y este botón se
+                  lee todos los días. */}
+              <OpsButton
+                icono={salidaEsPerfil ? UserCircle : ArrowLeft}
+                onClick={salirDelKds}
+                tecla="Esc"
+              >
+                {salidaEsPerfil ? 'Mi perfil' : 'Salir'}
               </OpsButton>
               {(comandas_activas?.length || 0) > 0 && (
                 <OpsButton

@@ -47,10 +47,27 @@ export function OpsHeader({
   titulo,
   subtitulo,
   icono: Icono,
+  onIcono,
+  iconoTitulo,
   acciones,
   scopeAtajos,
   className = '',
 }) {
+  // El icono como atajo a otro sitio (pedido de Chris, 12-ago: en el KDS el
+  // gorro de chef lleva al perfil). Es un EXTRA, nunca la única salida: este
+  // bloque es `hidden lg:flex`, así que en un teléfono no existe. La pantalla
+  // tiene que seguir ofreciendo su salida en `acciones`, que sí se ve siempre.
+  const IconoEnvoltorio = onIcono ? 'button' : 'div';
+  const propsIcono = onIcono
+    ? {
+        type: 'button',
+        onClick: onIcono,
+        title: iconoTitulo,
+        'aria-label': iconoTitulo,
+        className:
+          'bg-ops-accent/10 p-2.5 rounded-ui shrink-0 transition hover:bg-ops-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-ops-accent cursor-pointer',
+      }
+    : { className: 'bg-ops-accent/10 p-2.5 rounded-ui shrink-0' };
   return (
     // `items-stretch` y no `items-start` cuando esto es una columna.
     //
@@ -86,9 +103,9 @@ export function OpsHeader({
           quiénes son, y alguna no se acordaría. */}
       <div className="hidden lg:flex items-center gap-4 min-w-0">
         {Icono && (
-          <div className="bg-ops-accent/10 p-2.5 rounded-ui shrink-0">
+          <IconoEnvoltorio {...propsIcono}>
             <Icono className="w-7 h-7 text-ops-accent" />
-          </div>
+          </IconoEnvoltorio>
         )}
         <div className="min-w-0">
           <h1 className="text-3xl font-black font-syne text-ops-ink tracking-tight leading-none truncate">

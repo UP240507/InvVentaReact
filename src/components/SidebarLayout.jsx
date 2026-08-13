@@ -30,6 +30,7 @@ import {
 import {
   gruposVisibles as calcularGruposVisibles,
   esRutaOperacion,
+  esPantallaCompleta,
 } from '../lib/Navegacion';
 import { useAcoplado } from '../hooks/useAcoplado';
 import BarraPestanas from './BarraPestanas';
@@ -120,8 +121,12 @@ export default function SidebarLayout() {
     navigate('/login', { replace: true });
   };
 
-  const isFullScreenRoute =
-    location.pathname === '/pos' || location.pathname === '/kds';
+  // La lista vive en `lib/Navegacion.js`, no aquí. Esta condición era la ÚNICA
+  // definición de «pantalla sin riel» y por eso nadie relacionó el encierro del
+  // barista con ella: en el KDS no hay menú, así que la pantalla es la única
+  // que puede ofrecer salida. Compartida, `Escape.test.js` puede recorrerla y
+  // exigir salida para cada rol.
+  const isFullScreenRoute = esPantallaCompleta(location.pathname);
 
   // Rol e identidad — capacidades vivas (Proyecto L): flags, no nombres.
   const rolesPermisos = useAppStore((s) => s.roles_permisos);

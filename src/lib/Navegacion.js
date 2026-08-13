@@ -136,6 +136,19 @@ export const RUTAS_OPERACION = [
   '/loginempleados',
 ];
 
+// ── Pantallas SIN riel lateral (Proyecto D) ──────────────────────────────────
+// `SidebarLayout` se aparta en estas rutas para dejar la pantalla entera a la
+// operación. La consecuencia, que costó un encierro descubrir: **en ellas el
+// menú no existe, así que la propia pantalla es la única que puede ofrecer una
+// salida**. Si mañana se agrega una tercera, agrégala aquí y `Escape.test.js`
+// exigirá que tenga salida para todos los roles antes de dejar pasar la suite.
+export const RUTAS_PANTALLA_COMPLETA = ['/pos', '/kds'];
+
+export function esPantallaCompleta(path) {
+  const limpio = (path || '').replace(/\/+$/, '') || '/';
+  return RUTAS_PANTALLA_COMPLETA.includes(limpio);
+}
+
 export function esRutaOperacion(path) {
   const limpio = (path || '').replace(/\/+$/, '') || '/';
   return RUTAS_OPERACION.includes(limpio);

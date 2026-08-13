@@ -221,13 +221,33 @@ completa (sin riel) y su botón «Salir» navegaba a `getRutaInicial()`, que par
 Chef y Barista **es `/kds`**: el botón no hacía nada. Como el logout vive en
 `/perfil`, no había ninguna salida.
 
-- [ ] Como **Barista**, pulsar **Salir** en el KDS → cae en **Mi perfil**.
+Ya no se arregla pantalla por pantalla. El destino lo calcula `lib/Escape.js` y
+`Escape.test.js` lo comprueba contra **todos los roles y contra roles inventados**
+—incluido uno con las capacidades corruptas—, en todas las pantallas sin riel. La
+garantía que da: nunca devuelve la pantalla actual, y siempre devuelve algo que
+el rol puede abrir o `/checador`, que es pública.
+
+- [ ] Como **Barista**, el botón de arriba dice **«Mi perfil»**, no «Salir», y
+      lleva ahí. El texto sigue al destino: mandar a alguien al perfil bajo un
+      cartel que dice «Salir» es mentirle, y ese botón se lee todos los días.
+- [ ] El **gorro de chef** del encabezado también lleva al perfil (pedido de
+      Chris). Es un extra de escritorio: en teléfono ese bloque está oculto, por
+      eso el botón sigue siendo la salida de verdad.
+- [ ] Como **Admin**, el mismo botón dice **«Salir»** y lleva a `/dashboard`,
+      igual que siempre.
 - [ ] Desde ahí, **Cerrar sesión** funciona y lleva a `/loginempleados`.
 - [ ] Si tiene entrada abierta sin salida, primero exige marcar salida. Es lo
       correcto: la sesión no debe ser la puerta de atrás del checador.
 - [ ] En **Mi perfil** aparece el riel con **«Monitor Cocina»** para volver.
-- [ ] Como **Admin** (sesión por correo), el botón sigue llevando a
-      `/dashboard` como antes.
+- [ ] En el **POS**, salir desde Mostrador con una sesión de mesero → cae en
+      `/mesas`. Ese botón tenía el mismo agujero tapado con un `?? '/mesas'`
+      que suponía que todo el mundo puede abrir el mapa.
+
+> **Si mañana se agrega una tercera pantalla sin riel**, hay que anotarla en
+> `RUTAS_PANTALLA_COMPLETA` (`lib/Navegacion.js`). Entra sola en la matriz de
+> `Escape.test.js` y la suite no pasará hasta que tenga salida para todos los
+> roles. Es la parte que impide que esto vuelva a ocurrir; el resto sólo arregla
+> lo de ahora.
 
 > Ese botón estaba marcado en el código como «no-op consciente». No lo era.
 > Está anotado en el backlog §8 junto con lo que apareció al arreglarlo y **no**

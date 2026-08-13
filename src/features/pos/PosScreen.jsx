@@ -5,6 +5,12 @@ import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
+  getRolEfectivo,
+  getCapacidades,
+  puedeVerRuta,
+} from '../../lib/Permisos';
+import { rutaDeEscape } from '../../lib/Escape';
+import {
   ShoppingCart,
   ChefHat,
   CreditCard,
@@ -147,25 +153,35 @@ export default function PosScreen() {
   const rolActivo = (user?.rol || user?.puesto || '').toLowerCase();
   const esMesero = rolActivo.includes('mesero');
 
+  // Capacidades de QUIEN está usando la pantalla: el empleado del PIN si lo hay,
+  // y si no la cuenta del aparato. Sólo se usan para calcular la salida.
+  const capDeLaSesion = useMemo(() => {
+    const empleado = useSessionStore.getState().empleadoActivo;
+    return getCapacidades(
+      getRolEfectivo(empleado || user),
+      useAppStore.getState().roles_permisos,
+    );
+  }, [user]);
+
   // Salida del POS por rol (deuda #1 del traspaso): navigate(-1) era ambiguo
   // para quien aterriza DIRECTO en /pos (historial vacío) y /dashboard
   // hardcodeado expulsaba a roles cuyo guard lo rechaza. Regla:
   //  - En mesa → volver al mapa de mesas (origen natural del flujo).
-  //  - Mostrador: empleado → su ruta inicial; admin → /dashboard.
+  //  - Mostrador → lo que diga `lib/Escape.js`.
+  //
+  // El `?? '/mesas'` de antes tapaba el mismo agujero que encerró al barista en
+  // el KDS —un destino que es la propia pantalla—, pero lo tapaba SUPONIENDO que
+  // todo el mundo puede abrir `/mesas`. Un rol futuro con `['pos']` y nada más
+  // se habría quedado igual de atrapado. Ahora la salida se calcula en un solo
+  // sitio y se prueba contra roles que todavía no existen.
   const salirDelPos = () => {
-    if (isMesa) {
+    // El mapa de mesas es el origen natural del flujo, pero sólo vale como
+    // salida si este rol puede abrirlo.
+    if (isMesa && puedeVerRuta(capDeLaSesion, '/mesas')) {
       navigate('/mesas');
       return;
     }
-    let destino = '/dashboard';
-    try {
-      const { empleadoActivo, getRutaInicial } = useSessionStore.getState();
-      if (empleadoActivo) destino = getRutaInicial?.() || '/mesas';
-    } catch {
-      /* sesión admin o store no hidratado: /dashboard */
-    }
-    // Nunca navegar al propio POS (se quedaría atrapado): fallback a /mesas.
-    navigate(destino === '/pos' ? '/mesas' : destino);
+    navigate(rutaDeEscape({ cap: capDeLaSesion, rutaActual: '/pos' }));
   };
 
   const [carrito, setCarrito] = useState([]);
