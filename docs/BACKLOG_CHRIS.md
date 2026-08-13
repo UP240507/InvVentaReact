@@ -274,3 +274,29 @@ qué. Es una vuelta propia, con su tanda de pruebas.
 **Decisión tuya:** si la caja va a ser también la pantalla de cocina, esto sube
 de prioridad. Si el KDS vive en un aparato aparte que entra por
 `/loginempleados`, puede esperar.
+
+---
+
+## 9 · Notificaciones en el teléfono (12-ago)
+
+Diagnóstico y opciones completas en **`docs/DISENO_AVISOS_EN_TELEFONO.md`**.
+
+En una línea: el teléfono entra por `http://192.168.x.x:3000` y **una IP de red
+local por HTTP no es un «contexto seguro»**, así que la API de notificaciones
+—igual que los service workers— **no existe** ahí. No es un permiso denegado.
+
+Se puede forzar sirviendo HTTPS desde el hub, pero exige **instalar una
+autoridad certificadora en cada teléfono**, con PIN de pantalla y una
+advertencia permanente del sistema, repetido por persona y por aparato. Peor que
+instalar una app.
+
+**Camino recomendado: app de Android con Tauri.** Mismo código, un target más, y
+el plugin de notificaciones que ya funciona en Windows corre igual en Android.
+Decisión pendiente tuya, explicada en el diseño: **APK con los archivos dentro**
+(se pierde la actualización automática de todos los teléfonos al actualizar la
+caja) o **APK como cascarón que carga desde la caja** (la conserva, pero hay que
+autorizar acceso IPC a un origen remoto).
+
+Hoy, sobre `http`, el teléfono **ya suena y ya enseña el cartel** — el audio no
+exige contexto seguro. Lo único que falta es el aviso cuando están fuera de la
+app.
