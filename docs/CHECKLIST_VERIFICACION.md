@@ -18,17 +18,35 @@ localizable en tres síntomas mezclados.
   cajón**. El primero ya compiló; el segundo **no se ha compilado nunca** — no
   hay toolchain de Rust en el entorno donde se escribió.
 
-- [ ] `npx vitest run --isolate=false src/lib src/store src/test src/hooks`
+- [ ] `npm run test:rapido`
 
-  Debe dar **510 en verde**. Si salen 6 fallos en `useConectividad`, vuelve a
-  correrlo: son intermitentes y aparecen y desaparecen sin tocar código.
+  El lote de lógica pura, sin DOM ni globales. **521 en verde.** `--isolate=false`
+  aquí es seguro y rápido.
 
-- [ ] `npx vitest run --isolate=false src/features src/components`
+- [ ] `npm run test:run`
 
-  **Este ya estaba roto antes** (50 fallos, verificado el 10-ago revirtiendo
-  cambios). En una corrida del 12-ago salieron **52**, y no se pudo distinguir
-  si esos dos son nuevos o deriva del propio lote. **Es lo primero que hay que
-  aclarar en una máquina donde la suite sea fiable.**
+  **La suite entera, con aislamiento.** Debe dar TODO en verde.
+
+### Sobre `--isolate=false`, que costó dos días de fantasmas
+
+Durante el 10 y el 11-ago se dio por hecho que había «50 pruebas rotas» en
+`src/features src/components`. **No había ninguna.** Los 12 fallos de
+`MesasScreen.figuras` —los últimos que quedaban— pasan 19 de 19 al correr ese
+archivo solo, igual que `BarraPestanas`, `PanelAcoplable`, `MarcaConmutador` y
+`LoginPuerta`.
+
+Todos los fallos venían de compartir estado global entre archivos con
+`--isolate=false`. Ya se corrigieron dos casos concretos en `useConectividad`
+—un `vi.mock` que llegaba tarde y un `document.visibilityState` sin restaurar—
+y queda al menos uno más sin localizar entre los archivos que simulan
+`matchMedia`.
+
+**La conclusión práctica: ese atajo dejó de pagarse solo.** Se adoptó para que la
+suite cupiera en el tiempo de una llamada, y a cambio produjo tres falsas
+alarmas, mandó a revertir un cambio correcto y ocultó durante dos días que en
+realidad no había nada roto. Se queda para `src/lib src/store src/test
+src/hooks` —funciones puras, sin DOM ni globales, donde es seguro— y **la
+verificación de verdad se hace con `npm run test:run`**, que aísla.
 
 ## 1 · Los ajustes — nada funciona si no se guardan
 
@@ -140,4 +158,5 @@ contra algo que se sabe bueno.
 - CSP nulo en `tauri.conf.json` y `CorsLayer::permissive()` en el hub.
 - La reimpresión de documentos existe en `Comanda.js` y **nadie la llama**.
 - `mesas.mesero_id` sigue muerto: bloquea tres de las cinco propuestas de sala.
-- El lote `src/features src/components`, roto desde antes del 10-ago.
+- Queda por localizar el archivo que ensucia `matchMedia` entre ficheros. No
+  rompe nada con aislamiento; sólo estorba al correr sin él.

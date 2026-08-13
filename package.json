@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:rapido": "vitest run --isolate=false src/lib src/store src/test src/hooks",
     "test:ui": "vitest --ui",
     "test:cov": "vitest run --coverage",
     "e2e": "playwright test",
