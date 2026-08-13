@@ -89,6 +89,71 @@ fn hub_abrir_cajon(estado: tauri::State<'_, EstadoApp>) -> Result<(), String> {
         .map_err(|e| format!("no se pudo abrir el cajón: {e}"))
 }
 
+/// Deja en la caja una copia de lo que esta ventana acaba de encolar.
+///
+/// ── POR QUÉ EXISTEN ESTOS TRES COMANDOS Y NO SÓLO LAS RUTAS HTTP ────────────
+/// Es la lección del pulso del cajón, que se escribió sólo con su ruta HTTP y
+/// por eso nunca disparaba: **el cobro de la caja ocurre DENTRO de Tauri**, y
+/// ahí `lib/Hub.js` no hace fetch, invoca. Un respaldo que sólo funcionara por
+/// HTTP dejaría sin segunda copia justo al equipo que más cobra.
+#[tauri::command]
+fn hub_respaldar(
+    estado: tauri::State<'_, EstadoApp>,
+    anotaciones: Vec<hub::respaldo::Anotacion>,
+) -> Result<serde_json::Value, String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    let mut anotados = 0;
+    let mut duplicados = 0;
+    let mut invalidos = 0;
+
+    for mut a in anotaciones {
+        // La caja se identifica con su propio token, igual que la ruta HTTP
+        // toma el emisor de la cabecera y no del cuerpo.
+        a.dispositivo = hub.estado.token.clone();
+        match hub.estado.respaldo.anotar(a) {
+            hub::respaldo::Recibo::Anotado => anotados += 1,
+            hub::respaldo::Recibo::Duplicado => duplicados += 1,
+            hub::respaldo::Recibo::Invalido => invalidos += 1,
+        }
+    }
+
+    Ok(serde_json::json!({
+        "anotados": anotados,
+        "duplicados": duplicados,
+        "invalidos": invalidos,
+    }))
+}
+
+#[tauri::command]
+fn hub_confirmar_respaldo(
+    estado: tauri::State<'_, EstadoApp>,
+    claves: Vec<String>,
+) -> Result<usize, String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    Ok(hub.estado.respaldo.confirmar(&claves))
+}
+
+/// Lo que la caja tiene que adoptar: ventas de dispositivos que ya no dan
+/// señales. No devuelve las suyas propias — de ésas ya se encarga su cola.
+#[tauri::command]
+fn hub_respaldo_pendientes(
+    estado: tauri::State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    let propio = hub.estado.token.clone();
+    let huerfanas = hub.estado.respaldo.pendientes(|d| {
+        d == propio
+            || hub
+                .estado
+                .dispositivos
+                .visto_hace_menos_de(d, hub::servidor::VENTANA_VIVO_MS)
+    });
+    Ok(serde_json::json!({
+        "resumen": hub.estado.respaldo.resumen(),
+        "anotaciones": huerfanas,
+    }))
+}
+
 /// Ticket maquetado en texto plano, sin gastar papel.
 #[tauri::command]
 fn hub_previsualizar(estado: tauri::State<'_, EstadoApp>, documento: Documento) -> String {
@@ -244,6 +309,9 @@ pub fn run() {
             hub_descartar,
             hub_configurar_impresora,
             hub_abrir_cajon,
+            hub_respaldar,
+            hub_confirmar_respaldo,
+            hub_respaldo_pendientes,
             app_lista,
         ])
         .setup(|app| {

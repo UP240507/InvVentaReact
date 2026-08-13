@@ -4,6 +4,48 @@ import { supabase } from '../api/supabase';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { construirDeltasStock } from '../lib/Inventario';
 import { sinCamposDerivados } from '../lib/Payload';
+import { anotacionesDe, claveDeRespaldo } from '../lib/Respaldo';
+import { respaldar, confirmarRespaldo } from '../lib/Hub';
+
+// ── Respaldo en la caja (3.4 / 3.5) ─────────────────────────────────────────
+// Segunda copia de los cobros en el disco de la caja, para que las ventas de un
+// teléfono no se vayan con el teléfono. Qué se respalda y con qué clave está en
+// `lib/Respaldo.js`; el porqué de que el hub sólo guarde —y nunca suba— está en
+// `src-tauri/src/hub/respaldo.rs`.
+//
+// LA REGLA QUE MANDA SOBRE TODAS: **esto nunca puede tumbar un cobro.** Es la
+// segunda copia, jamás la única. Si el hub está apagado, si la LAN parpadea o
+// si el respaldo revienta, el cobro sigue su camino y `respaldarPendientes()`
+// lo recupera después. Por eso todo lo de aquí abajo va en «fire and forget»
+// con el error tragado, exactamente igual que `processQueue`.
+const respaldarEnSegundoPlano = (items) => {
+  const anotaciones = anotacionesDe(items);
+  if (anotaciones.length === 0) return;
+
+  Promise.resolve()
+    .then(() => respaldar(anotaciones))
+    .then(async (r) => {
+      if (!r?.ok) return;
+      // Se marca lo respaldado para que la barrida no lo reintente. Si esta
+      // escritura falla, lo peor que pasa es un POST de más contra un hub que
+      // ya lo tiene y responde «duplicado»: barato.
+      await Promise.all(
+        items
+          .filter((t) => claveDeRespaldo(t) != null && t.id != null)
+          .map((t) =>
+            localDB.sync_queue
+              .update(t.id, { respaldado: true })
+              .catch(() => {}),
+          ),
+      );
+    })
+    .catch((e) =>
+      console.warn(
+        '[respaldo] no se pudo dejar la copia en la caja (se reintentará):',
+        e?.message,
+      ),
+    );
+};
 
 // ── Clasificación de errores de sincronización ───────────────────────────────
 // PERMANENTE = el reintento NUNCA va a arreglarlo (RLS, columna inexistente,
@@ -50,6 +92,8 @@ export const useSyncStore = create((set, get) => ({
     // (navigator.onLine es poco confiable). processQueue ya evita correr en paralelo.
     if (status === false) {
       get().processQueue();
+      // Y de paso, respaldar lo que se cobró mientras no había hub a la vista.
+      get().respaldarPendientes();
     }
   },
 
@@ -126,6 +170,11 @@ export const useSyncStore = create((set, get) => ({
       throw e; // el llamador decide; pero esto NO debería pasar offline (es IndexedDB local)
     }
 
+    // 3b. Segunda copia en la caja, si es de las que se respaldan. Va DESPUÉS
+    //     de encolar y en segundo plano: el respaldo no puede retrasar ni un
+    //     milisegundo el camino del dinero.
+    respaldarEnSegundoPlano([{ ...queueItem, id: idTarea }]);
+
     // 4. Intentar subir en segundo plano. NUNCA propaga: un fallo de red aquí
     //    no debe tumbar al llamador (el dato ya está guardado + encolado).
     //    Sin await + catch tragado = "fire and forget".
@@ -187,13 +236,17 @@ export const useSyncStore = create((set, get) => ({
       nextAttemptAt: null,
       error: null,
     };
+    let idTarea;
     try {
-      await localDB.sync_queue.add(queueItem);
+      idTarea = await localDB.sync_queue.add(queueItem);
       set({ pendingTasks: await localDB.sync_queue.count() });
     } catch (e) {
       console.error('Error encolando RPC en sync_queue:', e?.message);
       throw e;
     }
+
+    // Sólo las RPC con identidad propia llevan copia; `lib/Respaldo.js` decide.
+    respaldarEnSegundoPlano([{ ...queueItem, id: idTarea }]);
     // Mismo patrón que enqueueAction: dispara processQueue en segundo plano sin
     // depender de isOffline (que causaba que la tarea quedara 'pending' para
     // siempre hasta un reload). Un fallo de red aquí no propaga.
@@ -351,6 +404,8 @@ export const useSyncStore = create((set, get) => ({
     // Hoisteado fuera del try{} para que el bloque finally pueda leer el
     // snapshot y detectar tareas que entraron mientras esta pasada corría.
     let pendingItems = [];
+    // Claves cuya copia en la caja ya sobra. Se confirman en bloque al final.
+    const confirmadas = [];
 
     try {
       pendingItems = await localDB.sync_queue.orderBy('createdAt').toArray();
@@ -424,6 +479,12 @@ export const useSyncStore = create((set, get) => ({
           // Éxito → fuera de la cola
           await localDB.sync_queue.delete(item.id);
           processedCount++;
+
+          // Ya está en Supabase: la caja puede olvidar su copia. Se acumulan
+          // para confirmarlas de una sola vez al final — una petición por venta
+          // sería una ráfaga contra el hub justo en hora de comida.
+          const clave = claveDeRespaldo(item);
+          if (clave) confirmadas.push(clave);
         } catch (error) {
           const attempts = (item.intentos || 0) + 1;
           const msg = error?.message || String(error);
@@ -493,6 +554,15 @@ export const useSyncStore = create((set, get) => ({
         }
       }
     } finally {
+      // Que la caja olvide lo que ya subió. Va en segundo plano y con el error
+      // tragado: si el hub no responde, la copia se queda de más —inofensivo—
+      // y la siguiente pasada vuelve a intentarlo. Lo caro sería lo contrario.
+      if (confirmadas.length > 0) {
+        Promise.resolve()
+          .then(() => confirmarRespaldo(confirmadas))
+          .catch(() => {});
+      }
+
       const remaining = await localDB.sync_queue.count();
       const dead = await localDB.sync_dead.count().catch(() => 0);
       set({
@@ -545,6 +615,30 @@ export const useSyncStore = create((set, get) => ({
     }
 
     return processedCount;
+  },
+
+  /**
+   * Barre la cola y respalda lo que se quedó sin copia.
+   *
+   * Cubre el caso real: se cobró con el hub apagado, o con el teléfono fuera
+   * del alcance del wifi. Sin esta barrida, esas ventas —justo las de la peor
+   * situación— serían las únicas sin segunda copia.
+   *
+   * Se llama al recuperar la conectividad y desde la pantalla del hub.
+   */
+  respaldarPendientes: async () => {
+    try {
+      const todas = await localDB.sync_queue.toArray();
+      const sinCopia = todas.filter(
+        (t) => t.respaldado !== true && claveDeRespaldo(t) != null,
+      );
+      if (sinCopia.length === 0) return 0;
+      respaldarEnSegundoPlano(sinCopia);
+      return sinCopia.length;
+    } catch (e) {
+      console.warn('[respaldo] no se pudo barrer la cola:', e?.message);
+      return 0;
+    }
   },
 
   // ── Gestión de dead-letter ───────────────────────────────────────────────

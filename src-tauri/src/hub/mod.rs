@@ -19,6 +19,7 @@ pub mod cola;
 pub mod dispositivos;
 pub mod documento;
 pub mod escpos;
+pub mod respaldo;
 pub mod servidor;
 pub mod transporte;
 
@@ -27,6 +28,7 @@ use std::sync::Arc;
 
 use cola::Cola;
 use dispositivos::Registro;
+use respaldo::Respaldo;
 use servidor::EstadoHub;
 use transporte::ConfigTransporte;
 
@@ -135,6 +137,10 @@ pub fn arrancar(
 
     let estado = Arc::new(EstadoHub {
         cola: Arc::clone(&cola),
+        // Junto a la cola de impresión y al registro de dispositivos: es el
+        // mismo tipo de dato —estado local de esta caja, que tiene que
+        // sobrevivir a un reinicio— y va a la misma carpeta.
+        respaldo: Respaldo::nuevo(carpeta_datos.join("respaldo-ventas.ndjson")),
         token: servidor::token_de_arranque(),
         dispositivos: Registro::nuevo(carpeta_datos.join("dispositivos.json")),
         puerto: puerto_real,

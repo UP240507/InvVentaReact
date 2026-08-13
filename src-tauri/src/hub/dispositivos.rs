@@ -171,6 +171,24 @@ impl Registro {
         }
     }
 
+    /// ¿Se ha visto a este dispositivo hace poco?
+    ///
+    /// A diferencia de `validar`, **no toca `visto_ms`**. Es la diferencia
+    /// entera: quien pregunta esto lo hace para decidir si adopta las ventas de
+    /// un teléfono que parece muerto, y si la propia pregunta lo marcara como
+    /// visto, nunca se adoptaría nada. Un token desconocido —revocado, o de una
+    /// caja anterior— cuenta como no vivo: sus ventas hay que adoptarlas.
+    pub fn visto_hace_menos_de(&self, token: &str, ventana_ms: u128) -> bool {
+        if token.is_empty() {
+            return false;
+        }
+        let mapa = self.interior.lock().unwrap();
+        match mapa.get(token) {
+            Some(d) => ahora_ms().saturating_sub(d.visto_ms) < ventana_ms,
+            None => false,
+        }
+    }
+
     pub fn listar(&self) -> Vec<Publico> {
         let mapa = self.interior.lock().unwrap();
         let mut v: Vec<Publico> = mapa.values().map(Publico::from).collect();

@@ -26,7 +26,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
@@ -39,6 +39,10 @@ use crate::hub::transporte::impresoras_instaladas;
 
 pub struct EstadoHub {
     pub cola: Arc<Cola>,
+    /// Segunda copia de las ventas que los dispositivos aún no han subido a
+    /// Supabase. El hub sólo las guarda: nunca habla con la nube. Ver
+    /// `respaldo.rs` para por qué eso no es una limitación sino la decisión.
+    pub respaldo: Arc<crate::hub::respaldo::Respaldo>,
     /// Token de EMPAREJAMIENTO: el que va en el QR. No concede acceso por sí
     /// mismo; solo sirve para canjearlo por un token propio en `/hub/emparejar`.
     /// Así el QR puede quedarse pegado en la pared sin que una foto conceda
@@ -355,6 +359,129 @@ struct PeticionRevocar {
     id: String,
 }
 
+/// Cuánto puede llevar un dispositivo sin dar señales antes de que la caja
+/// adopte sus ventas.
+///
+/// Quince minutos y no uno: un mesero que se mete en la cámara de frío pierde
+/// la LAN un rato y vuelve. Y equivocarse hacia el drenaje es barato —el
+/// drenaje usa `upsert` sobre una clave ya única, así que subir dos veces la
+/// misma venta es inofensivo—. Lo caro es no drenar nunca.
+pub const VENTANA_VIVO_MS: u128 = 15 * 60 * 1000;
+
+#[derive(Deserialize)]
+struct CuerpoRespaldo {
+    #[serde(default)]
+    anotaciones: Vec<crate::hub::respaldo::Anotacion>,
+}
+
+#[derive(Deserialize)]
+struct CuerpoConfirmar {
+    #[serde(default)]
+    claves: Vec<String>,
+}
+
+/// Deja una copia de lo que el dispositivo acaba de encolar para Supabase.
+///
+/// Cualquier dispositivo emparejado puede escribir aquí: dejar una copia de LO
+/// SUYO no expone nada de nadie.
+async fn respaldar(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+    Json(cuerpo): Json<CuerpoRespaldo>,
+) -> impl IntoResponse {
+    if !autorizado(&estado, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "token inválido o ausente" })),
+        );
+    }
+
+    // El emisor se toma del TOKEN, no del cuerpo. Si viniera en el JSON, un
+    // dispositivo podría firmar sus ventas como si fueran de otro y con eso
+    // hacer que la caja las adoptara —o que no las adoptara nunca— a voluntad.
+    let emisor = token_de(&headers).to_string();
+
+    let mut anotados = 0;
+    let mut duplicados = 0;
+    let mut invalidos = 0;
+
+    for mut a in cuerpo.anotaciones {
+        a.dispositivo = emisor.clone();
+        match estado.respaldo.anotar(a) {
+            crate::hub::respaldo::Recibo::Anotado => anotados += 1,
+            crate::hub::respaldo::Recibo::Duplicado => duplicados += 1,
+            crate::hub::respaldo::Recibo::Invalido => invalidos += 1,
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "anotados": anotados,
+            "duplicados": duplicados,
+            "invalidos": invalidos,
+        })),
+    )
+}
+
+/// «Esto ya subió a Supabase.» Cada dispositivo confirma lo suyo.
+async fn confirmar_respaldo(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+    Json(cuerpo): Json<CuerpoConfirmar>,
+) -> impl IntoResponse {
+    if !autorizado(&estado, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "token inválido o ausente" })),
+        );
+    }
+
+    let reconocidas = estado.respaldo.confirmar(&cuerpo.claves);
+    (
+        StatusCode::OK,
+        Json(json!({ "ok": true, "reconocidas": reconocidas })),
+    )
+}
+
+/// Lo que hay que adoptar: ventas de dispositivos que ya no dan señales.
+///
+/// **`autorizado_admin` y no `autorizado`, y no es ceremonia:** este endpoint
+/// entrega los cobros de todo el local. Con el token normal, cualquier teléfono
+/// emparejado se llevaría el historial de ventas de la caja.
+async fn respaldo_pendiente(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !autorizado_admin(&estado, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "requiere el token de la caja" })),
+        );
+    }
+
+    let quien_pregunta = token_de(&headers).to_string();
+    let huerfanas = estado.respaldo.pendientes(|dispositivo| {
+        // La caja no adopta lo suyo propio: eso lo sube su propia cola, y
+        // hacerlo por los dos caminos a la vez sería pedirle a `upsert` que
+        // arregle una carrera que se puede evitar.
+        dispositivo == quien_pregunta
+            || estado
+                .dispositivos
+                .visto_hace_menos_de(dispositivo, VENTANA_VIVO_MS)
+    });
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "ok": true,
+            "resumen": estado.respaldo.resumen(),
+            "anotaciones": huerfanas,
+        })),
+    )
+}
+
 async fn revocar(
     State(estado): State<Arc<EstadoHub>>,
     headers: HeaderMap,
@@ -384,6 +511,9 @@ pub fn rutas(estado: Arc<EstadoHub>, dir_web: Option<std::path::PathBuf>) -> Rou
         .route("/cola/descartar", post(descartar))
         .route("/impresora/ancho", post(configurar_ancho))
         .route("/cajon", post(abrir_cajon))
+        .route("/respaldo", post(respaldar))
+        .route("/respaldo/confirmar", post(confirmar_respaldo))
+        .route("/respaldo/pendientes", get(respaldo_pendiente))
         .with_state(estado);
 
     let mut app = Router::new().nest("/hub", api).layer(
@@ -464,6 +594,9 @@ mod tests {
                 )),
                 escpos::ANCHO_POR_DEFECTO,
                 dir.with_extension("cola.json"),
+            ),
+            respaldo: crate::hub::respaldo::Respaldo::nuevo(
+                dir.with_extension("respaldo.ndjson"),
             ),
             token: token.to_string(),
             dispositivos: Registro::nuevo(dir),

@@ -50,7 +50,12 @@ fi
 # ellos pasa a depender de `windows`, este script deja de compilar y eso es
 # exactamente el aviso que se quiere — significaría que la lógica de formato se
 # ató al sistema operativo.
-MODULOS=(documento escpos)
+#
+# `respaldo` entra aquí por la misma razón: guarda bytes opacos en un archivo y
+# no sabe qué es una venta, así que no toca Windows ni Supabase. Es además el
+# módulo donde más importa poder probar sin la caja delante — es el camino del
+# dinero y sus fallos son silenciosos.
+MODULOS=(documento escpos respaldo)
 
 for m in "${MODULOS[@]}"; do
   if [[ ! -f "$ORIGEN/$m.rs" ]]; then

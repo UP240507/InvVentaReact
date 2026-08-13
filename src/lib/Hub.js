@@ -576,6 +576,80 @@ export async function abrirCajon({ origen = null } = {}) {
   return pedir('/cajon', { metodo: 'POST', origen });
 }
 
+// ─── RESPALDO DE VENTAS (3.4 / 3.5) ─────────────────────────────────────────
+// Segunda copia de lo que este dispositivo encoló para Supabase, guardada en el
+// disco de la caja. El hub NUNCA sube nada: sólo guarda bytes y los devuelve.
+// El porqué de esa decisión está en `src-tauri/src/hub/respaldo.rs`.
+//
+// Las tres bifurcan Tauri/HTTP como el resto del módulo. Es obligatorio y no
+// cosmético: la caja cobra DENTRO de Tauri, y una versión sólo-HTTP dejaría sin
+// respaldo justo al equipo que más vende. Es el fallo del cajón, otra vez.
+
+/**
+ * Deja una copia. **Nunca lanza y nunca debe bloquear un cobro**: esto es la
+ * SEGUNDA copia, jamás la única. Si el hub está apagado se devuelve el fallo y
+ * quien llama sigue su camino — `respaldarPendientes()` lo recupera luego.
+ */
+export async function respaldar(anotaciones = [], { origen = null } = {}) {
+  const lista = Array.isArray(anotaciones) ? anotaciones : [];
+  if (lista.length === 0) return { ok: true, anotados: 0 };
+
+  if (enTauri()) {
+    try {
+      return {
+        ok: true,
+        ...(await invocar('hub_respaldar', { anotaciones: lista })),
+      };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+  return pedir('/respaldo', {
+    metodo: 'POST',
+    cuerpo: { anotaciones: lista },
+    origen,
+  });
+}
+
+/** «Esto ya subió a Supabase, olvídalo.» */
+export async function confirmarRespaldo(claves = [], { origen = null } = {}) {
+  const lista = (Array.isArray(claves) ? claves : []).filter(Boolean);
+  if (lista.length === 0) return { ok: true, reconocidas: 0 };
+
+  if (enTauri()) {
+    try {
+      return {
+        ok: true,
+        reconocidas: await invocar('hub_confirmar_respaldo', { claves: lista }),
+      };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+  return pedir('/respaldo/confirmar', {
+    metodo: 'POST',
+    cuerpo: { claves: lista },
+    origen,
+  });
+}
+
+/**
+ * Lo que hay que adoptar: ventas de dispositivos que ya no dan señales.
+ *
+ * Sólo responde al token de la CAJA. Un teléfono emparejado que lo intente
+ * recibe 401, y está bien: este endpoint entrega los cobros de todo el local.
+ */
+export async function respaldoPendiente({ origen = null } = {}) {
+  if (enTauri()) {
+    try {
+      return { ok: true, ...(await invocar('hub_respaldo_pendientes')) };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+  return pedir('/respaldo/pendientes', { origen });
+}
+
 export async function configurarAncho(ancho, { origen = null } = {}) {
   return pedir('/impresora/ancho', {
     metodo: 'POST',

@@ -1,7 +1,83 @@
 # 3.4 / 3.5 — Respaldo de ventas en el hub
 
-**Estado:** diseñado, sin escribir. 10-ago-2026.
-**Prerrequisito:** ✅ resuelto en la misma sesión (`lib/IdVenta.js`).
+**Estado (13-ago):** 🔨 **la copia está montada; la adopción no.**
+**Prerrequisito:** ✅ resuelto el 10-ago (`lib/IdVenta.js`).
+
+| Paso del §8 | Estado |
+|---|---|
+| 1 · `respaldo.rs` con sus pruebas | ✅ escrito — **12 pruebas, sin compilar todavía** |
+| 2 · Rutas y cableado | ✅ tres rutas + **tres comandos de Tauri** (ver abajo) |
+| 3 · `Hub.js` | ✅ `respaldar` · `confirmarRespaldo` · `respaldoPendiente` |
+| 4 · `useSyncStore` respaldar y confirmar | ✅ + `lib/Respaldo.js` con 22 pruebas |
+| 5 · `drenarRespaldo()` y el bloque en `HubScreen` | ⬜ **bloqueado, ver §10** |
+| 6 · Prueba extremo a extremo | ⬜ |
+
+**Un añadido al §4.2 del diseño original:** no bastan las rutas HTTP. La caja
+cobra DENTRO de Tauri, donde `lib/Hub.js` no hace `fetch` sino `invoke`, así que
+hay además tres comandos (`hub_respaldar`, `hub_confirmar_respaldo`,
+`hub_respaldo_pendientes`). Sin ellos, el equipo que más vende sería el único
+sin segunda copia. Es literalmente el fallo del pulso del cajón del 12-ago, y se
+evitó por acordarse de él.
+
+---
+
+## 10 · Lo que apareció al escribirlo, y por qué la adopción no entra todavía
+
+El diseño (§6) daba por hecho que `decrementar_stock` podía respaldarse usando
+«la clave de la venta que lo originó». Al ir a implementarlo se miró la función
+de verdad, y **no hay tal clave**:
+
+```
+decrementar_stock(p_items jsonb, p_restaurante_id uuid,
+                  p_referencia text, p_usuario text)
+```
+
+`p_referencia` **no es un identificador: es una etiqueta para el humano.** En la
+base de AZUL hay dos filas de `movimientos` con `referencia = 'Venta: Pizza x1'`
+—una de noviembre y otra de febrero, tres meses de diferencia—. Son dos ventas
+distintas del mismo platillo. Además, hoy el front **ni siquiera la manda**:
+`descontarStockVenta` llama a la RPC sin `p_referencia`, así que 74 de los 339
+movimientos no tienen referencia ninguna.
+
+O sea: **la función no es idempotente y no hay con qué hacerla idempotente.**
+
+Si la caja adoptara una venta huérfana y reejecutara su decremento, descontaría
+un inventario ya descontado. **No daría error.** Dejaría el almacén mal y nadie
+se enteraría hasta el conteo — exactamente el tipo de fallo que este proyecto
+lleva dos semanas persiguiendo.
+
+**Decisión:** `decrementar_stock` se queda **fuera** de `SE_RESPALDA`, y con ello
+la adopción entera se aparca. Respaldar la venta pero no su descuento sería
+peor que no respaldar: la venta adoptada entraría sin tocar inventario y el
+kardex mentiría en silencio, que es justo lo que el §5 advertía.
+
+### Lo que hace falta para desbloquearlo
+
+Una migración que le dé a `decrementar_stock` **su propio ledger por venta**,
+igual que ya lo tienen `registrar_visita_cliente` (`crm_visitas`) y
+`canjear_puntos` (`crm_canjes`). En concreto:
+
+1. Un parámetro `p_venta_id` de verdad (hay que **DROP y recrear**: añadir un
+   parámetro con valor por defecto crea una sobrecarga y deja la llamada
+   ambigua).
+2. Guarda de idempotencia al principio: si ya hay salida registrada para esa
+   venta, devolver el estado actual sin restar.
+3. Que `descontarStockVenta` pase el id de la venta.
+
+Es media sesión y arregla **un fallo que ya existe hoy**, independiente del
+respaldo: si la cola reintenta un `decrementar_stock` tras un timeout
+post-commit, hoy se descuenta dos veces. Los otros dos RPC ya se defienden de
+eso; éste no.
+
+### Lo que sí protege ya lo escrito
+
+La copia existe: cada venta, comanda y movimiento que un teléfono encola queda
+también en el disco de la caja, y se borra de allí cuando sube. Si un teléfono
+muere, **el dato ya no se va con él**. Lo que falta es el brazo automático que
+lo recoja — mientras tanto está en `respaldo-ventas.ndjson`, legible, y no se
+pierde.
+
+---
 
 ---
 
