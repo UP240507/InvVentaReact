@@ -35,6 +35,19 @@ fn hub_estado(estado: tauri::State<'_, EstadoApp>) -> serde_json::Value {
                 .map(|ip| format!("http://{}:{}", ip, h.estado.puerto))
                 .unwrap_or_else(|| format!("http://localhost:{}", h.estado.puerto)),
             "cola": h.estado.cola.resumen(),
+            // El ancho VIVO del rollo. Lo devolvía `/salud` (el camino HTTP del
+            // teléfono) y NO este comando, que es el que usa la caja —donde
+            // está la pantalla que lo configura—.
+            //
+            // Efecto en la caja (12-ago): elegir 80 mm se aplicaba y se
+            // escribía en hub.json correctamente, pero al recargar el selector
+            // volvía a enseñar 58 mm, porque `ancho_papel` llegaba `undefined`
+            // y la pantalla cae a 58 por defecto. Parecía que el ajuste no se
+            // guardaba; lo que no se guardaba era nada: mentía el selector.
+            //
+            // Mismo patrón que el pulso del cajón: dos capas correctas por
+            // separado y el hueco justo en medio.
+            "ancho_papel": h.estado.cola.ancho(),
             "impresoras": impresoras_instaladas(),
             "web": h.estado.web,
             "web_ms": h.estado.web_ms,
@@ -216,6 +229,10 @@ fn carpeta_web(app: &tauri::AppHandle) -> Option<PathBuf> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Notificaciones nativas para el KDS. Va aquí y no en el front con la
+        // API web porque WebView2 no la implementa: `Notification.permission`
+        // nunca llega a 'granted' y el aviso se pierde sin decir nada.
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             hub_estado,
             hub_imprimir,

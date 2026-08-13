@@ -48,7 +48,7 @@ export function enTauri() {
  * `withGlobalTauri`. Si ninguno responde, se lanza — pero solo puede pasar
  * dentro de Tauri, y todos los llamadores de este módulo capturan y degradan.
  */
-async function invocar(comando, args = {}) {
+export async function invocar(comando, args = {}) {
   const puente =
     (typeof window !== 'undefined' &&
       (window.__TAURI_INTERNALS__?.invoke || window.__TAURI__?.core?.invoke)) ||

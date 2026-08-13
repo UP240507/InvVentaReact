@@ -220,3 +220,57 @@ no aquí.
 Va junto con el punto de fondo: `--isolate=false` merece una vuelta propia.
 Cuatro archivos han dado ya fallos dependientes del orden o del tiempo, y una
 suite que falla a ratos deja de ser una red de seguridad.
+
+---
+
+## 8 · El barista atrapado, y lo que se vio al arreglarlo (12-ago)
+
+El síntoma que reportaste —«estoy atrapado en la sesión del barista, no puedo
+cerrar sesión»— ya está arreglado, pero conviene dejar escrito **por qué se
+pudo llegar ahí**, porque el error no fue de código: fue un comentario.
+
+`/kds` y `/pos` son rutas **a pantalla completa**: `SidebarLayout` se aparta a
+propósito, así que ahí no hay menú. La única salida del KDS era su botón
+«Salir», que llamaba a `getRutaInicial()`. Para Chef y Barista esa ruta **es**
+`/kds`, o sea que el botón navegaba a la pantalla en la que ya estaban.
+
+Eso estaba anotado en el código como **«no-op consciente»**. No lo era. Sus
+rutas son `['kds', 'perfil']` y el cierre de sesión vive en `/perfil`: sin ese
+botón no quedaba **ninguna** forma de salir. Un comentario que declaraba
+inofensivo lo que era un encierro — la misma familia que el `REVOKE` que no
+revocaba y el cajón que no disparaba, sólo que aquí el que mentía era el texto.
+
+**Arreglo:** si la ruta inicial es la pantalla actual, el botón lleva a
+`/perfil`. Desde ahí reaparece el riel con «Monitor Cocina» para volver, y el
+logout es el de siempre —el que sabe de la jornada—, no una segunda copia.
+
+### 8.1 Lo que apareció de camino, y **no** toqué
+
+Al mandar al barista a `/perfil` se le enseña por primera vez el riel lateral, y
+al revisar qué vería salió esto:
+
+- `SidebarLayout.jsx:128` calcula las capacidades con **`getRolEfectivo(user)`**
+  — la cuenta con la que se inició sesión en el aparato—, no con
+  `empleadoActivo`, que es quien de verdad está usando la pantalla. Es el único
+  sitio del proyecto que lo hace así: `KdsScreen`, `RelojChecadorScreen` y el
+  propio `SidebarLayout` treinta líneas más abajo usan `empleadoActivo`.
+- `EmpleadoRoute` (`App.jsx:96`) hace lo mismo y además **corta antes de
+  comprobar nada**: si `user` tiene `gestion`, devuelve la ruta sin pasar por
+  `puedeAcceder()`.
+
+**Qué significa en la práctica.** En el teléfono no pasa nada: se entra por
+`/loginempleados`, así que `user` **es** el empleado y su rol es el correcto. En
+la **caja** sí importa, porque está iniciada con tu correo de dueño: cualquiera
+que entre por PIN en ese aparato hereda el menú y los guards de Admin. No es una
+puerta nueva que abrí yo —pasa hoy con cualquier mesero en `/mesas`, que también
+lleva riel—; es que hasta ahora nadie había mirado.
+
+**No lo arreglé a propósito.** Cambiar de quién se leen las capacidades toca
+todos los guards de la aplicación, y hacerlo el mismo día que el flujo de la
+cuenta, la impresora y los avisos del KDS —tres cosas todavía sin verificar en
+el restaurante— es cómo se consigue no saber cuál de los cuatro cambios rompió
+qué. Es una vuelta propia, con su tanda de pruebas.
+
+**Decisión tuya:** si la caja va a ser también la pantalla de cocina, esto sube
+de prioridad. Si el KDS vive en un aparato aparte que entra por
+`/loginempleados`, puede esperar.

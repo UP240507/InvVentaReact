@@ -66,7 +66,17 @@ Los dos viven en **Ajustes → Zonas de Producción** y comparten el aviso de
 > Ya pasó una vez: el ajuste de comandas parecía no funcionar y en realidad
 > nunca se había guardado. En la base seguía en `siempre`.
 
-- [ ] **Ajustes → Hub** → ancho del papel en **80 mm (48 columnas)**.
+- [x] **Ajustes → Hub** → ancho del papel en **80 mm (48 columnas)**.
+
+> **Fallo encontrado y arreglado (12-ago).** Al recargar, el selector volvía a
+> 58 mm. El ajuste **sí se guardaba** —llegaba a `hub.json` y la impresora
+> imprimía a 48 columnas—: lo que mentía era el selector. El ancho vivo lo
+> devolvía `/salud` (el camino HTTP, el del teléfono) y **no** el comando
+> `hub_estado`, que es el que usa la caja, o sea justo donde está la pantalla
+> que lo configura. Sin ese dato, la pantalla cae a 58 por defecto.
+>
+> Mismo patrón que el pulso del cajón: dos capas correctas por separado y el
+> hueco exactamente en medio. **Requiere recompilar** (`cargo` toca).
 
 ## 2 · El folio, que sigue diciendo `PTKL`
 
@@ -90,9 +100,12 @@ localStorage.setItem('folio:prefijo-provisional', '1');
       después.
 - [ ] **No dice «Recibido» ni «Cambio» ni «Pago:»** — no se ha pagado todavía.
 
-- [ ] Cobrar en **efectivo** → **no sale un segundo papel** y **el cajón se
-      abre**.
-- [ ] Cobrar otra mesa con **tarjeta** → el cajón **no** se abre.
+- [ ] Cobrar en **efectivo** → **no sale un segundo papel**.
+- [ ] ~~el cajón se abre~~ / ~~con tarjeta no se abre~~ — **no se puede
+      verificar**: el cajón del restaurante está averiado y sólo abre con la
+      llave. El pulso ESC/POS sale igual (`hub_abrir_cajon`), pero no hay forma
+      de comprobarlo hasta que se repare o se pruebe en otro cajón. **Queda
+      pendiente, no verificado.**
 
 - [ ] **Mostrador** (venta directa, sin mesa) → al cobrar **sí** sale ticket,
       con método de pago y cambio. Ese flujo no cambió.
@@ -166,12 +179,59 @@ por correo no debe sonar nada, y eso también se verifica.
       suena**; el aviso es de la estación que se está mirando, como se acordó.
 
 - [ ] **Minimizar la ventana** (o irse a otra app) y mandar una comanda → sale
-      la **notificación de Windows**, no el cartel.
+      la **notificación de Windows**.
+- [ ] Al volver a la ventana, **el cartel sigue puesto** y recién entonces
+      empieza a contar sus 6 s.
 - [ ] Mandar dos seguidas estando fuera → **una sola notificación**, no dos
       apiladas. Al volver, lo que importa es la pantalla.
 
+> **Esto falló el 12-ago y se arregló, pero hay que recompilar.** Sonaba y la
+> notificación no salía nunca. Dos causas, las dos del mismo tipo de siempre:
+>
+> 1. **WebView2 no implementa la API web `Notification`.** En el teléfono
+>    funcionaba; en la caja `Notification.permission` se quedaba en `'default'`
+>    para siempre, `requestPermission()` no enseñaba ningún diálogo y no había
+>    error que mirar. Ahora se usa `tauri-plugin-notification`, que habla con el
+>    centro de notificaciones de Windows de verdad.
+> 2. **Minimizar no es «oculto».** Se preguntaba por `document.visibilityState`,
+>    y una ventana de Tauri minimizada —o tapada por WhatsApp— **sigue diciendo
+>    'visible'**. Ahora manda el **foco**, que sí se pierde.
+>
+> **Dos avisos para cuando no aparezca la notificación, y no sean bugs:**
+>
+> - En Windows el plugin **sólo funciona con la app INSTALADA**. Con el `.exe`
+>   suelto, o en `tauri dev`, el toast sale con el icono de PowerShell o no
+>   sale. Si en la cocina van a correr el ejecutable a pelo, **esto no va a
+>   funcionar** y hay que instalarlo de verdad.
+> - El **asistente de concentración** de Windows silencia los toasts sin
+>   decírselo a nadie. Es lo primero que hay que mirar.
+>
+> Por eso el cartel de la pantalla ahora **espera**: su cuenta atrás no corre
+> mientras la ventana está desatendida. Aunque Windows se trague el toast, quien
+> vuelve de la barra encuentra el aviso puesto en vez de una pantalla muda. El
+> sonido, que es el que nunca falló, sigue siendo la primera línea.
+
 - [ ] Entrar al KDS como **Gerente o Admin** → **no aparece el botón y no suena
       nada.** Entran a supervisar; un pitido por comanda es ruido.
+
+## 9 · La salida del KDS — que el barista pueda irse
+
+El 12-ago quedaste encerrado en la sesión de barista. `/kds` es pantalla
+completa (sin riel) y su botón «Salir» navegaba a `getRutaInicial()`, que para
+Chef y Barista **es `/kds`**: el botón no hacía nada. Como el logout vive en
+`/perfil`, no había ninguna salida.
+
+- [ ] Como **Barista**, pulsar **Salir** en el KDS → cae en **Mi perfil**.
+- [ ] Desde ahí, **Cerrar sesión** funciona y lleva a `/loginempleados`.
+- [ ] Si tiene entrada abierta sin salida, primero exige marcar salida. Es lo
+      correcto: la sesión no debe ser la puerta de atrás del checador.
+- [ ] En **Mi perfil** aparece el riel con **«Monitor Cocina»** para volver.
+- [ ] Como **Admin** (sesión por correo), el botón sigue llevando a
+      `/dashboard` como antes.
+
+> Ese botón estaba marcado en el código como «no-op consciente». No lo era.
+> Está anotado en el backlog §8 junto con lo que apareció al arreglarlo y **no**
+> se tocó: de quién lee las capacidades el riel lateral.
 
 ---
 

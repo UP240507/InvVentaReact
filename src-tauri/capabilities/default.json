@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capacidades base de la ventana principal de InvVenta",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "notification:default"]
 }

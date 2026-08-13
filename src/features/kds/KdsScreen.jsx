@@ -87,8 +87,16 @@ export default function KdsScreen() {
   // Salida por rol (deuda del roadmap: /dashboard hardcodeado expulsaba a
   // Chef/Barista/Mesero a una ruta que su guard rechaza → rebote al login).
   // Admin (sin empleadoActivo) → /dashboard. Empleado → su ruta inicial.
-  // Nota: para Chef/Barista getRutaInicial() ES /kds → el botón es no-op
-  // consciente (deuda #2: decidir su navegación fuera del KDS).
+  //
+  // ── EL ENCIERRO DEL 12-ago ─────────────────────────────────────────────────
+  // Para Chef y Barista `getRutaInicial()` ES `/kds`, así que este botón
+  // navegaba a la pantalla en la que ya estaban. Se dejó anotado como «no-op
+  // consciente» y no lo era: sus rutas son ['kds', 'perfil'] y **el logout vive
+  // en /perfil**, así que sin este botón no había NINGUNA forma de cerrar la
+  // sesión de barista. Quedó atrapado en producción.
+  //
+  // La regla ahora es la que faltaba: si la ruta inicial es donde ya estoy, el
+  // botón lleva a /perfil, que toda capacidad tiene y es de donde se sale.
   const salirDelKds = () => {
     let destino = '/dashboard';
     try {
@@ -97,6 +105,7 @@ export default function KdsScreen() {
     } catch {
       /* sesión admin o store no hidratado: /dashboard */
     }
+    if (destino === '/kds') destino = '/perfil';
     navigate(destino);
   };
 
@@ -389,12 +398,15 @@ export default function KdsScreen() {
               {/* Suena, pero el sistema no avisará si salen de la pantalla. Se
                   dice, porque el aviso al que se le confía «voy por un café»
                   es justo el que no está funcionando. */}
-              {avisosParaMi && !faltaActivar && permisoAvisos === 'denied' && (
-                <span className="self-center text-xs text-ops-ink-2 max-w-[14rem] leading-tight">
-                  Suena, pero sin notificación fuera de la pantalla (bloqueada
-                  en el sistema)
-                </span>
-              )}
+              {avisosParaMi &&
+                !faltaActivar &&
+                ['denied', 'unsupported'].includes(permisoAvisos) && (
+                  <span className="self-center text-xs text-ops-ink-2 max-w-[15rem] leading-tight">
+                    {permisoAvisos === 'denied'
+                      ? 'Suena, pero sin aviso fuera de la pantalla: las notificaciones están bloqueadas en el sistema.'
+                      : 'Suena, pero esta versión no puede lanzar avisos del sistema. Hay que actualizar la caja.'}
+                  </span>
+                )}
               <OpsButton
                 icono={isDarkMode ? Sun : Moon}
                 onClick={toggleTheme}

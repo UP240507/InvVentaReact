@@ -19,6 +19,13 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Notificaciones del sistema. WebView2 NO implementa la API web `Notification`:
+# en la caja el aviso sonaba y el toast no salia nunca. Este plugin habla con
+# el centro de notificaciones de Windows de verdad.
+# Ojo (documentado por Tauri): en Windows solo funciona con la app INSTALADA;
+# en `tauri dev` sale con el nombre y el icono de powershell.
+tauri-plugin-notification = "2"
+
 # ─── Hub LAN ────────────────────────────────────────────────────────────────
 # axum embebido en el propio proceso, NO un sidecar Node/Go: un solo binario,
 # sin runtime extra que instalar ni proceso huérfano que siga vivo si la app
