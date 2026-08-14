@@ -65,7 +65,17 @@ pub struct Anotacion {
     /// el front cambie la forma del payload no hay que tocar Rust.
     pub tarea: serde_json::Value,
     #[serde(default)]
-    pub creado_ms: u128,
+    /// **u64 y no u128, y esto NO es un detalle de estilo.**
+    ///
+    /// `Entrada` es un enum con etiqueta interna (`#[serde(tag = "t")]`), y esos
+    /// serializan a través de un buffer intermedio de serde que **no soporta
+    /// enteros de 128 bits**. Con `u128` aquí, `serde_json::to_string` devolvía
+    /// `Err` y —como el error se tragaba— **no se escribía NI UNA línea al
+    /// disco**. Las 67 pruebas en memoria pasaban; fallaban justo las tres que
+    /// reabren el archivo. El fallo silencioso de siempre, esta vez en Rust.
+    ///
+    /// u64 en milisegundos alcanza hasta el año 584.554.531. De sobra.
+    pub creado_ms: u64,
 }
 
 /// Una línea del archivo. El formato es un diario, no una foto: se añade lo que
@@ -103,7 +113,7 @@ pub struct Resumen {
     pub pendientes: usize,
     /// Edad de la más vieja, en milisegundos. La pantalla la usa para gritar:
     /// una venta de hace tres semanas que nadie subió sigue siendo dinero.
-    pub mas_vieja_ms: u128,
+    pub mas_vieja_ms: u64,
     pub confirmadas_recordadas: usize,
 }
 
@@ -246,9 +256,21 @@ impl Respaldo {
 
         let mut texto = String::new();
         for anotacion in interior.pendientes.values() {
-            if let Ok(linea) = serde_json::to_string(&Entrada::Anotada(anotacion.clone())) {
-                texto.push_str(&linea);
-                texto.push('\n');
+            match serde_json::to_string(&Entrada::Anotada(anotacion.clone())) {
+                Ok(linea) => {
+                    texto.push_str(&linea);
+                    texto.push('\n');
+                }
+                Err(e) => {
+                    // Perder una anotación viva EN LA COMPACTACIÓN es peor que
+                    // no compactar: se borra del archivo lo que sigue sin subir.
+                    eprintln!(
+                        "[hub] ⛔ compactando el respaldo: no se pudo reescribir \
+                         {} ({e}). Se aborta para no perderla.",
+                        anotacion.clave
+                    );
+                    return;
+                }
             }
         }
         // Las confirmadas también se conservan, en su forma corta: son la
@@ -281,8 +303,19 @@ impl Respaldo {
     /// disco falla no se tumba el cobro, que es lo que el cajero está esperando.
     /// Lo que se pierde es la SEGUNDA copia, nunca la primera.
     fn escribir(&self, entrada: &Entrada) {
-        let Ok(linea) = serde_json::to_string(entrada) else {
-            return;
+        // Se GRITA en vez de tragárselo. La primera versión hacía
+        // `let Ok(..) else { return }` y por eso un error de serialización
+        // —el `u128` de `creado_ms`— dejó el respaldo escribiendo en el vacío
+        // sin una sola señal. Un respaldo que no respalda tiene que doler.
+        let linea = match serde_json::to_string(entrada) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!(
+                    "[hub] ⛔ el respaldo NO pudo serializar una anotación ({e}). \
+                     La venta se queda sin segunda copia."
+                );
+                return;
+            }
         };
         if let Some(padre) = self.archivo.parent() {
             let _ = std::fs::create_dir_all(padre);
@@ -297,10 +330,10 @@ impl Respaldo {
     }
 }
 
-fn ahora_ms() -> u128 {
+fn ahora_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
+        .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
 }
 
@@ -367,6 +400,65 @@ mod tests {
             tarea: json!({ "tabla": "ventas", "metodo": "upsert", "data": { "total": 250 } }),
             creado_ms: 0,
         }
+    }
+
+    /// LA PRUEBA QUE FALTABA.
+    ///
+    /// El 13-ago las tres pruebas de persistencia fallaron con «0 pendientes»
+    /// tras reabrir. La causa no estaba en el archivo ni en la lectura: era que
+    /// `Entrada` lleva etiqueta interna (`#[serde(tag = "t")]`) y ese camino de
+    /// serde **no admite enteros de 128 bits**, así que con `creado_ms: u128`
+    /// `to_string` devolvía `Err`... y el error se tragaba. El respaldo escribía
+    /// en el vacío sin una sola señal.
+    ///
+    /// Esta prueba mira la serialización a la cara, en vez de deducirla de un
+    /// efecto tres capas más abajo. Si alguien vuelve a meter un `u128` —o
+    /// cualquier tipo que el buffer no soporte— falla AQUÍ y con nombre propio.
+    #[test]
+    fn una_anotacion_se_serializa_de_verdad() {
+        let entrada = Entrada::Anotada(anotacion("ventas::1", "tel"));
+        let texto = serde_json::to_string(&entrada)
+            .expect("si esto falla, el respaldo no escribe NADA y no se entera nadie");
+
+        assert!(texto.contains("\"t\":\"a\""), "falta la etiqueta: {texto}");
+        assert!(texto.contains("ventas::1"));
+
+        // Y de vuelta: un formato que se escribe pero no se lee es igual de
+        // inútil que uno que no se escribe.
+        let leida: Entrada = serde_json::from_str(&texto).expect("no se pudo releer");
+        match leida {
+            Entrada::Anotada(a) => assert_eq!(a.clave, "ventas::1"),
+            _ => panic!("se releyó como otra cosa"),
+        }
+    }
+
+    #[test]
+    fn la_confirmacion_tambien_va_y_vuelve() {
+        let entrada = Entrada::Confirmada {
+            clave: "ventas::1".into(),
+        };
+        let texto = serde_json::to_string(&entrada).expect("no serializa");
+        assert!(texto.contains("\"t\":\"c\""));
+        let leida: Entrada = serde_json::from_str(&texto).expect("no se pudo releer");
+        assert!(matches!(leida, Entrada::Confirmada { .. }));
+    }
+
+    #[test]
+    fn anotar_deja_rastro_en_el_archivo() {
+        // Lo que las tres pruebas de persistencia daban por supuesto. Mirar el
+        // archivo directamente separa «no se escribió» de «no se leyó bien», que
+        // es la distinción que costó encontrar el fallo.
+        let archivo = archivo_temp("rastro");
+        let r = Respaldo::nuevo(archivo.clone());
+        r.anotar(anotacion("ventas::1", "tel"));
+
+        let contenido = std::fs::read_to_string(&archivo).expect("no hay archivo");
+        assert!(
+            contenido.contains("ventas::1"),
+            "el archivo quedó vacío: el respaldo no está respaldando"
+        );
+
+        let _ = std::fs::remove_file(&archivo);
     }
 
     #[test]

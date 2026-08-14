@@ -5,7 +5,7 @@
 
 | Paso del §8 | Estado |
 |---|---|
-| 1 · `respaldo.rs` con sus pruebas | ✅ escrito — **12 pruebas, sin compilar todavía** |
+| 1 · `respaldo.rs` con sus pruebas | ✅ **compilado y en verde (13-ago)** — 15 pruebas; el primer `cargo test` encontró un fallo real, ver §11 |
 | 2 · Rutas y cableado | ✅ tres rutas + **tres comandos de Tauri** (ver abajo) |
 | 3 · `Hub.js` | ✅ `respaldar` · `confirmarRespaldo` · `respaldoPendiente` |
 | 4 · `useSyncStore` respaldar y confirmar | ✅ + `lib/Respaldo.js` con 22 pruebas |
@@ -361,3 +361,42 @@ del dinero: conviene que entre solo, con la suite en verde antes y después.
 - **El amplificador de wifi.** Si el extensor crea su propia subred, el teléfono
   no encuentra el hub y no hay respaldo que valga. Requisito de instalación, no
   ticket.
+
+
+---
+
+## 11 · El `u128` que dejó el respaldo escribiendo en el vacío (13-ago)
+
+El primer `cargo test` en la máquina de Chris dio **67 pasadas y 3 fallos**, y
+los tres eran el mismo: reabrir el archivo daba **0 pendientes**.
+
+La causa no estaba donde apuntaba el síntoma. `Entrada` es un enum con
+**etiqueta interna** (`#[serde(tag = "t")]`), y ese camino de serde serializa a
+través de un buffer intermedio que **no admite enteros de 128 bits**. Con
+`creado_ms: u128`, `serde_json::to_string` devolvía `Err` en cada línea… y el
+código hacía `let Ok(linea) = … else { return; }`.
+
+**El respaldo llevaba desde el primer día escribiendo en el vacío, sin una sola
+señal.** Toda la lógica en memoria era correcta —por eso 67 pruebas en verde— y
+sólo fallaban las tres que tocaban el disco.
+
+Es la firma de este proyecto otra vez: el `REVOKE` que no revocaba, el cajón que
+no disparaba, el toast que no salía, el selector que mentía. Todos iguales: **no
+hay error, hay ausencia.**
+
+Lo curioso es que `cola.rs` guarda un `creado_ms: u128` sin problema. La
+diferencia es que ahí va dentro de una estructura normal, no de un enum
+etiquetado — el mismo tipo funciona en un sitio y falla en otro, que es
+justamente lo que hacía difícil sospechar de él.
+
+**Tres cosas cambiaron, y la primera es la menos importante:**
+
+1. `creado_ms` y `mas_vieja_ms` pasan a `u64`. Milisegundos en u64 llegan al año
+   584.554.531.
+2. **El error deja de tragarse.** Ahora se grita por `stderr`, en la escritura y
+   en la compactación. Un respaldo que no respalda tiene que doler.
+3. **Pruebas nuevas que miran la serialización a la cara** en vez de deducirla
+   de un efecto tres capas más abajo: `una_anotacion_se_serializa_de_verdad`,
+   `la_confirmacion_tambien_va_y_vuelve` y `anotar_deja_rastro_en_el_archivo`.
+   Esa última separa «no se escribió» de «no se leyó bien», que es la distinción
+   que costó encontrar el fallo.
