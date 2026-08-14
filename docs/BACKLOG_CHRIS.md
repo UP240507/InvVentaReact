@@ -303,3 +303,23 @@ navegador mantiene viva la pestaña—, así que la parte de enterarse ya funcio
 Se prueba en el restaurante cuando esté todo al 99% y se decide con el feedback
 de la gente. El dato que lo reabriría: que el sonido deje de salir tras un rato
 largo con la pantalla apagada.
+
+
+---
+
+## 10 · Lo del lunes (13-ago, de noche)
+
+Dos cosas decididas para **después** de la verificación del sábado, con el
+diseño y las trampas en **`docs/PENDIENTE_LUNES.md`**:
+
+1. **Reimpresión del ticket** — botón en Reportes → «Tickets del turno». La copia
+   es un **duplicado exacto, sin texto extra** (decisión de Chris). El id sí
+   cambia en cada copia, o `cola.rs` la descartaría como duplicada y no saldría
+   papel sin dar error. **Se registra en auditoría**, y ése es el único rastro
+   que va a quedar: desde el papel no se distingue un original de una copia.
+
+2. **Gastos en dos pestañas: caja chica y caja grande.** Ya era la nº 1 de las
+   cinco propuestas (`EVALUACION_5_PROPUESTAS.md` §2). Columna nueva
+   `caja: 'chica' | 'grande'` — **no** reutilizar `gastos.origen`, que ya
+   significa otra cosa. Queda por decidir el alcance: sólo pestañas, o pestañas
+   con fondo y saldo de verdad.
