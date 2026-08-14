@@ -140,6 +140,12 @@ la URL del `latest.json`) y subir **tres** archivos:
 El endpoint apunta a `releases/latest/download/latest.json`, así que mientras
 ese release sea el «latest» de GitHub, las cajas lo encuentran solas.
 
+> **El botón tiene que estar en la versión INSTALADA.** Es lo que casi se nos
+> escapa el 13-ago: el updater estaba entero —plugin, llaves, endpoint, textos—
+> y no había ningún botón que lo disparara. Publicar así habría dejado esa
+> instalación sin forma de comprobar nada nunca: el botón de la versión
+> siguiente no sirve, porque para llegar a ella hay que actualizar primero.
+
 > **La primera publicación no actualiza a nadie, y está bien.** Si la caja tiene
 > instalado 0.1.0 y publicas 0.1.0, el updater compara y no hay nada que hacer.
 > Ésa es la línea de salida: la siguiente ya se actualiza sola.
@@ -147,7 +153,9 @@ ese release sea el «latest» de GitHub, las cajas lo encuentran solas.
 ## 4 · Lo que hay que probar antes de confiar
 
 - [ ] Instalar la versión N en una máquina limpia.
-- [ ] Publicar la N+1 y pulsar **Buscar actualizaciones** en Ajustes.
+- [ ] Publicar la N+1 y pulsar **Buscar actualizaciones** en
+      **Ajustes → Hub e impresora** (sólo sale en la caja: el updater no existe
+      fuera de Tauri y un botón que no hace nada es peor que ninguno).
 - [ ] Sale el aviso **con el texto que menciona el aviso azul de Windows**. Ese
       texto es la mitad del trabajo: sin él, el cliente interpreta que la app
       está infectada y llama.

@@ -25,6 +25,7 @@ import {
   Ban,
   ShieldCheck,
   CloudUpload,
+  ArrowUpCircle,
 } from 'lucide-react';
 
 import {
@@ -62,6 +63,11 @@ import {
   respaldoPendiente,
 } from '../../lib/Hub';
 import { useSyncStore } from '../../store/useSyncStore';
+import {
+  buscarActualizacion,
+  instalarActualizacion,
+  avisoDeActualizacion,
+} from '../../lib/Actualizacion';
 import { generar, aSvg } from '../../lib/QR';
 
 /**
@@ -116,6 +122,45 @@ export default function HubScreen() {
   const [respaldo, setRespaldo] = useState(null);
   const [drenando, setDrenando] = useState(false);
   const drenarRespaldo = useSyncStore((s) => s.drenarRespaldo);
+
+  // Actualizaciones. Vive en esta pantalla y no en Configuración porque es la
+  // pantalla de la CAJA: el updater sólo existe dentro de Tauri, y ponerlo
+  // donde también lo ven los teléfonos sería ofrecer un botón que allí no hace
+  // nada.
+  const [buscando, setBuscando] = useState(false);
+  const [novedad, setNovedad] = useState(null);
+  const [instalando, setInstalando] = useState(false);
+
+  const alBuscarActualizacion = useCallback(async () => {
+    setBuscando(true);
+    try {
+      const r = await buscarActualizacion();
+      setNovedad(r);
+      if (!r.hay) {
+        // Se dice SIEMPRE, aunque no haya nada. Un botón que no responde deja a
+        // quien lo pulsó sin saber si buscó o si falló.
+        showToast(
+          r.error
+            ? `No se pudo comprobar: ${r.error}`
+            : 'Ya tienes la última versión.',
+          r.error ? 'warning' : 'info',
+        );
+      }
+    } finally {
+      setBuscando(false);
+    }
+  }, [showToast]);
+
+  const alInstalar = useCallback(async () => {
+    setInstalando(true);
+    const r = await instalarActualizacion();
+    if (!r.ok) {
+      setInstalando(false);
+      showToast(`No se pudo instalar: ${r.error}`, 'error');
+    }
+    // Si salió bien no se apaga `instalando`: la app se reinicia sola y esta
+    // pantalla desaparece con ella.
+  }, [showToast]);
 
   const refrescar = useCallback(async () => {
     setCargando(true);
@@ -616,6 +661,52 @@ export default function HubScreen() {
             )}
           </CardBody>
         </Card>
+
+        {/* ── Actualizaciones (3.12) ─────────────────────────────────────── */}
+        {enTauri() && (
+          <Card>
+            <CardBody>
+              <h2 className="font-fraunces font-bold text-lg mb-1 flex items-center gap-2">
+                <ArrowUpCircle className="w-5 h-5 text-adm-accent" />
+                Actualizaciones
+              </h2>
+              <p className="text-sm text-adm-muted mb-4">
+                Versión instalada: <strong>{info?.version || '—'}</strong>. No
+                se busca sola al arrancar: las once de la mañana no es momento
+                de proponerle nada a nadie.
+              </p>
+
+              {novedad?.hay ? (
+                <>
+                  {/* El aviso ENTERO, no un resumen. El texto de Windows es la
+                      mitad del trabajo: sin él, quien lo lee interpreta que la
+                      app está infectada y llama por teléfono. */}
+                  <pre className="text-sm text-adm-ink bg-adm-bg border border-adm-border rounded-ui p-4 mb-4 whitespace-pre-wrap font-figtree">
+                    {avisoDeActualizacion(novedad.version, novedad.notas)}
+                  </pre>
+                  <Button
+                    onClick={alInstalar}
+                    disabled={instalando}
+                    icono={CloudUpload}
+                  >
+                    {instalando
+                      ? 'Instalando… la caja se va a reiniciar'
+                      : 'Instalar y reiniciar'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variante="secundario"
+                  onClick={alBuscarActualizacion}
+                  disabled={buscando}
+                  icono={RefreshCw}
+                >
+                  {buscando ? 'Buscando…' : 'Buscar actualizaciones'}
+                </Button>
+              )}
+            </CardBody>
+          </Card>
+        )}
 
         {/* ── Respaldo de ventas (3.4/3.5) ───────────────────────────────── */}
         {respaldo && (
