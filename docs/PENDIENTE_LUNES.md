@@ -156,6 +156,20 @@ corrían**. Ésa es la lección, más que el bug.
 **Al regenerar el snapshot: sólo DESPUÉS de arreglar el layout.** Regenerarlo
 antes convierte el fallo en la nueva referencia y lo entierra para siempre.
 
+### NO hace falta una tablet para arreglar esto
+
+Conviene dejarlo claro porque el 13-ago casi se aparca por eso. **El fallo no
+depende del hardware, depende del ANCHO de la ventana.** La propia prueba de
+Playwright es la tablet —corre en un viewport `ipad-landscape`, y por eso lo
+cazó— y para verlo a ojo basta con **estirar una ventana de Chrome a ~1080 px**
+y abrir el mapa de mesas.
+
+Lo que sí necesita una tablet de verdad es **otra pregunta**: si se *siente*
+bien usarlo —que los botones se toquen sin errar, que se lea a un brazo de
+distancia—. Eso ningún viewport lo contesta. Pero es un juicio distinto de
+«esto está roto», y eso último ya está demostrado y se puede corregir sin
+esperar a conseguir nada.
+
 ### 3.3 · Y lo que hay que decidir
 
 Unas E2E que nadie corre no son una red de seguridad: son una foto vieja que da
