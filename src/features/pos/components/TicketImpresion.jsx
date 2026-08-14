@@ -38,7 +38,7 @@ export default function TicketImpresion({ venta, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-ops-ink/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-      <div className="flex flex-col max-h-[95vh] w-full max-w-sm animate-in slide-in-from-bottom-10">
+      <div className="flex flex-col max-h-[95dvh] w-full max-w-sm animate-in slide-in-from-bottom-10">
         {/* BOTONERA SUPERIOR */}
         <div className="flex justify-between items-center mb-4 px-2">
           <h3 className="text-ops-bg font-black font-syne tracking-widest uppercase text-sm flex items-center gap-2">

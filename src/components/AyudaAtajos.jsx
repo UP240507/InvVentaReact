@@ -23,7 +23,7 @@ export default function AyudaAtajos({ abierta, onCerrar }) {
         role="dialog"
         aria-modal="true"
         aria-label="Atajos de teclado"
-        className="w-full max-w-2xl bg-adm-panel border border-adm-border rounded-ui shadow-2xl overflow-hidden font-figtree text-adm-ink animate-in zoom-in-95 duration-media flex flex-col max-h-[80vh]"
+        className="w-full max-w-2xl bg-adm-panel border border-adm-border rounded-ui shadow-2xl overflow-hidden font-figtree text-adm-ink animate-in zoom-in-95 duration-media flex flex-col max-h-[80dvh]"
       >
         <div className="px-5 py-4 border-b border-adm-border flex items-center justify-between bg-adm-bg shrink-0">
           <div className="flex items-center gap-3">

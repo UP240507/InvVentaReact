@@ -1001,7 +1001,7 @@ export default function RelojChecadorScreen() {
       {/* La plantilla */}
       {plantillaAbierta && plantilla && (
         <div className="fixed inset-0 bg-ops-ink/70 dark:bg-ops-bg/85 backdrop-blur-sm z-[120] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-6 max-w-md w-full shadow-2xl border-2 border-ops-border animate-in zoom-in-95 max-h-[85vh] overflow-y-auto">
+          <div className="bg-white dark:bg-ops-panel rounded-ui-lg p-6 max-w-md w-full shadow-2xl border-2 border-ops-border animate-in zoom-in-95 max-h-[85dvh] overflow-y-auto">
             <div className="flex items-start justify-between mb-1">
               <div>
                 <h3 className="font-black text-ops-ink text-xl font-syne">

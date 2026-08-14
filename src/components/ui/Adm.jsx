@@ -420,7 +420,12 @@ export function Modal({
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-sidebar/70 backdrop-blur-sm animate-in fade-in duration-media">
       <Elemento
         className={unir(
-          'bg-adm-panel border border-adm-border rounded-ui shadow-2xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-media font-figtree text-adm-ink',
+          // `dvh` y no `vh`: con el teclado abierto en un teléfono, `vh` sigue
+          // midiendo la pantalla completa y el pie del modal —donde vive
+          // «Guardar»— se queda debajo del teclado, inalcanzable. Junto con
+          // `interactive-widget=resizes-content` en index.html, esto lo tapa
+          // para TODOS los modales del ERP de una vez.
+          'bg-adm-panel border border-adm-border rounded-ui shadow-2xl w-full flex flex-col max-h-[90dvh] overflow-hidden animate-in zoom-in-95 duration-media font-figtree text-adm-ink',
           ancho,
         )}
         {...props}

@@ -138,7 +138,7 @@ export default function PanelAcoplable({
             aria-modal="true"
             aria-label={titulo || etiquetaAbrir}
             data-figura="hoja"
-            className="fixed left-0 right-0 bottom-0 z-40 max-h-[88vh] flex flex-col rounded-t-[28px] bg-ops-panel border-t border-ops-border shadow-2xl animate-in slide-in-from-bottom"
+            className="fixed left-0 right-0 bottom-0 z-40 max-h-[88dvh] flex flex-col rounded-t-[28px] bg-ops-panel border-t border-ops-border shadow-2xl animate-in slide-in-from-bottom"
           >
             {/* Asa. No arrastra —eso pide gestos y un estado más— pero dice
                 «esto se cierra tirando hacia abajo», que es lo que la mano

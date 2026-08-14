@@ -351,7 +351,7 @@ export function OpsModal({
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ops-ink/50 backdrop-blur-md animate-in fade-in">
       <Elemento
         className={unir(
-          'bg-ops-panel rounded-ui-lg border-2 border-ops-border shadow-2xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 text-ops-ink',
+          'bg-ops-panel rounded-ui-lg border-2 border-ops-border shadow-2xl w-full flex flex-col max-h-[90dvh] overflow-hidden animate-in zoom-in-95 text-ops-ink',
           ancho,
         )}
         {...props}

@@ -530,7 +530,7 @@ export default function EmpleadosScreen() {
       {/* ─── MODAL ALTA/EDICIÓN ─── */}
       {showModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-adm-panel w-full max-w-2xl rounded-ui-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+          <div className="bg-white dark:bg-adm-panel w-full max-w-2xl rounded-ui-lg shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] transition-colors">
             <div className="p-6 border-b border-adm-border flex justify-between items-center bg-adm-bg transition-colors">
               <h2 className="text-xl font-black text-adm-ink flex items-center gap-2">
                 {isEditing ? (

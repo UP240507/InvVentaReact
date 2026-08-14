@@ -17,7 +17,7 @@
 | 1 · Monetización                           | 74 → 84     | ✅ completada (25-jul)                        |
 | 2 · Proyecto D (rediseño)                  | 84 → 92     | ✅ completada (27-jul) — los 6 ítems cerrados |
 | 2.5 · Gastos y costos fijos                | intercalada | ✅ cerrada (26-jul)                           |
-| 3 · Caja-hub, impresión, multi-dispositivo | 92 → 98     | 🔨 escrita entera; **falta compilar y probar** |
+| 3 · Caja-hub, impresión, multi-dispositivo | 92 → 98     | ✅ **escrita y compilada**; falta la prueba en el restaurante |
 | 4 · Hardening y lanzamiento                | 98 → 100    | ⬜ sin empezar                                |
 
 **El número importa menos que la naturaleza de lo que queda.** El 96 % se
@@ -27,8 +27,8 @@ parte que no admite atajos y la que suele tardar más de lo que aparenta.
 
 ### Lo que falta, en concreto
 
-**Fase 3 — al 13-ago no queda nada por ESCRIBIR salvo un punto.** Lo que queda
-es compilar, y probarlo en el restaurante:
+**Fase 3 — al 13-ago no queda nada por escribir.** El Rust compila y sus
+pruebas pasan. Lo que queda es **probarlo en el restaurante**:
 
 | Ítem | Estado |
 |---|---|
@@ -36,7 +36,7 @@ es compilar, y probarlo en el restaurante:
 | **3.4 / 3.5 · respaldo en la caja** | ✅ **ESCRITO 13-ago.** La caja guarda una copia de cada cobro y adopta lo de los dispositivos que dejan de dar señales. Diseño y hallazgos en `docs/DISENO_3.4_3.5_RESPALDO_HUB.md`. **Rust sin compilar.** |
 | **3.3 · mDNS** | ✅ **ESCRITO 13-ago** (`hub/anuncio.rs`). La caja se anuncia como `invventa-caja.local`. Es un respaldo, no el camino principal: Chrome en Android resuelve `.local` de forma irregular, así que el QR sigue llevando la IP. **Sin compilar.** |
 | **3.12 · auto-updater** | 🔨 **Código puesto, faltan tus llaves.** Plugin, capacidad, endpoint a GitHub Releases y `lib/Actualizacion.js` con la regla de no actualizar en silencio. Los pasos que sólo puedes dar tú están en `docs/CHECKLIST_ACTUALIZACIONES.md`. |
-| **3.10 · responsive de Métricas** | ⬜ **LO ÚNICO QUE QUEDA POR ESCRIBIR.** Rejilla de 12 columnas en tablet y las reglas globales del ERP. Riesgo bajo: toda la operación está cerrada. |
+| **3.10 · responsive de Métricas** | ✅ **13-ago.** Las reglas globales del ERP: `dvh` en los 20 modales + `interactive-widget=resizes-content`, con `src/test/modales-teclado.test.js` barriendo el repo para que no vuelva. Los KPIs pasan a 4 columnas en `lg` (una tablet en horizontal se quedaba con dos y media pantalla vacía). De paso, se quitó `user-scalable=no`, que fallaba WCAG 1.4.4. |
 | **3.6 · relay KDS** | Declarado **v2**, fuera del lanzamiento. |
 
 **Y la deuda de verificación, que ahora es la que manda.** Nada de lo del 11, 12

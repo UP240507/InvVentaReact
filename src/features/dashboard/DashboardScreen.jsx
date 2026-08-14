@@ -343,7 +343,13 @@ export default function DashboardScreen() {
       )}
 
       {/* ── KPIs ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      {/* Cuatro KPIs en cuanto hay sitio, no sólo en `xl`.
+          El salto estaba en 1280 px, así que una TABLET en horizontal —1024 a
+          1180— se quedaba con dos columnas y media pantalla vacía, que es el
+          aparato con el que el dueño mira esto de pie en el local. A 1024 el
+          riel ya está acoplado y quedan ~816 px: 200 px por tarjeta, que es lo
+          que mide una tarjeta de KPI cómoda. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Kpi
           etiqueta="Ingresos"
           icono={Wallet}

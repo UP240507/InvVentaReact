@@ -495,7 +495,7 @@ export default function ModalCobro({
     // que ya iban justas — es de donde salía que «Total Final» y «$40.00» se
     // montaran uno encima del otro.
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 lg:p-4 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md animate-in fade-in">
-      <div className="bg-white dark:bg-ops-panel rounded-none lg:rounded-ui-lg w-full lg:max-w-5xl shadow-2xl flex flex-col overflow-hidden h-full lg:h-auto lg:max-h-[90vh] border-0 lg:border-2 border-ops-border">
+      <div className="bg-white dark:bg-ops-panel rounded-none lg:rounded-ui-lg w-full lg:max-w-5xl shadow-2xl flex flex-col overflow-hidden h-full lg:h-auto lg:max-h-[90dvh] border-0 lg:border-2 border-ops-border">
         {/* ─── CABECERA · sólo en estrecho ───
             Con sitio, cada columna trae su propio encabezado y el aspa vive en
             la esquina del panel derecho. Apiladas, esa aspa `absolute` aterriza

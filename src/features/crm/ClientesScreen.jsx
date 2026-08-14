@@ -380,7 +380,7 @@ export default function CrmScreen() {
       {/* MODAL FORMULARIO */}
       {showModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-2 border-adm-border animate-in zoom-in-95 duration-media transition-colors">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] border-2 border-adm-border animate-in zoom-in-95 duration-media transition-colors">
             <div className="p-8 border-b border-adm-border flex justify-between items-center bg-adm-bg transition-colors">
               <div className="flex items-center gap-4">
                 <div className="bg-adm-danger p-3 rounded-ui shadow-lg shadow-adm-danger/30">
@@ -548,7 +548,7 @@ acking-widest px-2 flex justify-between"
           onClick={() => setDetalleCliente(null)}
         >
           <div
-            className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-2 border-adm-border animate-in zoom-in-95 duration-media transition-colors"
+            className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] border-2 border-adm-border animate-in zoom-in-95 duration-media transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-8 border-b border-adm-border flex justify-between items-center bg-adm-bg transition-colors">

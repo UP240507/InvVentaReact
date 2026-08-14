@@ -1170,7 +1170,7 @@ export default function MesasScreen() {
       {/* ─── MODAL: JUNTAR MESAS ─── */}
       {modalJuntar && (
         <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90dvh]">
             <div className="flex justify-between items-center mb-2 border-b-2 border-ops-border pb-4 shrink-0">
               <h2 className="text-xl font-black font-syne text-ops-ink flex items-center gap-2">
                 <Link2 className="w-5 h-5 text-ops-ok" /> Juntar Mesas
@@ -1276,7 +1276,7 @@ export default function MesasScreen() {
       {/* ─── MODAL: ASIGNAR MESEROS POR ZONA ─── */}
       {modalMeseros && (
         <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-lg w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-lg w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90dvh]">
             <div className="flex justify-between items-center mb-6 border-b-2 border-ops-border pb-4 shrink-0">
               <h2 className="text-xl font-black font-syne text-ops-ink flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-ops-accent" /> Meseros por
@@ -1339,7 +1339,7 @@ export default function MesasScreen() {
       {/* ─── MODAL: TRASPASO DE CUENTAS ─── */}
       {modalTraspaso.show && (
         <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+          <div className="bg-ops-panel rounded-ui-lg border-2 border-ops-border p-6 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90dvh]">
             <div className="flex justify-between items-center mb-6 border-b-2 border-ops-border pb-4 shrink-0">
               <h2 className="text-xl font-black font-syne text-ops-ink flex items-center gap-2">
                 <ArrowRightLeft className="w-5 h-5 text-ops-danger" /> Traspaso

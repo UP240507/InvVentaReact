@@ -362,7 +362,7 @@ export default function FacturasScreen() {
       {/* MODAL NUEVA FACTURA */}
       {modalNueva && (
         <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-border shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto animate-in zoom-in-95">
             <div className="p-8">
               <div className="flex items-center justify-between mb-8">
                 <div>

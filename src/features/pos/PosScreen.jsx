@@ -1446,7 +1446,7 @@ export default function PosScreen() {
 
         {/* Panel de Rondas: estado dinámico de las comandas enviadas a producción */}
         {isMesa && (
-          <div className="border-t border-ops-border bg-ops-panel max-h-[40vh] overflow-y-auto custom-scrollbar shrink-0">
+          <div className="border-t border-ops-border bg-ops-panel max-h-[40dvh] overflow-y-auto custom-scrollbar shrink-0">
             <PanelRondas mesaId={mesaActual.id} />
           </div>
         )}
@@ -1667,7 +1667,7 @@ export default function PosScreen() {
       {/* MODAL: elecciones del paquete ("elige 1 de N" por grupo) */}
       {modalElecciones && (
         <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-ops-panel rounded-ui-lg w-full max-w-md shadow-2xl border-2 border-ops-border animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+          <div className="bg-ops-panel rounded-ui-lg w-full max-w-md shadow-2xl border-2 border-ops-border animate-in zoom-in-95 flex flex-col max-h-[85dvh]">
             <div className="p-6 border-b border-ops-border flex justify-between items-center">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="bg-ops-accent/15 p-2.5 rounded-ui shrink-0">

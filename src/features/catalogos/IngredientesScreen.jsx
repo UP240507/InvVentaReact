@@ -387,7 +387,7 @@ export default function IngredientesScreen() {
               </button>
             </div>
 
-            <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="p-8 max-h-[70dvh] overflow-y-auto custom-scrollbar">
               <form
                 id="formInsumo"
                 onSubmit={handleSubmit}

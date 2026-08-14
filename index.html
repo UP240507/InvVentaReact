@@ -1,27 +1,58 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
     <title>InvVenta POS & ERP</title>
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
-    
+    <!-- Dos cambios con motivo, 13-ago:
+
+      `interactive-widget=resizes-content` — sin esto, al abrir el teclado del
+      teléfono el viewport de layout NO encoge, así que un modal con
+      `max-h-90dvh` sigue midiendo la pantalla entera y su pie —el botón de
+      guardar— queda DEBAJO del teclado. Es el fallo que `MOCKUPS_RESPONSIVE.md`
+      nombra como clásico, y se arregla aquí una vez para las 37 rutas.
+
+      Se quitaron `maximum-scale=1.0, user-scalable=no` — impedían hacer zoom.
+      Además de fallar WCAG 1.4.4, en un restaurante es justo lo que necesita
+      alguien de sesenta años para leer un ticket en un teléfono. iOS los ignora
+      desde hace años; Android no, así que sí tenían efecto. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta
+      name="theme-color"
+      content="#f8fafc"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0f172a"
+      media="(prefers-color-scheme: dark)"
+    />
+
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="InvVenta" />
-    
+
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Syne:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
 
     <style>
       /* Optimizaciones base sin romper el scroll ni los inputs */
-      html, body, #root {
+      html,
+      body,
+      #root {
         margin: 0;
         padding: 0;
         width: 100%;
@@ -31,10 +62,11 @@
       }
     </style>
   </head>
-  <body class="bg-slate-100 dark:bg-ui-obsidiana antialiased selection:bg-brand-amatista/30">
-    
+  <body
+    class="bg-slate-100 dark:bg-ui-obsidiana antialiased selection:bg-brand-amatista/30"
+  >
     <div id="root"></div>
-    
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

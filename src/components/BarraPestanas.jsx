@@ -78,7 +78,7 @@ export default function BarraPestanas({ items = [] }) {
             aria-modal="true"
             aria-label="Más destinos"
             data-figura="hoja-mas"
-            className="fixed left-0 right-0 bottom-0 z-40 max-h-[75vh] flex flex-col rounded-t-[28px] bg-ops-panel border-t border-ops-border shadow-2xl animate-in slide-in-from-bottom"
+            className="fixed left-0 right-0 bottom-0 z-40 max-h-[75dvh] flex flex-col rounded-t-[28px] bg-ops-panel border-t border-ops-border shadow-2xl animate-in slide-in-from-bottom"
           >
             <div className="pt-3 pb-1 flex justify-center shrink-0">
               <div className="w-10 h-1 rounded-full bg-ops-muted/40" />

@@ -46,7 +46,7 @@ export default function ConfirmacionStockModal({
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-ops-ink/80 dark:bg-ops-bg/90 backdrop-blur-md animate-in fade-in">
-      <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-border w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-media">
+      <div className="bg-white dark:bg-ops-panel rounded-ui-lg border-2 border-ops-border w-full max-w-2xl shadow-2xl flex flex-col max-h-[90dvh] animate-in zoom-in-95 duration-media">
         {/* HEADER */}
         <div className="flex justify-between items-start p-8 pb-4 shrink-0">
           <div className="flex items-center gap-4">

@@ -339,3 +339,20 @@ Ver `docs/CHECKLIST_ACTUALIZACIONES.md`: **no funciona hasta que generes las
 llaves y pegues la pública en `tauri.conf.json`**. Hoy dice
 `PEGA_AQUI_LA_CLAVE_PUBLICA`, así que la compilación del bundle fallará al
 firmar si no se hace.
+
+## 11 · Lo responsivo del 13-ago (3.10)
+
+Dos reglas globales, no veintinueve revisiones. Se comprueban en un teléfono de
+verdad, no en el simulador del navegador — el teclado del simulador no ocupa
+espacio y es justo lo que se está probando.
+
+- [ ] Abrir cualquier modal del ERP con formulario (Clientes, Proveedores,
+      Ingredientes…) en un **teléfono**, tocar un campo para que salga el
+      teclado → **el botón de guardar sigue siendo tocable**.
+- [ ] Hacer **zoom con dos dedos** en cualquier pantalla → ahora deja. Antes no.
+- [ ] En una **tablet en horizontal**, el Dashboard enseña **cuatro KPIs en
+      fila**, no dos.
+
+> El barrido de `src/test/modales-teclado.test.js` impide que vuelva a colarse
+> un `vh`, pero no puede comprobar que el resultado se vea bien. Eso son tus
+> ojos y un teléfono.

@@ -316,7 +316,7 @@ export default function ModificadoresScreen() {
       {/* MODAL CREADOR DE GRUPOS */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-media flex flex-col max-h-[90vh] border-2 border-adm-border transition-colors">
+          <div className="bg-white dark:bg-adm-panel rounded-ui-lg w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-media flex flex-col max-h-[90dvh] border-2 border-adm-border transition-colors">
             <div className="p-6 border-b border-adm-border flex justify-between items-center bg-adm-bg shrink-0">
               <div className="flex items-center gap-3">
                 <div className="bg-adm-info/15 p-2 rounded-ui">
