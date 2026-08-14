@@ -42,3 +42,13 @@ test-results/
 # publicar una actualización que las cajas instalarán como legítima.
 *.key
 *.key.pub
+
+# Carpeta llamada literalmente «~».
+#
+# El CLI de Tauri en Windows NO expande el `~`, así que
+# `tauri signer generate -w ~/.tauri/invventa.key` crea esta carpeta DENTRO del
+# proyecto en vez de en el perfil del usuario. Pasó el 13-ago y la llave privada
+# acabó en un commit. No estaba pusheada, así que se limpió el historial y no
+# hizo falta regenerarla — pero se ignora para que no vuelva a colarse mientras
+# alguien la deja ahí sin darse cuenta.
+~/
