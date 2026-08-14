@@ -128,17 +128,60 @@ Windows va a mostrar un aviso azul diciendo que no reconoce el
 programa. Es normal y pasa en cada actualización: …
 ```
 
-### d) Publicar en GitHub
+### d) Publicar en GitHub — paso a paso
 
-Crear un release con la etiqueta **`v<version>`** (con la `v`; es lo que espera
-la URL del `latest.json`) y subir **tres** archivos:
+**0. `git push` PRIMERO.** Un release cuelga de una etiqueta, y la etiqueta
+apunta a un commit. Si el commit no está en GitHub, la etiqueta se crea sobre
+algo distinto de lo que compilaste. Comprueba antes que no quedan commits
+locales:
+
+```bash
+git status -sb        # la primera línea dice «ahead N» si falta pushear
+git push
+```
+
+**1.** En el repositorio: pestaña **Releases** (columna derecha de la portada, o
+`.../releases`) → **Draft a new release**.
+
+**2. Choose a tag** → escribe **`v0.2.1`** (con la `v`) → aparece
+**«+ Create new tag: v0.2.1 on publish»**, púlsalo. La etiqueta no existe
+todavía; se crea al publicar.
+
+**3. Release title:** `v0.2.1`.
+
+**4. Descripción** — opcional, y **NO es la nota que ve el restaurante.** Son
+dos textos distintos y conviene no confundirlos:
+
+| | Quién lo lee | De dónde sale |
+|---|---|---|
+| Descripción del release | quien entre a GitHub | se escribe aquí |
+| `notes` del `latest.json` | **el dueño del restaurante**, en el aviso de actualizar | `npm run release -- "…"` |
+
+**5. Attach binaries** — arrastra los **tres** archivos:
 
 1. `InvVenta_<version>_x64-setup.exe`
 2. `InvVenta_<version>_x64-setup.exe.sig`
-3. `latest.json`
+3. `release/latest.json`
 
-El endpoint apunta a `releases/latest/download/latest.json`, así que mientras
-ese release sea el «latest» de GitHub, las cajas lo encuentran solas.
+Espera a que las tres barras lleguen al final antes de publicar.
+
+**6. Deja marcado «Set as the latest release»** y **NO marques «Set as a
+pre-release»**. Es lo único de esta pantalla que puede romper el updater sin
+avisar: el endpoint es `releases/latest/download/latest.json`, y GitHub excluye
+las pre-releases de «latest». Con eso mal puesto, las cajas piden un archivo que
+devuelve 404 y el botón dirá «no se pudo comprobar» sin más pista.
+
+**7. Publish release.**
+
+**8. Compruébalo** abriendo en el navegador:
+
+```
+https://github.com/UP240507/InvVentaReact/releases/latest/download/latest.json
+```
+
+Tiene que descargarse o mostrarse el JSON con la versión correcta. **Si da 404,
+las cajas también lo van a recibir**, así que no des el release por bueno hasta
+ver ese archivo.
 
 > **El botón tiene que estar en la versión INSTALADA.** Es lo que casi se nos
 > escapa el 13-ago: el updater estaba entero —plugin, llaves, endpoint, textos—
