@@ -37,13 +37,33 @@ Salen dos cosas:
 
 ## 2 · Variables de entorno al compilar
 
-```bash
-TAURI_SIGNING_PRIVATE_KEY=<contenido del archivo .key>
-TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<la contraseña de arriba>
+**No se ponen solas.** Son variables del shell y hay que dárselas al build cada
+vez. Tauri no las lee de ningún archivo, y **no deben ir a `.env`**: ese archivo
+acaba en copias, en capturas y —el día menos pensado— en el repositorio.
+
+Y no es que sin ellas el instalador salga sin firma: **con
+`createUpdaterArtifacts: true`, el build FALLA.** Es a propósito. Un instalador
+sin firmar que se publica sin que nadie se dé cuenta es peor que un error.
+
+En PowerShell, **sólo para esta ventana** (que es lo que se quiere):
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$HOME\.tauri\invventa.key" -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "la-contraseña"
+npm run tauri build
 ```
 
-Sin ellas, `npm run tauri build` no genera la firma y el instalador sale sin el
-`.sig` que el updater necesita.
+`TAURI_SIGNING_PRIVATE_KEY` admite **el contenido** de la llave o **la ruta** al
+archivo. Se usa el contenido porque la ruta con `~` no la expande PowerShell y
+el error que sale entonces —«no se encontró la llave»— manda a buscar en el
+sitio equivocado.
+
+**Si la llave no tiene contraseña, hay que poner la variable igual, vacía**
+(`$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""`). Sin definirla, el proceso se
+queda esperando una contraseña que nadie va a teclear y el build parece colgado.
+
+Para no repetirlo cada vez, un `firmar.ps1` **fuera del repositorio** con esas
+tres líneas. Fuera, no dentro: es el archivo que no puede acabar en GitHub.
 
 ## 3 · Publicar una versión
 

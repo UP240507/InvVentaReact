@@ -37,3 +37,8 @@ dev-dist/
 
 # Resultados de la última corrida de Playwright.
 test-results/
+
+# Llaves de firma del updater. NUNCA al repositorio: quien las tenga puede
+# publicar una actualización que las cajas instalarán como legítima.
+*.key
+*.key.pub
