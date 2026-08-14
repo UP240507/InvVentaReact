@@ -175,3 +175,62 @@ esperar a conseguir nada.
 Unas E2E que nadie corre no son una red de seguridad: son una foto vieja que da
 sensación de cobertura. O entran en el ritual —junto a `cargo test` y
 `test:rapido`— o hay que asumir en voz alta que no cuentan.
+
+---
+
+## 4 · Lo fiscal de los gastos — notas, NO decidido
+
+Chris trajo investigación el 13-ago. **No se programa todavía**; esto es para que
+el día que se retome no se empiece de cero ni se repitan las verificaciones.
+
+### Las reglas duras, verificadas (no de memoria)
+
+- **El límite de $2,000 en efectivo sigue vigente** (art. 27 fr. III LISR). Un
+  gasto por encima **pierde la deducibilidad aunque tengas factura**.
+- **Los $2,000 INCLUYEN el IVA.** El SAT aclaró que se refiere al **total del
+  CFDI**, no al subtotal. Un gasto de $1,900 + IVA ya se pasó. **Si la alerta se
+  programa sobre el subtotal, avisaría tarde justo en los casos frontera** —que
+  son los únicos donde el aviso sirve.
+- **El combustible es excepción**: siempre por medio electrónico, **sin importar
+  el monto**. Aunque sean $300 de gasolina.
+
+### La pieza que las dos vías señalaron
+
+La investigación llegó, desde el lado operativo, a lo mismo que el §2 de este
+documento desde el lado del modelo: **el vale de caja / dinero en tránsito**.
+Sale dinero a la tiendita → vale digital → al volver se captura lo gastado, si
+hubo factura, y el cambio. Eso ES el «fondo, retiros y reposiciones» sin el cual
+caja chica no puede responder cuánto queda.
+
+Que dos caminos distintos apunten a la misma pieza es la mejor señal de que hay
+que construirla.
+
+### Idea de producto que vale la pena
+
+**Reporte de merma fiscal:** «este mes se fueron $X en gastos sin factura».
+No es un dato contable, es un argumento comercial — es la frase que hace que un
+dueño cambie de proveedor de pan.
+
+### Tres reglas de diseño, y las tres importan
+
+1. **El umbral va en CONFIGURACIÓN, no quemado.** Los $2,000 llevan años
+   iguales, pero el día que cambien, un número dentro del binario significa
+   recompilar y republicar en cada restaurante.
+
+2. **La app INFORMA, no decide.** Avisar «esto en efectivo pierde deducibilidad»
+   está bien. Marcar un gasto como «no deducible» por su cuenta, no: la
+   deducibilidad depende de cosas que el sistema no sabe —si el pan acabó en el
+   menú o en la casa del dueño—. Ni nosotros ni el software somos su contador.
+
+3. **El RÉGIMEN va por restaurante, no supuesto.** AZUL es **probablemente**
+   Persona Moral —Chris dijo «lo más seguro»; **falta confirmarlo con la
+   Constancia de Situación Fiscal**—. Y da igual lo que sea AZUL: InvVenta es
+   multi-inquilino, así que si el código asume un régimen, el siguiente cliente
+   recibe una pantalla que le miente.
+
+   Importa porque cambia el DISCURSO de la función:
+
+   | Régimen | Qué gana el dueño al facturar |
+   |---|---|
+   | Persona Moral | Baja ISR **e** IVA acreditable |
+   | RESICO | **Sólo IVA** — las deducciones no bajan el ISR |
