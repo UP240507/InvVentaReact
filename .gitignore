@@ -52,3 +52,7 @@ test-results/
 # hizo falta regenerarla — pero se ignora para que no vuelva a colarse mientras
 # alguien la deja ahí sin darse cuenta.
 ~/
+
+# El latest.json se GENERA (npm run release). Versionarlo invita a editarlo a
+# mano, que es como se cuela una firma mal copiada.
+release/

@@ -1,7 +1,7 @@
 {
   "name": "invventa",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,9 @@
     "contraste": "node scripts/verificar-contraste.mjs",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"scripts/**/*.mjs\"",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version": "node scripts/version.mjs",
+    "release": "node scripts/latest-json.mjs"
   },
   "dependencies": {
     "@fontsource/figtree": "^5.1.0",

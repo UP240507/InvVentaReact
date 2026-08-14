@@ -67,34 +67,65 @@ tres líneas. Fuera, no dentro: es el archivo que no puede acabar en GitHub.
 
 ## 3 · Publicar una versión
 
-1. Subir `src-tauri/tauri.conf.json` → `version` (y `package.json` si quieres
-   que coincidan).
-2. `npm run tauri build`.
-3. Crear un release en GitHub y subir **el instalador** y **su `.sig`**.
-4. Subir también un `latest.json` con esta forma:
+### a) Subir el número — **en los tres sitios a la vez**
 
-```json
-{
-  "version": "0.2.0",
-  "notes": "Qué cambió, en una línea que entienda el dueño del restaurante.",
-  "pub_date": "2026-08-13T12:00:00Z",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "<el contenido del archivo .sig>",
-      "url": "https://github.com/UP240507/InvVentaReact/releases/download/v0.2.0/InvVenta_0.2.0_x64-setup.exe"
-    }
-  }
-}
+La versión vive en `package.json`, `src-tauri/tauri.conf.json` y
+`src-tauri/Cargo.toml`. El 13-ago estaban en 0.0.0, 0.1.0 y 0.1.0: **ya se
+habían separado sin que nadie lo notara**, porque separarse no rompe nada.
+
+Y el día que importa, falla mal: el updater compara el número del `latest.json`
+con el que Tauri metió DENTRO del instalador. Si te guías por un `package.json`
+desfasado para nombrar el release, publicas un `latest.json` que dice una
+versión sobre un instalador que por dentro dice otra — y las cajas no se
+actualizan **sin dar ningún error**.
+
+```bash
+npm run version                # las enseña y avisa si no coinciden
+npm run version -- 0.2.0       # las pone las tres
+npm run version -- patch       # 0.1.0 → 0.1.1
 ```
 
-El endpoint ya está apuntando a
-`releases/latest/download/latest.json`, así que mientras el release sea el
-«latest» de GitHub, las cajas lo encontrarán solas.
+### b) Compilar
 
-> **`notes` lo lee una persona, no un desarrollador.** «Corrige que el cajón no
-> abría al cobrar con tarjeta» sirve; «fix: cola.rs abrir_cajon» no.
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$HOME\.tauri\invventa.key" -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "tu-contraseña"
+npm run tauri build
+```
 
----
+Salen dos archivos en `src-tauri/target/release/bundle/nsis/`: el
+`InvVenta_<version>_x64-setup.exe` y su `.sig`.
+
+### c) Generar el `latest.json`
+
+```bash
+npm run release
+```
+
+Lee la versión y **la firma reales del último build** y escribe
+`release/latest.json`. Se genera en vez de escribirse a mano porque la firma son
+420 caracteres en base64: copiarla a mano es una errata esperando a ocurrir, y
+el síntoma sería «la actualización no se instala» sin más pista.
+
+**Antes de subirlo, cambia `notes`.** Lo lee el dueño del restaurante, no un
+programador: «Corrige que el cajón no abría al cobrar con tarjeta» sirve;
+«fix: cola.rs abrir_cajon» no.
+
+### d) Publicar en GitHub
+
+Crear un release con la etiqueta **`v<version>`** (con la `v`; es lo que espera
+la URL del `latest.json`) y subir **tres** archivos:
+
+1. `InvVenta_<version>_x64-setup.exe`
+2. `InvVenta_<version>_x64-setup.exe.sig`
+3. `latest.json`
+
+El endpoint apunta a `releases/latest/download/latest.json`, así que mientras
+ese release sea el «latest» de GitHub, las cajas lo encuentran solas.
+
+> **La primera publicación no actualiza a nadie, y está bien.** Si la caja tiene
+> instalado 0.1.0 y publicas 0.1.0, el updater compara y no hay nada que hacer.
+> Ésa es la línea de salida: la siguiente ya se actualiza sola.
 
 ## 4 · Lo que hay que probar antes de confiar
 
