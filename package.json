@@ -20,7 +20,8 @@
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"scripts/**/*.mjs\"",
     "tauri": "tauri",
     "version": "node scripts/version.mjs",
-    "release": "node scripts/latest-json.mjs"
+    "release": "node scripts/latest-json.mjs",
+    "publicar": "node scripts/publicar.mjs"
   },
   "dependencies": {
     "@fontsource/figtree": "^5.1.0",

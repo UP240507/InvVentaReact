@@ -12,9 +12,9 @@ publicar en cada versión.
 > Son cosas distintas y conviene no confundirlas:
 >
 > - **Certificado de firma de código** (el que cuesta dinero): le dice a
->   *Windows* quién publica la app. Sin él sale el aviso azul de SmartScreen.
+>   _Windows_ quién publica la app. Sin él sale el aviso azul de SmartScreen.
 >   Sigue descartado, y sigue anotado que con flujo de dinero se reconsidera.
-> - **Llaves del updater** (esto, gratis): le dicen a *la propia app* que la
+> - **Llaves del updater** (esto, gratis): le dicen a _la propia app_ que la
 >   actualización viene de ti y no de alguien que se metió en medio. Sin ellas
 >   el updater no arranca — y no debería: un updater sin firma es una puerta
 >   para que cualquiera que controle la red instale lo que quiera en la caja.
@@ -128,7 +128,45 @@ Windows va a mostrar un aviso azul diciendo que no reconoce el
 programa. Es normal y pasa en cada actualización: …
 ```
 
-### d) Publicar en GitHub — paso a paso
+### d) Publicar — con un comando
+
+```bash
+npm run publicar -- "Corrige que el cajón no abría al cobrar con tarjeta."
+```
+
+Hace la parte `c)` y la `d)` de una vez, y **cierra los tres agujeros por los
+que se cuela un release roto sin dar error**: sube siempre los tres archivos,
+nunca marca pre-release, y regenera el `latest.json` en el momento en vez de
+confiar en el que haya en disco (que puede ser de la versión anterior, o
+anterior a un recompilado, con lo cual la firma ya no cuadra).
+
+Antes de publicar comprueba, y aborta si algo falla:
+
+- que exista el instalador **de esta versión** y su `.sig`;
+- que no queden commits sin subir — la etiqueta colgaría de un commit que
+  GitHub no conoce;
+- que ese release **no exista ya** — republicar el mismo número con bytes
+  distintos es la peor divergencia posible;
+- que la firma del `latest.json` sea la del `.sig` que va a subir.
+
+Y después de publicar abre
+`releases/latest/download/latest.json` y comprueba que sirve esta versión. Si
+da 404 o sirve otra, lo dice: es el único paso que demuestra algo.
+
+Requiere la CLI de GitHub, una sola vez:
+
+```powershell
+winget install GitHub.cli
+gh auth login
+```
+
+**No compila.** Compilar necesita las variables de firma en el shell, y eso es
+una decisión tuya, no un efecto secundario de publicar.
+
+> **Sigue faltando instalar el `.exe` en la caja.** Publicar no instala nada, y
+> ningún script puede hacer ese paso por ti.
+
+### d-bis) Publicar a mano — por si `gh` no está
 
 **0. `git push` PRIMERO.** Un release cuelga de una etiqueta, y la etiqueta
 apunta a un commit. Si el commit no está en GitHub, la etiqueta se crea sobre
@@ -152,9 +190,9 @@ todavía; se crea al publicar.
 **4. Descripción** — opcional, y **NO es la nota que ve el restaurante.** Son
 dos textos distintos y conviene no confundirlos:
 
-| | Quién lo lee | De dónde sale |
-|---|---|---|
-| Descripción del release | quien entre a GitHub | se escribe aquí |
+|                           | Quién lo lee                                            | De dónde sale            |
+| ------------------------- | ------------------------------------------------------- | ------------------------ |
+| Descripción del release   | quien entre a GitHub                                    | se escribe aquí          |
 | `notes` del `latest.json` | **el dueño del restaurante**, en el aviso de actualizar | `npm run release -- "…"` |
 
 **5. Attach binaries** — arrastra los **tres** archivos:
@@ -219,3 +257,24 @@ sería ruido casi todo el año y, el día que sirva, llegará en mal momento.
 
 Se busca a mano, desde Ajustes, cuando tú decidas. Está en
 `src/lib/Actualizacion.js`.
+
+## 6 · Por qué esto NO lo hace GitHub Actions (todavía)
+
+Lo normal a partir de cierto tamaño es empujar la etiqueta y que un runner de
+Windows compile, firme y publique solo. No se ha hecho, y la razón no es
+técnica:
+
+**La llave privada del updater tendría que vivir en los secretos de GitHub.**
+Esa llave es lo único que le demuestra a la caja de un restaurante que una
+actualización viene de nosotros. Hoy existe en una sola máquina. Ponerla ahí la
+hace existir también en la infraestructura de otro — cifrada y con la práctica
+habitual del sector, sí, pero existiendo.
+
+Con un cliente y sin flujo de dinero, esa cesión no compra gran cosa: el paso
+que de verdad cuesta —instalar el `.exe` en la caja— hay que hacerlo a mano
+igual. `npm run publicar` ya quita los errores que ocurrían de verdad.
+
+**Cuándo reconsiderarlo:** cuando haya varios restaurantes y publicar empiece a
+doler, o cuando entre el certificado de firma de código (que también vive con
+esta decisión). Mismo criterio que el certificado: se revisa cuando haya
+ingresos.
