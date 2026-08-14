@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "InvVenta",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "identifier": "app.invventa.pos",
   "build": {
     "beforeDevCommand": "npm run dev",

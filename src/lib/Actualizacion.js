@@ -78,9 +78,19 @@ export async function instalarActualizacion() {
  * que acertar: si no se dice lo del aviso de Windows ANTES, el cliente lo
  * interpreta como que la app está infectada.
  */
-export function avisoDeActualizacion(version) {
+export function avisoDeActualizacion(version, notas = '') {
+  // Las notas van PRIMERO y separadas: es lo único del aviso que responde a la
+  // pregunta que de verdad se hace quien lo lee —«¿esto para qué es?»— y sin
+  // ellas el resto suena a trámite.
+  //
+  // Se descubrió que `buscarActualizacion` las traía y nadie las enseñaba: el
+  // texto viajaba desde el `latest.json` hasta aquí para morir. Justo el tipo
+  // de cosa que no da error.
+  const cuerpo = String(notas || '').trim();
+
   return [
     version ? `Hay una versión nueva (${version}).` : 'Hay una versión nueva.',
+    ...(cuerpo ? ['', cuerpo] : []),
     '',
     'Al instalarla, la caja se va a cerrar y volver a abrir sola.',
     '',

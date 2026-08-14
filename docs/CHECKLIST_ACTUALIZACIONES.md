@@ -99,7 +99,7 @@ Salen dos archivos en `src-tauri/target/release/bundle/nsis/`: el
 ### c) Generar el `latest.json`
 
 ```bash
-npm run release
+npm run release -- "Corrige que el cajón no abría al cobrar con tarjeta."
 ```
 
 Lee la versión y **la firma reales del último build** y escribe
@@ -107,9 +107,26 @@ Lee la versión y **la firma reales del último build** y escribe
 420 caracteres en base64: copiarla a mano es una errata esperando a ocurrir, y
 el síntoma sería «la actualización no se instala» sin más pista.
 
-**Antes de subirlo, cambia `notes`.** Lo lee el dueño del restaurante, no un
-programador: «Corrige que el cajón no abría al cobrar con tarjeta» sirve;
-«fix: cola.rs abrir_cajon» no.
+**La nota va en el comando, y sin ella el script no escribe nada.** Es a
+propósito: si fuera un campo que se edita en el archivo después, sería un paso
+manual al final, y un paso manual al final es el que alguien se salta el día que
+tiene prisa. Lo que se publicaría entonces es un aviso que dice «PON AQUI QUE
+CAMBIO» en la pantalla de un restaurante.
+
+**Esa frase la lee tu patrón, no un programador.** «Corrige que el cajón no
+abría al cobrar con tarjeta» sirve; «fix: cola.rs abrir_cajon» no. Sale en el
+aviso, encima de la explicación del mensaje de Windows:
+
+```
+Hay una versión nueva (0.2.1).
+
+Corrige que el cajón no abría al cobrar con tarjeta.
+
+Al instalarla, la caja se va a cerrar y volver a abrir sola.
+
+Windows va a mostrar un aviso azul diciendo que no reconoce el
+programa. Es normal y pasa en cada actualización: …
+```
 
 ### d) Publicar en GitHub
 
