@@ -67,7 +67,23 @@ const TABS = [
   // Es el add-on que se vende aparte, así que se ve como módulo: sin el plan
   // contratado el tab no aparece, igual que /clientes en el menú lateral.
   { id: 'lealtad', label: 'Lealtad', icon: HeartHandshake, modulo: 'lealtad' },
-  { id: 'impresoras', label: 'Impresoras', icon: Printer },
+  // ── «Impresoras» está QUITADO A PROPÓSITO (Chris, 13-ago) ──────────────────
+  // El tab existe más abajo (`tab === 'impresoras'`) y guarda una lista en
+  // `cfdi_config.impresoras`. **Nadie lee esa lista.** Y no es que falte
+  // conectarla: el hub tiene UN solo `transporte` (`hub/mod.rs`), así que la
+  // promesa del propio letrero —«cada zona puede tener su propia impresora»— no
+  // la puede cumplir la arquitectura de hoy.
+  //
+  // Se quita en vez de dejarlo porque el fallo no sería un error sino un
+  // silencio: el dueño captura la IP de la impresora de la barra, guarda, y no
+  // pasa nada. Concluye que el sistema está roto, o —peor— da por hecho que la
+  // barra ya imprime. Una pantalla que promete algo que no ocurre es peor que
+  // su ausencia.
+  //
+  // Para devolverlo hacen falta las dos mitades: `HashMap<zona, Transporte>` en
+  // el hub y que la cola elija por `documento.zona` (que ya viene puesto desde
+  // `lib/Comanda.js`). Mientras tanto la impresora real se configura en
+  // Ajustes → Hub e impresora, que sí manda.
   { id: 'turnos', label: 'Turnos', icon: Clock },
 ];
 

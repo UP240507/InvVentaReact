@@ -241,6 +241,24 @@ function fechaDe(iso) {
  * @param {Object} opciones { configuracion, copia }
  * @returns {Array} documentos, uno por zona, ordenados por nombre de zona
  */
+/**
+ * Las opciones elegidas de un platillo, como sublíneas sangradas.
+ *
+ * Se sangran con dos espacios igual que los componentes de un paquete: en un
+ * papel de 32 columnas, dos sangrías distintas se leen como un error de
+ * impresión, no como dos clases de información.
+ *
+ * Aquí NO se imprime el precio de la opción aunque el dato venga: hoy los
+ * modificadores no suman al total (ver `lib/Modificadores.js`), y un papel que
+ * enseñara «+$15» junto a un total que no lo incluye sería una discusión con
+ * el cliente en la mesa.
+ */
+function sublineasDeModificadores(item) {
+  return (Array.isArray(item?.modificadores) ? item.modificadores : [])
+    .map((m) => `  ${m?.nombre || ''}`.trimEnd())
+    .filter((s) => s.trim().length > 0);
+}
+
 export function construirComandas(
   comanda,
   { configuracion = {}, copia = 1 } = {},
@@ -263,7 +281,10 @@ export function construirComandas(
       // garantiza por construcción: no hay una bandera que alguien pueda
       // encender por error, simplemente no existe el campo.
       importe: '',
-      sublineas: [],
+      // Lo elegido en «¿cómo lo quiere?». Es el papel que el cocinero tiene
+      // delante: si el término de la carne no sale aquí, no sale en ningún
+      // sitio donde sirva.
+      sublineas: sublineasDeModificadores(item),
     });
   }
 
@@ -315,7 +336,9 @@ export function construirTicket(
     if (cantidad <= 0) continue;
 
     const linea = importeDeLinea(item);
-    const sublineas = [];
+    // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
+    // descuento es una operación sobre eso.
+    const sublineas = sublineasDeModificadores(item);
 
     // Los componentes de un paquete se listan: el cliente pagó "Desayuno
     // completo" y tiene derecho a ver qué incluía.
@@ -496,7 +519,9 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
     if (cantidad <= 0) continue;
 
     const linea = importeDeLinea(item);
-    const sublineas = [];
+    // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
+    // descuento es una operación sobre eso.
+    const sublineas = sublineasDeModificadores(item);
 
     const componentes = (item?.componentes || []).filter(
       (c) => c?.recetaId != null,

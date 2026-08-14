@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { textoDeReglas } from '../../lib/Modificadores';
 import {
   ListPlus,
   Plus,
@@ -377,7 +378,7 @@ export default function ModificadoresScreen() {
                         Opción Única (Radio)
                       </p>
                       <p className="text-[10px] text-adm-muted mt-0.5">
-                        El cliente solo puede elegir uno (Ej. Término de carne).
+                        Ej. Término de carne.
                       </p>
                     </div>
                   </label>
@@ -400,7 +401,7 @@ export default function ModificadoresScreen() {
                         Selección Múltiple (Checkbox)
                       </p>
                       <p className="text-[10px] text-adm-muted mt-0.5">
-                        Puede elegir varios o ninguno (Ej. Quitar ingredientes).
+                        Ej. Quitar ingredientes.
                       </p>
                     </div>
                   </label>
@@ -428,6 +429,25 @@ export default function ModificadoresScreen() {
                       </p>
                     </div>
                   </label>
+
+                  {/* ── LA FRASE QUE DESHACE LA CONTRADICCIÓN ──────────────
+                      Antes, la descripción de «Selección Múltiple» decía
+                      «puede elegir varios O NINGUNO» y esta casilla de abajo
+                      la desmentía. Y «múltiple + obligatorio» —que significa
+                      «al menos una»— no estaba escrito en ninguna parte: son
+                      cuatro combinaciones y sólo dos son evidentes.
+
+                      Se usa la MISMA función que el modal del punto de venta,
+                      así que lo que se promete aquí al configurar es
+                      literalmente el texto que el cajero lee al vender. */}
+                  <div className="mt-4 p-3 rounded-ui bg-adm-info/10 border border-adm-info/30">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-adm-info mb-1">
+                      En la caja se verá así
+                    </p>
+                    <p className="text-sm font-bold text-adm-ink">
+                      {textoDeReglas(formData)}
+                    </p>
+                  </div>
                 </div>
               </div>
 

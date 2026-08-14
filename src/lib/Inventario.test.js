@@ -1,6 +1,10 @@
 // src/lib/Inventario.test.js
 import { describe, it, expect } from 'vitest';
-import { construirDeltasStock, verificarStock } from './Inventario';
+import {
+  construirDeltasStock,
+  verificarStock,
+  construirItemsComanda,
+} from './Inventario';
 
 describe('construirDeltasStock · expansión de inventario', () => {
   it('expande una receta a sus insumos por cantidad vendida', () => {
@@ -140,5 +144,31 @@ describe('verificarStock · gate antes de cobrar', () => {
       { id: 99, cantidad: 1, insumos: [{ productoId: 777, cantidad: 5 }] },
     ];
     expect(verificarStock(items, productos)).toEqual([]);
+  });
+});
+
+// ── El eslabón que estaba roto (13-ago) ─────────────────────────────────────
+describe('construirItemsComanda · los modificadores sobreviven hasta cocina', () => {
+  it('los pasa al item de la comanda', () => {
+    // `construirItemsComanda` arma el item CAMPO A CAMPO —no hace spread—, así
+    // que todo dato nuevo del carrito se pierde en silencio si nadie lo nombra.
+    // Fue exactamente lo que pasó: se elegían y no llegaban.
+    const mods = [{ grupo_id: 1, id_opcion: 11, nombre: 'Término medio' }];
+    const [item] = construirItemsComanda(
+      [{ id: '1', nombre: 'Hamburguesa', cantidad: 1, modificadores: mods }],
+      [],
+      {},
+    );
+    expect(item.modificadores).toEqual(mods);
+  });
+
+  it('un item sin modificadores sale con lista vacía, no con undefined', () => {
+    // Para que el render de cocina pueda hacer `.length` sin comprobar antes.
+    const [item] = construirItemsComanda(
+      [{ id: '1', nombre: 'Sopa', cantidad: 1 }],
+      [],
+      {},
+    );
+    expect(item.modificadores).toEqual([]);
   });
 });

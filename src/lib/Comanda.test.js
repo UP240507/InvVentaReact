@@ -773,3 +773,63 @@ describe('el ticket sin pago — la cuenta que se lleva a la mesa', () => {
     expect(meta).toContain('Folio');
   });
 });
+
+// ── Modificadores en el papel (13-ago) ──────────────────────────────────────
+// El camino estaba entero y no lo recorría nadie: el POS no producía el dato.
+// Estas pruebas fijan el tramo del papel para que, si alguien vuelve a
+// reconstruir un item campo a campo por el camino, falle aquí y no en cocina.
+describe('modificadores · lo elegido llega al papel', () => {
+  const conMods = {
+    ...comandaBase,
+    items: [
+      {
+        id: '1',
+        nombre: 'Hamburguesa',
+        cantidad: 1,
+        destino: 'Cocina',
+        nota: 'salsa aparte',
+        modificadores: [
+          { grupo_id: 1, id_opcion: 11, nombre: 'Término medio' },
+          { grupo_id: 2, id_opcion: 21, nombre: 'Extra queso', precio: 15 },
+        ],
+      },
+    ],
+  };
+
+  it('la comanda de cocina las lista como sublíneas', () => {
+    const [cocina] = construirComandas(conMods, { configuracion: config });
+    expect(cocina.cuerpo[0].sublineas).toEqual([
+      '  Término medio',
+      '  Extra queso',
+    ]);
+  });
+
+  it('la nota y los modificadores conviven: no se pisan', () => {
+    // Son dos cosas distintas —lo estructurado y lo que el cliente dijo— y el
+    // cocinero necesita las dos.
+    const [cocina] = construirComandas(conMods, { configuracion: config });
+    expect(cocina.cuerpo[0].nota).toBe('salsa aparte');
+    expect(cocina.cuerpo[0].sublineas).toHaveLength(2);
+  });
+
+  it('NO imprime el precio de la opción, aunque el dato venga', () => {
+    // Hoy los modificadores no suman al total. Un papel que enseñara «+$15»
+    // junto a un total que no lo incluye es una discusión en la mesa.
+    const [cocina] = construirComandas(conMods, { configuracion: config });
+    expect(cocina.cuerpo[0].sublineas.join(' ')).not.toMatch(/15|\$/);
+  });
+
+  it('sangra igual que los componentes de un paquete', () => {
+    // Dos sangrías distintas en 32 columnas se leen como un error de
+    // impresión, no como dos clases de información.
+    const [cocina] = construirComandas(conMods, { configuracion: config });
+    for (const s of cocina.cuerpo[0].sublineas) {
+      expect(s.startsWith('  ')).toBe(true);
+    }
+  });
+
+  it('un item sin modificadores sigue saliendo igual que siempre', () => {
+    const [barra] = construirComandas(comandaBase, { configuracion: config });
+    expect(barra.cuerpo[0].sublineas).toEqual([]);
+  });
+});

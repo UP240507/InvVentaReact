@@ -190,6 +190,14 @@ export function construirItemsComanda(
       destino: destinoDe(item.categoria),
       estado: 'pendiente',
       nota: item.nota || '',
+      // «¿Cómo lo quiere?» tiene que sobrevivir hasta aquí o no sirve de nada.
+      // Este objeto se construye CAMPO A CAMPO —no es un spread del item—, así
+      // que cualquier dato nuevo del carrito se pierde en silencio si no se
+      // nombra explícitamente. Es lo que pasaba con los modificadores: se
+      // elegían y no llegaban a cocina.
+      modificadores: Array.isArray(item.modificadores)
+        ? item.modificadores
+        : [],
     });
   }
   return out;

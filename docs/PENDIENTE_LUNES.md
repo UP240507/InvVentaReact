@@ -234,3 +234,135 @@ dueño cambie de proveedor de pan.
    |---|---|
    | Persona Moral | Baja ISR **e** IVA acreditable |
    | RESICO | **Sólo IVA** — las deducciones no bajan el ISR |
+
+---
+
+## 5 · Impresión de reportes — el Corte Z y el vale de propina no imprimen
+
+**No es código muerto: es código vivo que no puede funcionar dentro de la caja.**
+
+`ReportesScreen.jsx` imprime así (líneas ~322 y ~362):
+
+```js
+const win = window.open('', '_blank', 'width=340,height=700');
+win.document.write(`<html>…`);
+setTimeout(() => { win.print(); win.close(); }, 500);
+```
+
+Eso es un patrón de navegador. En la caja —Tauri sobre WebView2— `window.open`
+no devuelve una ventana manipulable, así que `win.document` revienta y el botón
+**no hace absolutamente nada visible**. Ni imprime, ni avisa, ni deja rastro
+salvo un error en una consola que nadie mira. La quinta vez este mes que el
+fallo es un silencio.
+
+Y aunque funcionara, imprimiría **por el diálogo de Windows a una hoja A4**, no
+por la térmica. El Corte Z es justamente lo que el dueño quiere pegado en la
+libreta al cerrar: tiene que salir por la misma impresora que los tickets.
+
+**Lo que hay que hacer:** los dos documentos pasan a la cola del hub como
+ESC/POS, igual que el ticket y la comanda. Ya existe todo el camino
+(`lib/Comanda.js` → `hub/cola.rs`); falta el constructor del documento «corte»
+y el del «vale». El HTML de arriba sirve de especificación del contenido: se
+tira, pero se copian los campos.
+
+**Ojo con `TicketImpresion.jsx:28`** — `window.print()` a secas, que imprime la
+ventana ENTERA de la aplicación. Mismo origen, misma revisión.
+
+## 6 · El logo del restaurante — el campo existe, el ticket no lo usa
+
+`ConfiguracionScreen` guarda `logo_url` y **lo único que lo lee es su propia
+vista previa**. No llega al ticket ni en pantalla ni en papel.
+
+Son dos trabajos de tamaño muy distinto y conviene no meterlos en el mismo saco:
+
+- **En pantalla / PDF** — trivial, un `<img>`. Media hora.
+- **En la térmica** — `hub/escpos.rs` **no sabe imprimir imágenes hoy**: no hay
+  una sola línea de raster. Sí es posible (`GS v 0`), pero es trabajo de verdad:
+  bajar la imagen, escalarla al ancho exacto en puntos (384 para 58 mm, 576 para
+  80 mm), convertirla a 1 bit con tramado y empaquetarla en bytes. Medio día
+  largo en Rust y quisquilloso de afinar en una impresora concreta.
+
+**Y hay un problema de diseño antes que el técnico:** `logo_url` es una URL. Una
+caja sin internet no puede descargarla. Si el logo va a imprimirse, tiene que
+guardarse **local y ya convertido** —el hub lo cachea la primera vez, o se sube
+como archivo en vez de como enlace—. Decidir eso antes de escribir el ESC/POS;
+si no, sale una función que falla justo el día que se cae la red, que es el día
+en que este programa presume de seguir funcionando.
+
+## 7 · Barrido de jerga de programador en pantalla (hecho el 13-ago, mantener)
+
+Se quitaron los dos `npm run build` de `HubScreen` — se le estaban diciendo al
+dueño del restaurante, que no tiene consola. El dato útil (la fecha de la
+compilación) se queda; cambia el destinatario de la instrucción: «avisa a
+soporte con esta fecha».
+
+**La regla:** en un texto que ve el cliente no aparece Supabase, ni npm, ni
+`dist/`, ni nombres de archivo, ni «endpoint». Si el diagnóstico es para
+nosotros, el texto tiene que decirle al cliente **a quién avisar**, no qué
+teclear. Conviene un barrido periódico; lo que hay hoy está limpio salvo
+comentarios de código, que no se ven.
+
+## 8 · Modificadores: precio y descuento de inventario
+
+El 13-ago se conectó «¿cómo lo quiere?» de punta a punta —modal en el POS,
+comanda, KDS, ticket— **deliberadamente sin precio ni stock**. Falta eso.
+
+**Precio.** Las opciones ya traen `precio` y viaja hasta `opcionesElegidas()`
+en `lib/Modificadores.js`. Sumarlo es aritmética sobre la línea del carrito.
+Lo que hay que decidir antes de escribirlo:
+
+- ¿El precio de la opción es **por unidad del platillo** o por línea? Dos
+  hamburguesas con extra queso, ¿son $15 o $30? (Casi seguro $30, pero
+  escribirlo mal no da error, da una cuenta mal cobrada.)
+- El ticket y la comanda tienen que empezar a imprimir el `+$15` **el mismo día
+  que se empieza a cobrar**, ni antes ni después. Hoy `Comanda.js` lo omite a
+  propósito: un papel que enseñe «+$15» junto a un total que no lo incluye es
+  una discusión con el cliente en la mesa.
+
+**Inventario — es el trozo delicado, y no hay hueco donde meterlo.**
+`descontarStockVenta(items, sustituciones, origen)`: ese segundo argumento son
+*sustituciones*, que es otra cosa. Un «extra tocino» que baja tocino son deltas
+**adicionales**. Hay que abrir un tercer camino en `construirDeltasStock`.
+
+Y antes hay una pregunta de diseño que los datos de AZUL dejan a la vista: el
+grupo **«Tipo de leche»** tiene tres opciones —Entera, Deslactosada, Almendra—
+y **las tres apuntan al mismo producto** (`Leche Entera`). Puede ser un error de
+captura, pero también apunta a que ese grupo no es una *suma* sino una
+*sustitución*: si el cliente pide almendra, no hay que descontar leche entera
+además, hay que descontar almendra **en vez de**. Son dos mecanismos distintos
+y el formulario de hoy no distingue entre ellos.
+
+**Preguntarle al restaurante qué querían decir con ese grupo antes de escribir
+código.** Si la respuesta es «sustitución», la pantalla de modificadores
+necesita una casilla más («esta opción sustituye a un insumo de la receta»), y
+eso cambia el modelo de datos.
+
+## 9 · La curva de aprendizaje de los modificadores (parcialmente atacada)
+
+Chris (13-ago): es la parte del sistema que más cuesta configurar. De las cuatro
+causas que salieron al mirarla, **dos ya están arregladas**:
+
+- ✅ El formulario se contradecía: «puede elegir varios **o ninguno**» junto a
+  una casilla «El cajero DEBE seleccionar». Ahora hay un recuadro **«En la caja
+  se verá así»** que lo dice en una frase, generada por `textoDeReglas()` — la
+  MISMA función que usa el modal del POS, así que lo prometido al configurar es
+  literalmente el texto que se lee al vender.
+- ✅ La combinación «múltiple + obligatorio» = «al menos una» no estaba escrita
+  en ningún sitio. Ahora sí.
+
+**Sigue pendiente:**
+
+- **El grupo no hace nada hasta que se ata en Recetas**, y eso no se anuncia en
+  ninguna parte. Es la trampa gorda: haces todo bien y concluyes que está roto.
+  Un aviso en la pantalla de modificadores («este grupo todavía no está en
+  ningún platillo — átalo en Recetas») lo resolvería, y además es dato que ya
+  está en memoria.
+- **Vista previa de cómo se verá en el POS**, para el concepto grupo vs opción.
+  Enseñar en vez de explicar.
+- **El panel de ayuda** que pidió Chris, para el recorrido de tres pantallas.
+  Va el tercero a propósito: si los dos de arriba están hechos, el panel tiene
+  mucho menos que explicar.
+- **El vínculo con inventario viene apagado por defecto** («No afecta
+  inventario»). Alguien da de alta «Extra tocino» y el tocino nunca se
+  descuenta, sin error ni aviso. Cuando se implemente §8, avisar al guardar un
+  grupo cuyas opciones no descuentan nada.

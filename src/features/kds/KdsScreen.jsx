@@ -544,6 +544,21 @@ export default function KdsScreen() {
                                     .join(' · ')}
                                 </p>
                               )}
+                            {/* Lo elegido en «¿cómo lo quiere?». Va MÁS
+                                GRANDE que el desglose de un paquete y con
+                                color: el término de la carne no es
+                                información de contexto, es la instrucción.
+                                Un cocinero mira esta tarjeta dos segundos
+                                desde medio metro. */}
+                            {Array.isArray(item.modificadores) &&
+                              item.modificadores.length > 0 && (
+                                <p className="text-sm font-black text-ops-accent mt-1.5 leading-tight">
+                                  {item.modificadores
+                                    .map((m) => m?.nombre)
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              )}
                             {nota && (
                               <p className="text-xs font-black text-ops-warn mt-2 bg-ops-warn/15 border border-ops-warn/30 px-3 py-1.5 rounded-ui inline-block">
                                 📝 {nota}

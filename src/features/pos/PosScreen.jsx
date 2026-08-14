@@ -25,6 +25,8 @@ import {
   X,
   Package,
   Percent,
+  StickyNote,
+  SlidersHorizontal,
 } from 'lucide-react';
 import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
@@ -49,6 +51,16 @@ import {
   abrirCajon,
 } from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
+import {
+  gruposDeProducto,
+  necesitaEleccion,
+  alternar,
+  faltantes,
+  seleccionCompleta,
+  opcionesElegidas,
+  textoDeReglas,
+  firmaDeLinea,
+} from '../../lib/Modificadores';
 import { buscarAutorizador, sesionAutoriza } from '../../lib/Autorizacion';
 import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
@@ -98,6 +110,7 @@ export default function PosScreen() {
     turnos,
     staff,
     roles_permisos,
+    modificadores,
   } = useAppStore();
 
   const {
@@ -444,11 +457,35 @@ export default function PosScreen() {
   // el combo entre al carrito. { paquete, seleccion: {grupo: recetaId} } | null
   const [modalElecciones, setModalElecciones] = useState(null);
 
+  // MODIFICADORES Y NOTA: «¿cómo lo quiere?». Se abre solo cuando el platillo
+  // tiene grupos atados; para poner una nota suelta se abre a mano desde la
+  // línea del carrito (ver `abrirNotaDeLinea`).
+  //
+  // Por qué NO se abre para todo: si cada producto pidiera confirmación, un
+  // refresco costaría dos toques en vez de uno y el POS dejaría de servir en
+  // una barra con cola. Los grupos obligatorios sí lo justifican — son la única
+  // forma de que «obligatorio» signifique algo, porque una vez que la línea
+  // entró al carrito ya no se puede exigir nada.
+  //
+  // { producto, seleccion, nota, lineaId } | null   (lineaId ⇒ editando)
+  const [modalMods, setModalMods] = useState(null);
+
+  const gruposDelModal = useMemo(
+    () =>
+      modalMods ? gruposDeProducto(modalMods.producto, modificadores) : [],
+    [modalMods, modificadores],
+  );
+
   const agregarAlCarrito = (producto) => {
     if (bloqueadoPorCuenta()) return;
     // Paquete con grupos "elige 1 de N" → primero se resuelven las elecciones.
     if (esPaquete(producto) && tieneElecciones(producto)) {
       setModalElecciones({ paquete: producto, seleccion: {} });
+      return;
+    }
+    // Platillo con modificadores → «¿cómo lo quiere?» antes de entrar.
+    if (necesitaEleccion(producto, modificadores)) {
+      setModalMods({ producto, seleccion: {}, nota: '', lineaId: null });
       return;
     }
     const productoSanitizado = {
@@ -517,6 +554,91 @@ export default function PosScreen() {
       return [...prev, { ...item, cantidad: 1 }];
     });
     setModalElecciones(null);
+  };
+
+  /**
+   * Abre el mismo cuadro para una línea que YA está en el carrito — es la vía
+   * para poner una nota a un producto sin grupos («sin hielo»), y para
+   * corregirse.
+   *
+   * Se bloquea si la línea ya salió a cocina: cambiar la nota entonces no
+   * cambia el papel que el cocinero tiene en la mano, así que la pantalla
+   * diría una cosa y la cocina estaría haciendo otra. Eso es peor que no poder
+   * editarlo.
+   */
+  const abrirNotaDeLinea = (item) => {
+    if (bloqueadoPorCuenta()) return;
+    if ((item.cantidad_enviada || 0) > 0) {
+      showToast(
+        'Ese platillo ya está en cocina. Avísale de viva voz: cambiar la nota aquí no cambia el papel que ya salió.',
+        'error',
+      );
+      return;
+    }
+    setModalMods({
+      producto: item,
+      seleccion: item.seleccion_mods || {},
+      nota: item.nota || '',
+      lineaId: item.id,
+    });
+  };
+
+  const confirmarModificadores = () => {
+    if (!modalMods) return;
+    const { producto, seleccion, nota, lineaId } = modalMods;
+    if (!seleccionCompleta(gruposDelModal, seleccion)) return;
+
+    const notaLimpia = String(nota || '').trim();
+    const elegidas = opcionesElegidas(gruposDelModal, seleccion);
+    // El id de línea lleva DENTRO la selección y la nota. Sin eso, una
+    // hamburguesa término medio y otra bien cocida se fundirían en «2x
+    // Hamburguesa» y la cocina sacaría dos iguales; el mesero no se entera
+    // hasta que el cliente devuelve el plato.
+    const lineId = firmaDeLinea(
+      producto.receta_id ?? producto.id,
+      seleccion,
+      notaLimpia,
+    );
+
+    const base = {
+      ...producto,
+      id: lineId,
+      receta_id: producto.receta_id ?? producto.id,
+      precio: getPrecio(producto),
+      nota: notaLimpia,
+      // La selección cruda se guarda para poder reabrir el cuadro tal y como
+      // se dejó; `modificadores` es la forma aplanada que leen la comanda, el
+      // KDS y el ticket.
+      seleccion_mods: seleccion,
+      modificadores: elegidas,
+    };
+
+    setCarrito((prev) => {
+      // Al editar, la línea vieja desaparece y su cantidad viaja a la nueva:
+      // el mesero cambió la nota de ESAS unidades, no pidió más.
+      const anterior = lineaId ? prev.find((i) => i.id === lineaId) : null;
+      const sinAnterior = lineaId ? prev.filter((i) => i.id !== lineaId) : prev;
+      const traslado = anterior ? safeNumber(anterior.cantidad, 1) : 1;
+
+      const existe = sinAnterior.find((i) => i.id === lineId);
+      if (existe) {
+        return sinAnterior.map((i) =>
+          i.id === lineId
+            ? { ...i, cantidad: safeNumber(i.cantidad, 0) + traslado }
+            : i,
+        );
+      }
+      return [
+        ...sinAnterior,
+        {
+          ...base,
+          cantidad: traslado,
+          cantidad_enviada: anterior?.cantidad_enviada || 0,
+          descuento: anterior?.descuento ?? producto.descuento ?? null,
+        },
+      ];
+    });
+    setModalMods(null);
   };
 
   const modificarCantidad = (id, delta) => {
@@ -1135,6 +1257,7 @@ export default function PosScreen() {
     mostrarGateStock ||
     modalRondasPendientes ||
     !!modalElecciones ||
+    !!modalMods ||
     !!lineaDescuento ||
     !!ticketGenerado;
 
@@ -1193,6 +1316,7 @@ export default function PosScreen() {
         descripcion: 'Cerrar este cuadro',
         accion: () => {
           if (ticketGenerado) return handleCerrarTicket();
+          if (modalMods) return setModalMods(null);
           if (modalElecciones) return setModalElecciones(null);
           if (mostrarGateStock) return setMostrarGateStock(false);
           if (modalRondasPendientes) return setModalRondasPendientes(false);
@@ -1396,6 +1520,26 @@ export default function PosScreen() {
                       </div>
                     );
                   })()}
+                  {/* Lo elegido y la nota se ven SIEMPRE en el carrito, no
+                      escondidos tras un icono. Es lo que el mesero repite en
+                      voz alta para confirmar con el cliente antes de mandar. */}
+                  {(item.modificadores || []).length > 0 && (
+                    <ul className="mt-1.5 space-y-0.5">
+                      {item.modificadores.map((m) => (
+                        <li
+                          key={`${m.grupo_id}-${m.id_opcion}`}
+                          className="text-[11px] font-bold text-ops-muted leading-tight"
+                        >
+                          · {m.nombre}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {item.nota && (
+                    <p className="mt-1.5 text-[11px] font-bold text-ops-accent leading-tight break-words">
+                      📝 {item.nota}
+                    </p>
+                  )}
                   {(item.cantidad_enviada || 0) > 0 && (
                     <span className="text-[10px] font-black text-ops-warn bg-ops-warn/10 border border-ops-warn/30 px-2 py-1 rounded-ui mt-2 inline-block uppercase tracking-widest">
                       Enviado: {item.cantidad_enviada}
@@ -1420,6 +1564,18 @@ export default function PosScreen() {
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
+
+                <button
+                  onClick={() => abrirNotaDeLinea(item)}
+                  title="Cómo lo quiere / nota para cocina"
+                  className={`w-10 h-10 flex items-center justify-center rounded-ui transition-colors ${
+                    item.nota || (item.modificadores || []).length > 0
+                      ? 'text-ops-accent bg-ops-accent/10'
+                      : 'text-ops-muted hover:bg-ops-panel-2'
+                  }`}
+                >
+                  <StickyNote className="w-5 h-5" />
+                </button>
 
                 <button
                   onClick={() => setLineaDescuento(item)}
@@ -1748,6 +1904,128 @@ export default function PosScreen() {
               >
                 Agregar al pedido · $
                 {(Number(modalElecciones.paquete.precio_venta) || 0).toFixed(0)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: «¿cómo lo quiere?» — modificadores del platillo + nota libre.
+          Nada de lo que se elige aquí suma precio ni descuenta inventario
+          todavía; es deliberado y está explicado en lib/Modificadores.js. */}
+      {modalMods && (
+        <div className="fixed inset-0 bg-ops-ink/60 dark:bg-ops-bg/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-ops-panel rounded-ui-lg w-full max-w-md shadow-2xl border-2 border-ops-border animate-in zoom-in-95 flex flex-col max-h-[85dvh]">
+            <div className="p-6 border-b border-ops-border flex justify-between items-center">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-ops-accent/15 p-2.5 rounded-ui shrink-0">
+                  <SlidersHorizontal className="w-6 h-6 text-ops-accent" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-black font-syne text-lg text-ops-ink leading-tight truncate">
+                    {modalMods.producto.nombre}
+                  </h3>
+                  <p className="text-[10px] font-bold text-ops-muted uppercase tracking-widest">
+                    ¿Cómo lo quiere?
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setModalMods(null)}
+                className="p-2 text-ops-muted hover:text-ops-danger shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+              {gruposDelModal.map((g) => {
+                const marcadas = (modalMods.seleccion[String(g.id)] || []).map(
+                  String,
+                );
+                return (
+                  <div key={g.id}>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-ops-accent">
+                      {g.nombre}
+                      {g.obligatorio && ' *'}
+                    </p>
+                    {/* La regla se escribe con la MISMA función que usa el
+                        catálogo, para que lo prometido al configurar sea
+                        literalmente lo que se lee al vender. */}
+                    <p className="text-[11px] text-ops-muted mb-2">
+                      {textoDeReglas(g)}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {g.opciones.map((op) => {
+                        const activa = marcadas.includes(String(op.id_opcion));
+                        return (
+                          <button
+                            key={op.id_opcion}
+                            onClick={() =>
+                              setModalMods((prev) => ({
+                                ...prev,
+                                seleccion: alternar(
+                                  g,
+                                  prev.seleccion,
+                                  op.id_opcion,
+                                ),
+                              }))
+                            }
+                            className={`px-4 py-3 rounded-ui font-black text-sm border-2 text-left transition-all active:scale-95 ${
+                              activa
+                                ? 'border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm'
+                                : 'border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border'
+                            }`}
+                          >
+                            {op.nombre}
+                          </button>
+                        );
+                      })}
+                      {g.opciones.length === 0 && (
+                        <p className="col-span-2 text-[11px] text-ops-muted italic">
+                          Este grupo no tiene opciones configuradas.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-2 flex items-center gap-1.5">
+                  <StickyNote className="w-3.5 h-3.5" /> Nota para cocina
+                </p>
+                <textarea
+                  value={modalMods.nota}
+                  onChange={(e) =>
+                    setModalMods((prev) => ({ ...prev, nota: e.target.value }))
+                  }
+                  rows={2}
+                  maxLength={120}
+                  placeholder="Sin cebolla, salsa aparte…"
+                  className="w-full bg-ops-panel-2 border-2 border-ops-border text-ops-ink font-bold px-3 py-2.5 rounded-ui outline-none focus:border-ops-accent text-sm resize-none transition-colors"
+                />
+                <p className="text-[10px] text-ops-muted mt-1">
+                  Se imprime en la comanda y se ve en la pantalla de cocina.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-ops-border">
+              {/* Un botón apagado sin decir POR QUÉ es una pantalla que no se
+                  puede usar: se nombra el grupo que falta. */}
+              {faltantes(gruposDelModal, modalMods.seleccion).length > 0 && (
+                <p className="text-[11px] font-bold text-ops-warn mb-3 text-center">
+                  Falta elegir:{' '}
+                  {faltantes(gruposDelModal, modalMods.seleccion).join(', ')}
+                </p>
+              )}
+              <button
+                onClick={confirmarModificadores}
+                disabled={!seleccionCompleta(gruposDelModal, modalMods.seleccion)}
+                className="w-full bg-ops-accent text-ops-accent-fg py-4 rounded-ui font-black uppercase tracking-widest shadow-lg disabled:bg-ops-panel-2 disabled:dark:bg-ops-border disabled:text-ops-muted disabled:shadow-none active:scale-95 transition-all"
+              >
+                {modalMods.lineaId ? 'Guardar cambios' : 'Agregar al pedido'}
               </button>
             </div>
           </div>

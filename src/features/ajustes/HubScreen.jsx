@@ -462,17 +462,22 @@ export default function HubScreen() {
                         {new Date(Number(info.web_ms)).toLocaleString('es-MX')}
                       </span>
                     </p>
+                    {/* Antes esta línea decía «corre npm run build». Se lo
+                        estaba diciendo al DUEÑO DEL RESTAURANTE, que no tiene
+                        ni consola ni por qué saber qué es eso. El dato —la
+                        fecha— sigue sirviendo para el diagnóstico; la
+                        instrucción es la que cambia de destinatario. */}
                     <p className="text-xs text-adm-muted mt-1">
-                      Si es anterior a tu último cambio, corre{' '}
-                      <code className="font-mono">npm run build</code> y
-                      reinicia: los teléfonos están viendo esa versión, no la de
-                      esta ventana.
+                      Si esa fecha es muy anterior a hoy, los teléfonos y
+                      tablets están viendo una versión vieja del programa. Avisa
+                      a soporte con esta fecha.
                     </p>
                   </div>
                 ) : (
                   <p className="text-xs text-adm-danger mb-3">
-                    El hub no encontró el build de la app: los dispositivos no
-                    van a poder cargarla. Corre <code>npm run build</code>.
+                    Esta caja no tiene la copia del programa que necesitan los
+                    teléfonos y tablets: no van a poder abrirlo. La caja sigue
+                    funcionando con normalidad. Avisa a soporte.
                   </p>
                 )}
 

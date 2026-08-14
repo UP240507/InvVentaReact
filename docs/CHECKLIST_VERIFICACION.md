@@ -135,6 +135,53 @@ localStorage.setItem('folio:prefijo-provisional', '1');
 > Lo fácil es que deje de imprimir. **Lo que hay que verificar es que siga
 > imprimiendo cuando hace falta.**
 
+## 5b · «¿Cómo lo quiere?» — modificadores y notas (nuevo el 13-ago)
+
+Hasta el 13-ago **el punto de venta no tenía forma de personalizar una línea**:
+ni modificadores ni nota. El catálogo de grupos existía, el enlace en Recetas
+existía, la comanda sabía imprimir la nota y el KDS sabía pintarla — pero nadie
+producía el dato. Un mesero no podía pedir «término medio».
+
+**Antes de probar, hay catálogo que preparar** (hoy sólo Chilaquiles tiene un
+grupo atado, y las tres opciones de «Tipo de leche» apuntan por error al mismo
+producto):
+
+- [ ] En **Catálogos → Modificadores**, un grupo de prueba realista — p. ej.
+      «Término», única y obligatoria, con «Término medio» y «Bien cocido».
+- [ ] Comprobar que el recuadro azul **«En la caja se verá así»** dice lo que
+      esperas al marcar y desmarcar las dos casillas. Son cuatro combinaciones
+      y dos no son evidentes.
+- [ ] En **Catálogos → Recetas**, atar el grupo a un platillo. **Este paso es
+      el que se olvida**: sin él, el grupo no aparece en el POS y parece roto.
+
+Y ya en la caja:
+
+- [ ] Tocar ese platillo → **se abre solo** el cuadro «¿Cómo lo quiere?».
+- [ ] Con el grupo obligatorio sin responder, el botón está apagado **y dice
+      cuál falta**.
+- [ ] Un platillo **sin** grupos entra al carrito **de un solo toque**. Si pide
+      confirmación, está mal: en una barra con cola eso hace inservible el POS.
+- [ ] La nota libre se pone desde el **icono de la nota en la línea del
+      carrito** (📝), también en productos sin grupos («sin hielo»).
+- [ ] **Dos veces el mismo platillo con elecciones distintas = DOS líneas.**
+      Uno término medio y otro bien cocido no pueden fundirse en «2x». Es el
+      fallo más caro de esta pantalla: la cocina sacaría dos iguales y nadie se
+      entera hasta que el cliente devuelve el plato.
+- [ ] Mandar a producción → en el **KDS** salen las opciones en grande y la
+      nota con su 📝.
+- [ ] Por la tarde, con impresora: en el **papel de cocina** las opciones salen
+      sangradas debajo del platillo, igual que los componentes de un paquete.
+- [ ] Intentar cambiar la nota de una línea **ya enviada** → lo impide y
+      explica por qué (el papel que tiene el cocinero ya salió).
+
+> **Nada de esto suma precio ni descuenta inventario, y es a propósito.** Es la
+> condición que permitió que entrara dos días antes de esta prueba: lo que hoy
+> se verifica es que el stock se descuenta bien, y meter código nuevo en el
+> camino del inventario esa misma semana convertiría un fallo de modificadores
+> en un fallo de inventario sin forma de distinguirlos. Si ves una opción con
+> precio en el catálogo, **no la uses el sábado**: se elegiría y no se cobraría.
+> Ver `docs/PENDIENTE_LUNES.md` §8.
+
 ## 6 · El teléfono
 
 - [ ] Arriba a la derecha aparece un botón con **las iniciales** del mesero.
