@@ -110,3 +110,54 @@ un saldo, hay que llegar a B.
 Lo que sí encaja sin inventar nada desde el principio: **la firma de quién pidió
 y quién autorizó**, con el mismo PIN que ya funciona para los descuentos en
 `ModalCobro`, y con rastro en auditoría.
+
+---
+
+## 3 · Los dos fallos de las E2E (13-ago)
+
+Se corrieron por primera vez en semanas: **7 pasaron, 2 fallaron.** Los dos
+fallos son de naturaleza opuesta y conviene no confundirlos.
+
+### 3.1 · El folio — **la prueba está desactualizada, el código está bien**
+
+`e2e/flujo-pos.spec.js:123` busca `/POS-\d{5}/`. Ése es el formato **viejo**.
+Los folios cambiaron al escribir `lib/Folio.js`: ahora son `AZUL7K-V-000123`
+—prefijo del local, serie, consecutivo—.
+
+Comprobado de punta a punta: `construirTicket` mete `{ etiqueta: 'Folio' }` en
+`meta`, y `TicketImpresion` pinta `doc.meta` completo. **El ticket sí muestra el
+folio.** Sólo hay que actualizar la expresión de la prueba, y de paso los tres
+comentarios del archivo que siguen hablando de `POS-xxxxx`.
+
+### 3.2 · El render en tablet — **esto sí es un fallo de verdad**
+
+El snapshot de `render.spec.js` da 27 % de píxeles distintos. Al mirar la imagen
+**actual** (no el diff, que superpone y engaña) se ve el problema:
+
+- **«CONTROL DE PISO Y CUENTAS» se parte palabra por palabra en vertical.**
+- La tira de atajos —«Mover la selección», «Abrir la mesa», «Reservar»…— se
+  rompe en columnas de dos centímetros.
+- Y se **encima** con la fila de contadores y con los botones.
+
+Es un contenedor que perdió su ancho: cada palabra cae en su propia línea.
+
+**La hipótesis, para empezar por ahí:** en `OpsHeader`, el bloque de acciones
+lleva **`shrink-0`** y el de identidad `min-w-0`. En escritorio sobra sitio. En
+una tablet de 1080 px, con el riel comiéndose ~208, quedan ~870 para una fila
+de Mesas con cinco botones: **las acciones se quedan con todo el ancho y el
+título con nada.** Es el mismo síntoma que ya está documentado en ese archivo
+—«cortado sin puntos suspensivos»—, sólo que llevado al extremo.
+
+**No se sabe desde cuándo está roto, y no hay que afirmar que fue lo del 13-ago:**
+los cambios de ese día tocan alturas (`dvh`) y el viewport, no anchos. Lo más
+probable es que lleve semanas ahí sin que nadie lo viera, **porque las E2E no se
+corrían**. Ésa es la lección, más que el bug.
+
+**Al regenerar el snapshot: sólo DESPUÉS de arreglar el layout.** Regenerarlo
+antes convierte el fallo en la nueva referencia y lo entierra para siempre.
+
+### 3.3 · Y lo que hay que decidir
+
+Unas E2E que nadie corre no son una red de seguridad: son una foto vieja que da
+sensación de cobertura. O entran en el ritual —junto a `cargo test` y
+`test:rapido`— o hay que asumir en voz alta que no cuentan.
