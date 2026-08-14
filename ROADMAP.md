@@ -44,8 +44,22 @@ y 13 de agosto se ha visto funcionar en el restaurante, y hay **Rust que no se
 ha compilado nunca**: el respaldo, el mDNS, el updater y el pulso del cajón. El
 guion está en `docs/CHECKLIST_VERIFICACION.md`.
 
-**Fase 4 — sin empezar (4.1 a 4.4):** QA con un segundo inquilino real, E2E
-ampliado, telemetría y runbook, y la landing con instalador descargable.
+**Fase 4 — EN ESPERA por decisión de Chris (13-ago).** No se empieza hasta que
+**InvVenta esté al 100% en AZUL y hayan dejado de usar Soft Restaurant.**
+
+El razonamiento, para que no se reabra cada semana: los cuatro ítems de la fase
+4 —segundo inquilino, E2E ampliado, telemetría y runbook, landing— son trabajo
+de **escalar**. Escalar algo que todavía convive con el sistema al que pretende
+sustituir es construir sobre una suposición: mientras AZUL siga cobrando en Soft
+para lo importante, no sabemos qué falta de verdad.
+
+Y hay un beneficio concreto en esperar: **el runbook y la telemetría se escriben
+mucho mejor después de un mes de operación real**, porque para entonces se sabe
+qué se rompe y qué llama por teléfono. Escritos ahora serían una lista de lo que
+imaginamos que va a fallar.
+
+**Condición de arranque, explícita:** AZUL operando el turno completo en
+InvVenta, sin Soft de respaldo. Ese día se retoma con 4.1.
 
 ### Deuda viva que no cuelga de ninguna fase
 
