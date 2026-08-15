@@ -21,12 +21,43 @@
  * nada. La política acordada es «sólo actualizaciones de seguridad, raras y
  * avisadas», así que un sondeo automático sería ruido casi todo el año.
  */
+import { check } from '@tauri-apps/plugin-updater';
 import { enTauri, invocar } from './Hub';
+
+/**
+ * ── POR QUÉ SE USA EL PAQUETE OFICIAL Y NO `invocar` A PELO ─────────────────
+ * La primera versión llamaba `invocar('plugin:updater|download_and_install')`
+ * sin argumentos, y en la caja salía:
+ *
+ *     invalid args `rid` for command `download_and_install`:
+ *     command download_and_install missing required key rid
+ *
+ * El comando necesita DOS cosas: el `rid` —el identificador del recurso que
+ * devolvió `check`, que vive en el proceso de Rust— y un `onEvent` que tiene
+ * que ser un **Channel**, cuya serialización (`__CHANNEL__:<id>`) es un detalle
+ * interno de Tauri. Replicar eso a mano son quince líneas apoyadas en un
+ * contrato no documentado que se rompería en la siguiente actualización de
+ * Tauri, y se rompería justo aquí: en el botón que un restaurante pulsa una vez
+ * cada varios meses y nadie prueba.
+ *
+ * El resto del proyecto habla con Tauri por `invocar` a propósito, porque el
+ * mismo bundle corre en los teléfonos. Aquí se hace la excepción: importar la
+ * clase no ejecuta nada, y todas las llamadas siguen detrás de `enTauri()`.
+ */
+
+/**
+ * El `Update` vivo entre buscar e instalar.
+ *
+ * No es un capricho de diseño: `rid` es un puntero a un recurso que vive en el
+ * proceso de Rust, no un dato. Guardar el objeto es la forma que tiene el
+ * plugin de que «instala esto» se refiera a lo mismo que se acaba de mirar.
+ */
+let pendiente = null;
 
 /**
  * ¿Hay versión nueva?
  *
- * @returns {Promise<{hay: boolean, version?: string, notas?: string, error?: string}>}
+ * @returns {Promise<{hay: boolean, version?: string, actual?: string, notas?: string, error?: string}>}
  *   Nunca lanza. Sin red, o fuera de Tauri, devuelve `hay: false` con motivo —
  *   un fallo al buscar actualizaciones no puede molestar a nadie que esté
  *   cobrando.
@@ -36,16 +67,16 @@ export async function buscarActualizacion() {
     return { hay: false, error: 'sólo desde la aplicación de escritorio' };
   }
   try {
-    const r = await invocar('plugin:updater|check');
-    // El plugin devuelve `null` cuando no hay nada nuevo.
+    const r = await check();
+    pendiente = r; // `null` si no hay nada nuevo, y entonces instalar no aplica
     if (!r) return { hay: false };
     return {
       hay: true,
-      version: r.version || r.currentVersion || '',
-      notas: r.body || r.notes || '',
-      // Se devuelve el identificador para que `instalar` sepa qué aplicar sin
-      // volver a preguntar; si el plugin no lo da, `instalar` vuelve a buscar.
-      rid: r.rid ?? null,
+      version: r.version || '',
+      // La instalada. Antes la pantalla la sacaba de `hub_estado`, que no la
+      // devuelve, así que enseñaba un guion para siempre.
+      actual: r.currentVersion || '',
+      notas: r.body || '',
     };
   } catch (e) {
     return { hay: false, error: String(e?.message || e) };
@@ -66,10 +97,36 @@ export async function buscarActualizacion() {
 export async function instalarActualizacion() {
   if (!enTauri()) return { ok: false, error: 'sólo desde la aplicación' };
   try {
-    await invocar('plugin:updater|download_and_install');
+    // Si la pantalla estuvo abierta mucho rato, o se recargó entre buscar e
+    // instalar, el recurso pudo cerrarse. Se vuelve a preguntar en vez de
+    // fallar con un error que hablaría de `rid`, que no significa nada para
+    // quien lo lee.
+    if (!pendiente) {
+      pendiente = await check();
+      if (!pendiente) {
+        return { ok: false, error: 'ya no hay ninguna versión nueva' };
+      }
+    }
+    await pendiente.downloadAndInstall();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/**
+ * La versión que hay instalada ahora mismo.
+ *
+ * Se pregunta al propio Tauri (`plugin:app|version`) y no al hub: `hub_estado`
+ * no devuelve la versión, así que la pantalla enseñaba «Versión instalada: —»
+ * pasara lo que pasara. Otro selector que mentía sin dar error.
+ */
+export async function versionInstalada() {
+  if (!enTauri()) return '';
+  try {
+    return String((await invocar('plugin:app|version')) || '');
+  } catch {
+    return '';
   }
 }
 

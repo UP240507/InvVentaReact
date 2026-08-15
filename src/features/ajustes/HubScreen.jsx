@@ -67,6 +67,7 @@ import {
   buscarActualizacion,
   instalarActualizacion,
   avisoDeActualizacion,
+  versionInstalada,
 } from '../../lib/Actualizacion';
 import { generar, aSvg } from '../../lib/QR';
 
@@ -130,6 +131,18 @@ export default function HubScreen() {
   const [buscando, setBuscando] = useState(false);
   const [novedad, setNovedad] = useState(null);
   const [instalando, setInstalando] = useState(false);
+  // La versión se pregunta al propio Tauri. Antes se leía de `info.version`
+  // —el estado del hub—, que nunca la ha devuelto: la pantalla enseñaba
+  // «Versión instalada: —» hiciera lo que hiciera.
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    let vivo = true;
+    versionInstalada().then((v) => vivo && setVersion(v));
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   const alBuscarActualizacion = useCallback(async () => {
     setBuscando(true);
@@ -676,7 +689,8 @@ export default function HubScreen() {
                 Actualizaciones
               </h2>
               <p className="text-sm text-adm-muted mb-4">
-                Versión instalada: <strong>{info?.version || '—'}</strong>. No
+                Versión instalada:{' '}
+                <strong>{version || novedad?.actual || '—'}</strong>. No
                 se busca sola al arrancar: las once de la mañana no es momento
                 de proponerle nada a nadie.
               </p>
