@@ -1,9 +1,60 @@
 # Lo del lunes — después de la prueba del sábado
 
-Dos cosas decididas el 13-ago por la noche. **Ninguna se toca antes de la
-verificación en AZUL**: son cambios encima de un sistema que todavía no se ha
-visto funcionar, y hoy ya pasó dos veces que un cambio nuevo tapara el
-diagnóstico de otro.
+Se escribió el 13-ago por la noche con la regla de no tocar nada antes de la
+verificación en AZUL. **La verificación ya se hizo, el 15-ago**, así que esa
+puerta está abierta — pero delante de todo lo demás va lo que salió del local.
+
+---
+
+## 0 · Lo que salió de la verificación del 15-ago
+
+Cuatro fallos, con causa y línea. El detalle está en
+`docs/VERIFICADO_15-AGO.md`; aquí sólo el orden y por qué.
+
+**El orden no es por gravedad, es por dependencia.** Mientras una venta muera en
+el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
+15-ago eso produjo un falso quinto fallo que costó dos pruebas descartar.
+
+1. **El trigger que castea `it->>'id'` a `bigint`.** Toda venta con nota o
+   modificador se queda fuera de Supabase, con 22P02 y sin reintento. El item ya
+   trae `receta_id` al lado; el trigger tiene que leerlo y caer a `id` sólo si
+   falta. Una línea, y desbloquea medir lo demás.
+
+   > **Hasta que esté:** que nadie use notas ni modificadores en ventas reales,
+   > y no borrar los datos del navegador de la caja — la venta
+   > `AZULJ3-V-000006` (total 209) sólo vive ahí.
+
+2. **La reimpresión tras reabrir una cuenta no imprime, y no avisa.** Es **el
+   mismo mecanismo que describe §1 de este documento**, y de hecho §1 ya lo
+   había previsto en abstracto: el id sale del folio, el folio no cambia al
+   reabrir, y `cola.rs` descarta por id ya impreso sin considerarlo error. Lo
+   que §1 escribió como trampa a evitar resultó estar ya ocurriendo en el flujo
+   de la cuenta. **Conviene arreglar los dos a la vez**: es la misma regla —el
+   id cambia en cada copia, el papel no cambia nunca.
+
+3. **El centavo de más.** `calcularVenta` redondea el subtotal y luego saca el
+   IVA de esa cifra ya redondeada, así que dos jugos de $40 se cobran a $80.01.
+   Con `precios_incluyen_iva` el precio de menú **es** el total y el IVA es el
+   resto: `iva = brutoNeto − subtotal` da 11.03 y cuadra en 80.00. Ojo al
+   tocarlo: hay que repasar el caso con descuento de línea y el de ticket.
+
+4. **«Recuperar ahora» falla y dice «No había nada que recuperar».**
+   `drenarRespaldo` devuelve `subidas.length`, así que fallar y no tener nada
+   que hacer dan el mismo cero; el error sólo va a `console.warn` y la consola
+   no abre en release. Distinguir los tres casos y decir cuántas fallaron.
+
+   > Y con esto, una pregunta abierta: por qué una venta cobrada **por la caja**
+   > pasó a «Por adoptar» al reiniciar la app, si la caja se excluye a sí misma
+   > comparando tokens. Hipótesis: al reiniciar toma un token distinto. Se
+   > comprueba en diez segundos y está anotado en el checklist.
+
+### Y una cosa que el checklist pedía y el binario no permite
+
+El paso de §2 —y el de mDNS— piden la consola de la ventana, pero
+`src-tauri/Cargo.toml` declara `tauri` sin la feature `devtools`: en un build de
+release no hay nada que abrir. Comprobado en la caja. Cualquier diagnóstico que
+hoy dependa de la consola es, en producción, un diagnóstico que no existe. O se
+compila con devtools, o esos datos salen a una pantalla.
 
 ---
 
@@ -97,10 +148,10 @@ lunes en vez de descubrirlo a media implementación:
 
 Dos alcances posibles:
 
-| | Qué da | Qué cuesta |
-|---|---|---|
-| **A · Sólo las pestañas** | Separa y filtra los gastos. La pantalla queda como Chris la describió. | Muy poco. Pero «caja chica» sigue siendo un filtro con nombre ambicioso: no dice cuánto queda. |
-| **B · Pestañas + fondo y saldo** | Responde «cuánto queda» y «cuánto hay que reponer». Es la caja chica de verdad. | Más: modelar fondo, retiros y reposiciones. Hay patrón en `lib/Arqueo.js`. |
+|                                  | Qué da                                                                          | Qué cuesta                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **A · Sólo las pestañas**        | Separa y filtra los gastos. La pantalla queda como Chris la describió.          | Muy poco. Pero «caja chica» sigue siendo un filtro con nombre ambicioso: no dice cuánto queda. |
+| **B · Pestañas + fondo y saldo** | Responde «cuánto queda» y «cuánto hay que reponer». Es la caja chica de verdad. | Más: modelar fondo, retiros y reposiciones. Hay patrón en `lib/Arqueo.js`.                     |
 
 **Mi lectura:** empezar por A, pero **sabiendo que es A**. Ponerle «caja chica» a
 un filtro y llamarlo terminado es lo que hace que dentro de dos meses alguien
@@ -164,7 +215,7 @@ Playwright es la tablet —corre en un viewport `ipad-landscape`, y por eso lo
 cazó— y para verlo a ojo basta con **estirar una ventana de Chrome a ~1080 px**
 y abrir el mapa de mesas.
 
-Lo que sí necesita una tablet de verdad es **otra pregunta**: si se *siente*
+Lo que sí necesita una tablet de verdad es **otra pregunta**: si se _siente_
 bien usarlo —que los botones se toquen sin errar, que se lea a un brazo de
 distancia—. Eso ningún viewport lo contesta. Pero es un juicio distinto de
 «esto está roto», y eso último ya está demostrado y se puede corregir sin
@@ -230,10 +281,10 @@ dueño cambie de proveedor de pan.
 
    Importa porque cambia el DISCURSO de la función:
 
-   | Régimen | Qué gana el dueño al facturar |
-   |---|---|
-   | Persona Moral | Baja ISR **e** IVA acreditable |
-   | RESICO | **Sólo IVA** — las deducciones no bajan el ISR |
+   | Régimen       | Qué gana el dueño al facturar                  |
+   | ------------- | ---------------------------------------------- |
+   | Persona Moral | Baja ISR **e** IVA acreditable                 |
+   | RESICO        | **Sólo IVA** — las deducciones no bajan el ISR |
 
 ---
 
@@ -246,7 +297,10 @@ dueño cambie de proveedor de pan.
 ```js
 const win = window.open('', '_blank', 'width=340,height=700');
 win.document.write(`<html>…`);
-setTimeout(() => { win.print(); win.close(); }, 500);
+setTimeout(() => {
+  win.print();
+  win.close();
+}, 500);
 ```
 
 Eso es un patrón de navegador. En la caja —Tauri sobre WebView2— `window.open`
@@ -321,14 +375,14 @@ Lo que hay que decidir antes de escribirlo:
 
 **Inventario — es el trozo delicado, y no hay hueco donde meterlo.**
 `descontarStockVenta(items, sustituciones, origen)`: ese segundo argumento son
-*sustituciones*, que es otra cosa. Un «extra tocino» que baja tocino son deltas
+_sustituciones_, que es otra cosa. Un «extra tocino» que baja tocino son deltas
 **adicionales**. Hay que abrir un tercer camino en `construirDeltasStock`.
 
 Y antes hay una pregunta de diseño que los datos de AZUL dejan a la vista: el
 grupo **«Tipo de leche»** tiene tres opciones —Entera, Deslactosada, Almendra—
 y **las tres apuntan al mismo producto** (`Leche Entera`). Puede ser un error de
-captura, pero también apunta a que ese grupo no es una *suma* sino una
-*sustitución*: si el cliente pide almendra, no hay que descontar leche entera
+captura, pero también apunta a que ese grupo no es una _suma_ sino una
+_sustitución_: si el cliente pide almendra, no hay que descontar leche entera
 además, hay que descontar almendra **en vez de**. Son dos mecanismos distintos
 y el formulario de hoy no distingue entre ellos.
 
@@ -366,3 +420,39 @@ causas que salieron al mirarla, **dos ya están arregladas**:
   inventario»). Alguien da de alta «Extra tocino» y el tocino nunca se
   descuenta, sin error ni aviso. Cuando se implemente §8, avisar al guardar un
   grupo cuyas opciones no descuentan nada.
+
+## 10 · Consumos de personal (Chris, 14-ago) — diseño en documento aparte
+
+Ver **`docs/DISENO_CONSUMOS_PERSONAL.md`**, actualizado con la regla real de
+AZUL. **Depende del §8 (precio en los modificadores): sin él calcula cero y
+parece que funciona.** Resumen de por qué no es trivial:
+
+**La regla no es «base gratis, extras al 75 %», es por ingrediente.** Van
+gratis tortilla, huevo, crema, queso fresco, verdura simple, tés, aguas de
+fruta y cafés; lo demás al 75 %. Los chilaquiles salen gratis porque están
+hechos de cosas gratis. Bandera `cobrable_personal` en `productos`, con valor
+por defecto por categoría y excepción por ingrediente — y filtro «sin decidir»,
+porque un ingrediente que caiga en sí o en no sin que nadie lo elija es o
+cobrarle de más a alguien o regalar comida sin enterarse.
+
+Son **tres cosas independientes** y una venta las ata a la vez, que es por lo
+que no sirve una comanda al 100 % de descuento:
+
+1. el inventario se descuenta **siempre**;
+2. el precio admite descuento variable, de 0 % a cortesía;
+3. lo que quede a cargo se descuenta **del sueldo**.
+
+Tres cosas que hay que tocar y que hoy no existen:
+
+- Tabla `consumos` con `staff_id` de verdad (`movimientos.usuario` es texto
+  libre y no sirve para descontar de una nómina).
+- **`nominas` no tiene deducciones**: `gran_total = sueldos + propinas`, no hay
+  un solo concepto que reste.
+- **El dueño no tiene nómina.** Si no se resuelve, su consumo queda con importe
+  a cargo y `nomina_id` nulo para siempre — una deuda que engorda cada mes y
+  que nadie va a cobrar. Va a un cubo de _retiros del propietario_, o a
+  cortesía, pero elegido en pantalla, nunca en silencio.
+
+Y el candado: **`nomina_id` en cada consumo**. Reprocesar una nómina —que pasa,
+se corrige un turno y se vuelve a generar— cobraría la comida dos veces sin dar
+ningún error. Mismo patrón que `stock_salidas` y `crm_canjes`; van tres.

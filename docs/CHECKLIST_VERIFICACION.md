@@ -81,67 +81,6 @@ compartir estado global entre archivos con `--isolate=false`.
 > La tarde del 15-ago se hizo entera con sesión de dueño, así que el camino del
 > PIN no se tocó.
 
-## 5b · «¿Cómo lo quiere?» — los grupos de modificadores
-
-La **nota libre** ya se verificó hasta el papel. Lo que sigue sin verse son los
-**grupos**: no se preparó catálogo, así que ninguna venta llevó opciones.
-
-**Antes de probar, hay catálogo que preparar** (hoy sólo Chilaquiles tiene un
-grupo atado, y las tres opciones de «Tipo de leche» apuntan por error al mismo
-producto):
-
-- [ ] En **Catálogos → Modificadores**, un grupo de prueba realista — p. ej.
-      «Término», única y obligatoria, con «Término medio» y «Bien cocido».
-- [ ] Comprobar que el recuadro azul **«En la caja se verá así»** dice lo que
-      esperas al marcar y desmarcar las dos casillas. Son cuatro combinaciones
-      y dos no son evidentes.
-- [ ] En **Catálogos → Recetas**, atar el grupo a un platillo. **Este paso es
-      el que se olvida**: sin él, el grupo no aparece en el POS y parece roto.
-
-Y ya en la caja:
-
-- [ ] Tocar ese platillo → **se abre solo** el cuadro «¿Cómo lo quiere?».
-- [ ] Con el grupo obligatorio sin responder, el botón está apagado **y dice
-      cuál falta**.
-- [ ] Un platillo **sin** grupos entra al carrito **de un solo toque**. Si pide
-      confirmación, está mal: en una barra con cola eso hace inservible el POS.
-- [ ] **Dos veces el mismo platillo con elecciones distintas = DOS líneas.**
-      Uno término medio y otro bien cocido no pueden fundirse en «2x». Es el
-      fallo más caro de esta pantalla: la cocina sacaría dos iguales y nadie se
-      entera hasta que el cliente devuelve el plato.
-- [ ] Mandar a producción → en el **KDS** salen las opciones en grande y la
-      nota con su 📝.
-- [ ] En el **papel de cocina**, las opciones salen sangradas debajo del
-      platillo, igual que los componentes de un paquete.
-- [ ] Intentar cambiar la nota de una línea **ya enviada** → lo impide y
-      explica por qué (el papel que tiene el cocinero ya salió).
-
-> **Nada de esto suma precio ni descuenta inventario, y es a propósito.** Si ves
-> una opción con precio en el catálogo, **no la uses**: se elegiría y no se
-> cobraría. Ver `docs/PENDIENTE_LUNES.md` §8.
-
-> **Y hasta que el fallo 1 esté arreglado, esto sólo se prueba en ventas de
-> mentira.** Una venta real con modificadores no llega a Supabase.
-
-## 6 · El teléfono
-
-- [ ] Arriba a la derecha aparece un botón con **las iniciales** del mesero.
-- [ ] Lleva a **Perfil**, y desde ahí se puede cerrar sesión.
-- [ ] Al salir, cae en **`/loginempleados`** (código + PIN), no en el formulario
-      de correo.
-
-## 7 · El checador
-
-- [ ] Botón **«Quién está trabajando»** → pide PIN de Admin o Gerente.
-- [ ] La lista muestra nombre, hora de entrada y tiempo dentro.
-- [ ] **Los tres registros abiertos de AZUL** aparecen: Carlos Muñoz entre los
-      activos, y **Daniel Muñoz y Juan Pérez en «sin salida registrada»** —
-      llevan más de 40 días y ya no están en la plantilla.
-- [ ] Cerrarlos exige que **`horas_jornada` esté configurado**; si está en 0,
-      el panel lo dice y no deja. Configúralo antes.
-- [ ] Al cerrar un olvido, la hora que se guarda es **entrada + jornada**, no la
-      actual. Compruébalo en Asistencias: una salida de hace semanas, no de hoy.
-
 ## 8 · El aviso del KDS — sonido y notificaciones
 
 Se prueba **con una sesión de Chef o Barista** (por PIN). Con la sesión de dueño

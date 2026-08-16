@@ -74,14 +74,42 @@ fallos de abajo.)*
 Esta es la mitad que importaba. Lo fácil era que dejara de imprimir; lo que había
 que demostrar es que **sigue imprimiendo cuando hace falta**.
 
-### §5b · La nota libre llega hasta el papel
+### §5b · «¿Cómo lo quiere?» — modificadores y notas
 
 La **nota** escrita en la línea del carrito sale impresa en la comanda de cocina.
 La cadena que el 14-ago estaba rota —`construirItemsComanda` armaba el item campo
 a campo y perdía todo dato nuevo en silencio— está entera.
 
-Los **grupos de modificadores** no se ejercitaron: no se preparó catálogo ni se
-ató ninguno en Recetas, así que ninguna venta llevó opciones. Sigue pendiente.
+Y ya al final del día, con el catálogo preparado —grupo creado en **Catálogos →
+Modificadores** y atado a un platillo en **Recetas**, que es el paso que se
+olvida— se comprobó el resto de la sección: el cuadro se abre solo, el botón
+apagado dice cuál grupo falta, un platillo sin grupos entra de un solo toque, las
+opciones salen en el KDS y sangradas en el papel de cocina, y la nota de una
+línea ya enviada no se deja cambiar.
+
+Lo importante, y confirmado explícitamente: **el mismo platillo con elecciones
+distintas queda en DOS líneas**, no fundido en «2x». Es lo que sostiene
+`firmaDeLinea()`, y es el fallo más caro que podía tener esa pantalla — fundidas,
+la cocina saca dos iguales y nadie se entera hasta que el cliente devuelve el
+plato.
+
+### §6 · El teléfono
+
+El botón con las iniciales del mesero, arriba a la derecha; lleva a Perfil; y al
+cerrar sesión cae en `/loginempleados` (código + PIN), no en el formulario de
+correo.
+
+### §7 · El checador
+
+- «Quién está trabajando» pide PIN de Admin o Gerente, y la lista muestra nombre,
+  hora de entrada y tiempo dentro.
+- **Los tres registros abiertos de AZUL** aparecen: Carlos Muñoz entre los
+  activos, y Daniel Muñoz y Juan Pérez en «sin salida registrada».
+- Cerrar un olvido exige `horas_jornada` configurado.
+- Y lo que se comprobó en **Asistencias**, que es donde esto fallaría callado: la
+  hora guardada al cerrar un olvido es **entrada + jornada**, una salida de hace
+  semanas, no la de hoy. Si guardara la actual, el registro diría que estuvo 40
+  días dentro.
 
 ### §10 · El descuento de inventario es idempotente
 
