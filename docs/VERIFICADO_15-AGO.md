@@ -119,7 +119,7 @@ sin probarse.
 
 ---
 
-## Los tres fallos encontrados
+## Los cuatro fallos encontrados
 
 En el orden en que conviene atacarlos, que no es el de gravedad sino el de
 dependencia: hasta que el primero esté arreglado, su ruido se mete en cualquier
@@ -223,6 +223,42 @@ de `0.02`. La divergencia máxima por este camino es de ~1.1 centavos, así que
 Es el aviso de la cabecera de `Comanda.js` cumpliéndose por el otro lado: allí se
 prohibió que el hub hiciera aritmética para no tener dos motores de dinero. El
 segundo motor acabó estando en Postgres, y no coinciden.
+
+### 4 · «Recuperar ahora» falla y dice «No había nada que recuperar»
+
+Encontrado al final del día, y por accidente: al reabrir la app, el panel del
+respaldo pasó a **«Sin confirmar: 1 · Por adoptar: 1»**. Al pulsar **Recuperar
+ahora**, el aviso dijo **«No había nada que recuperar»** y los dos contadores se
+quedaron en 1.
+
+Lo que pasó de verdad: la adopción intentó subir la venta, chocó contra el mismo
+trigger del fallo 1, y `drenarRespaldo` (`store/useSyncStore.js:677`) la capturó
+en su `catch`. La captura es correcta —una que falle no debe detener a las demás,
+y la venta se queda en el disco para el siguiente intento—, pero el resultado
+sale de `subidas.length`, así que **fallar y no tener nada que hacer devuelven el
+mismo cero** y el usuario lee lo segundo.
+
+El error sólo va a `console.warn`, y la consola no abre en un build de release.
+O sea: **un fallo de recuperación de una venta es hoy invisible.**
+
+Lo mínimo sería distinguir los tres casos —nada que hacer, subidas, fallaron N—
+y decir cuántas fallaron.
+
+> **Lo seguro sí está bien, y conviene dejarlo dicho:** sólo se confirman las que
+> subieron de verdad (`confirmarRespaldo(subidas)`). Pulsar el botón **no puede
+> perder la venta**. El problema es lo que cuenta, no lo que hace.
+
+**Y queda una pregunta abierta, que es la más interesante:** ¿por qué esa venta
+pasó a «Por adoptar» justo al reiniciar la app? La cobró la caja, y la caja se
+excluye a sí misma comparando tokens (`hub/servidor.rs:465`,
+`dispositivo == quien_pregunta`). La hipótesis es que **al reiniciar tomó un
+token distinto**, de modo que sus propias anotaciones dejaron de reconocerse como
+suyas y, sin señales del token viejo en 15 minutos, pasaron a contar como
+dispositivo muerto. Si es así, la caja se ofrece a adoptar lo suyo bajo otra
+identidad — justo la carrera que ese `if` existe para evitar.
+
+Se confirma comparando el `"dispositivo":"840ce96da4be84e5"` que lleva esa
+anotación en el `.ndjson` con el token que la caja tenga ahora. **Sin comprobar.**
 
 ---
 

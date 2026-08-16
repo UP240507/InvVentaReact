@@ -20,8 +20,15 @@ trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa.
 1. El trigger que castea `it->>'id'` a `bigint`.
 2. La reimpresión tras reapertura.
 3. El centavo de más en el total.
+4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
 
-Ver `docs/VERIFICADO_15-AGO.md`. Los tres son de pocas líneas.
+Ver `docs/VERIFICADO_15-AGO.md`. Los cuatro son de pocas líneas.
+
+- [ ] **Pendiente de comprobar, y va con el fallo 4:** comparar el
+      `"dispositivo":"840ce96da4be84e5"` de la anotación en el `.ndjson` con el
+      token que la caja tiene ahora. Si son distintos, la caja deja de
+      reconocer sus propias ventas pendientes tras un reinicio y se ofrece a
+      adoptarlas bajo otra identidad.
 
 ---
 
