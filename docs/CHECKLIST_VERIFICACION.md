@@ -10,9 +10,112 @@ localizable en tres síntomas mezclados.
 
 ---
 
+## RESULTADO — verificación en AZUL, 15-ago-2026 (tarde)
+
+La mañana **no se hizo**: no hubo ventas en Simulador ni comprobación de stock
+en solitario. Todo lo de abajo se midió por la tarde, con la impresora real
+conectada y con Chris en el local.
+
+**Verificado:** §0 (Chris, `cargo test` y la suite npm, en verde), §1, §2 —de
+rebote—, §3, §4 salvo lo que se dice abajo, §5 completo, el descuento de stock
+de §10 y el respaldo de la caja de §10.
+
+**Sin verificar, y anotado sin disimulo:** §5b sólo se ejercitó con nota libre
+—ningún grupo de modificadores atado en Recetas llegó a una venta—, §6, §7, §8,
+§9, §11, la mitad del respaldo que exige matar un teléfono, y el pulso del
+cajón, que sigue averiado en el local.
+
+### Los dos fallos encontrados, en el orden en que conviene atacarlos
+
+**1 · La venta con nota o modificador NO llega a Supabase. 22P02, permanente.**
+
+Síntoma exacto, tal cual salió en pantalla:
+
+```
+ventas INSERT · PERMANENTE (22P02)
+folio: AZULJ3-V-000006 · total: 209
+invalid input syntax for type bigint: "1781461782580::nota:Sin cebolla, sin mostaza"
+```
+
+La causa está en `supabase/migrations/20260811042805_verificar_total_venta_lectura_defensiva_config.sql`,
+línea 61:
+
+```sql
+nullif(it->>'id','')::bigint as receta_id,
+```
+
+El trigger desempaqueta `ventas.items` y castea el `id` de cada línea a
+`bigint`. Desde el 14-ago ese `id` ya no es el número del producto: es la firma
+que `firmaDeLinea()` construye con la selección y la nota dentro. Postgres
+rechaza el cast y **tumba el INSERT entero**.
+
+El patrón de siempre: el trigger es del 11-ago y era correcto para el dato de
+entonces, los modificadores son del 14 y también son correctos, y el hueco está
+exactamente en medio. Ningún lado dio error; el único que se queja es Postgres,
+en el último salto, y la venta se queda en el equipo.
+
+Alcance: **toda venta que lleve al menos una línea con nota o con modificador.**
+Como el fallo es permanente, no se reintenta sola.
+
+El arreglo es de una línea y el dato bueno ya viaja al lado del malo — el mismo
+item trae `"receta_id":1781461782580`. El trigger tiene que leer `receta_id` y
+caer a `id` sólo si falta.
+
+> **Consecuencia colateral, que al principio se diagnosticó como un fallo
+> aparte y no lo era.** En mostrador salieron ticket + dos comandas con red,
+> que es justo lo que el ajuste `sin_nube` debía evitar. La cola sube en serie
+> y la comanda iba detrás de una venta que estaba muriendo, así que
+> `llegoALaNube` agotó sus 2 s y el papel salió. Un cobro de mostrador **sin**
+> notas imprimió sólo el ticket: mismo bug, no dos. Queda dicho porque la
+> primera prueba que se diseñó para separarlos comparaba mesa contra mostrador
+> cuando la variable real era nota contra sin nota.
+
+**2 · Tras reabrir una cuenta, volver a pedirla no imprime nada. En silencio.**
+
+Con el flujo en `ticket_final`, `handlePedirCuenta` llama a `enviarTicket` y
+`construirTicket` arma el id así (`lib/Comanda.js:450`):
+
+```js
+id: `ticket::${venta.id ?? venta.folio}${sufijoCopia(copia)}`,
+```
+
+`datosCuenta` no lleva `id`, así que cae al **folio** — y el folio, a propósito,
+**no cambia al reabrir**: el cliente ya tiene ese número en la mano. Resultado:
+el segundo documento tiene el id del primero, el hub lo reconoce como ya
+impreso (`hub/cola.rs:155`) y lo descarta como duplicado.
+
+Y el descarte no se nota: `Recibo::Duplicado` **no es un error** para el hub —lo
+dice su propio comentario—, así que la promesa vuelve con `ok` y el aviso «No se
+pudo imprimir la cuenta» nunca aparece. El mesero pulsa, no sale papel y nadie
+dice nada.
+
+Importa más de lo que parece: reabrir una cuenta es exactamente el caso en que
+hace falta un papel nuevo —se agregó algo y el total cambió—, y el cliente se
+queda con una tira cuyo total ya no es el suyo.
+
+Relacionado con la deuda ya anotada: «la reimpresión de documentos existe en
+`Comanda.js` y nadie la llama». La reimpresión tras reapertura es precisamente
+eso, con su aviso impreso y su sufijo de copia.
+
+### Lo que el checklist decía mal, y ya está corregido abajo
+
+- **§2 no hacía falta.** El folio ya salía como `AZULKL-V-000010` el 12-ago y
+  hoy como `AZULJ3-V-000006`: el prefijo `AZUL` lleva días bien. Lo de `PTKL`
+  estaba viejo.
+- **El paso de §2 es inejecutable en producción de todos modos**: pide la
+  consola del navegador, y `src-tauri/Cargo.toml` declara `tauri` sin la feature
+  `devtools`, así que en un build de release no hay nada que abrir. Se comprobó
+  en la caja: no abre.
+- **§10 no necesita generar llaves**: `tauri.conf.json` ya tiene la `pubkey`
+  pegada de verdad, no el `PEGA_AQUI_LA_CLAVE_PUBLICA`.
+
+---
+
 ## 0 · Antes de nada — que compile y que pase la suite
 
-- [ ] `cd src-tauri && cargo test`
+- [x] `cd src-tauri && cargo test` — **15-ago, verde.** Lo corrió Chris en su
+      máquina; compila por primera vez el pulso del cajón y los tres módulos
+      del 13-ago.
 
   Toca Rust dos veces hoy: el **ancho configurable** (32/48) y el **pulso del
   cajón**. El primero ya compiló; el segundo **no se ha compilado nunca** — no
@@ -23,7 +126,7 @@ localizable en tres síntomas mezclados.
   El lote de lógica pura, sin DOM ni globales. **521 en verde.** `--isolate=false`
   aquí es seguro y rápido.
 
-- [ ] `npm run test:run`
+- [x] `npm run test:run` — **15-ago, verde.**
 
   **La suite entera, con aislamiento.** Debe dar TODO en verde.
 
@@ -59,9 +162,11 @@ verificación de verdad se hace con `npm run test:run`**, que aísla.
 Los dos viven en **Ajustes → Zonas de Producción** y comparten el aviso de
 «falta guardar».
 
-- [ ] **La cuenta de la mesa** → «Un solo papel — el ticket final».
-- [ ] **Cuándo imprimir las comandas** → «Sólo cuando no llegó a la nube».
-- [ ] Pulsar **Guardar** y recargar para confirmar que quedaron.
+- [x] **La cuenta de la mesa** → «Un solo papel — el ticket final». **15-ago.**
+- [x] **Cuándo imprimir las comandas** → «Sólo cuando no llegó a la nube».
+      **15-ago.**
+- [x] Pulsar **Guardar** y recargar para confirmar que quedaron. **15-ago:
+      aguantaron la recarga.**
 
 > Ya pasó una vez: el ajuste de comandas parecía no funcionar y en realidad
 > nunca se había guardado. En la base seguía en `siempre`.
@@ -86,48 +191,78 @@ En la consola de la ventana de la app (clic derecho → Inspeccionar):
 localStorage.setItem('folio:prefijo-provisional', '1');
 ```
 
-- [ ] Recargar. El siguiente folio debe empezar por **AZUL**, conservando los
+- [x] Recargar. El siguiente folio debe empezar por **AZUL**, conservando los
       dos caracteres del dispositivo.
+
+> **15-ago: no hacía falta y además no se puede.** El folio ya salía bien desde
+> antes — `AZULKL-V-000010` en el papel del 12-ago, `AZULJ3-V-000006` hoy. Y el
+> paso es inejecutable en un build de release: `Cargo.toml` declara `tauri` sin
+> la feature `devtools`, así que clic derecho → Inspeccionar no abre nada. Se
+> probó en la caja. Si algún día hace falta repetirlo, o se compila con
+> devtools o hace falta un botón en Ajustes; depender de una consola que el
+> binario de producción no tiene es un fallo del checklist.
 
 ## 3 · El flujo de la cuenta — un solo papel
 
-- [ ] Mesa con productos → **Pedir Cuenta**.
-- [ ] **Sale UN papel**, con folio.
+> **15-ago, antes de §3.** Al reconectar la impresora salió un documento del
+> **12-ago** que llevaba tres días en la cola del hub y se vació al volver el
+> transporte. Bien por la cola; mal para contar papeles. Si se repite la
+> prueba, **vaciar la cola antes** — si no, un papel viejo se cuela en medio y
+> se cuenta como el segundo que no debía salir.
+
+- [x] Mesa con productos → **Pedir Cuenta**. **15-ago.**
+- [x] **Sale UN papel**, con folio. **15-ago.**
 - [ ] **El cajón NO se abre.** Es lo más importante de este paso: ese papel se
       imprime antes de cobrar y no debe mover dinero.
-- [ ] El maquetado nuevo: **TOTAL arriba y grande**, luego `SON:`, y abajo
+- [x] El maquetado nuevo: **TOTAL arriba y grande**, luego `SON:`, y abajo
       `SUBTOTAL:… IVA:…` en una sola línea. Advertencia fiscal primero, propina
-      después.
-- [ ] **No dice «Recibido» ni «Cambio» ni «Pago:»** — no se ha pagado todavía.
+      después. **15-ago, comprobado en papel.**
+- [x] **No dice «Recibido» ni «Cambio» ni «Pago:»** — no se ha pagado todavía.
+      **15-ago.**
 
-- [ ] Cobrar en **efectivo** → **no sale un segundo papel**.
+- [x] Cobrar en **efectivo** → **no sale un segundo papel**. **15-ago.**
 - [ ] ~~el cajón se abre~~ / ~~con tarjeta no se abre~~ — **no se puede
       verificar**: el cajón del restaurante está averiado y sólo abre con la
       llave. El pulso ESC/POS sale igual (`hub_abrir_cajon`), pero no hay forma
       de comprobarlo hasta que se repare o se pruebe en otro cajón. **Queda
       pendiente, no verificado.**
 
-- [ ] **Mostrador** (venta directa, sin mesa) → al cobrar **sí** sale ticket,
-      con método de pago y cambio. Ese flujo no cambió.
+- [x] **Mostrador** (venta directa, sin mesa) → al cobrar **sí** sale ticket,
+      con método de pago y cambio. Ese flujo no cambió. **15-ago.**
+
+- [ ] **FALLA — reabrir la cuenta y volver a pedirla no imprime nada, y no
+      avisa.** Ver el bloque de resultados arriba, fallo 2: el id del documento
+      sale del folio, el folio no cambia al reabrir, y el hub descarta el
+      segundo como duplicado sin considerarlo un error.
 
 ## 4 · El bloqueo de la cuenta
 
-- [ ] Con la cuenta impresa, intentar agregar un producto → **no deja**, y sale
-      el aviso con el folio y el botón «Reabrir cuenta».
-- [ ] «A Producción» y «Pedir Cuenta» quedan apagados.
-- [ ] **Reabrir** con una sesión que tenga `autoriza_descuentos` (Admin,
-      Gerente o Capitán) → entra directo, **sin pedir PIN**.
+- [x] Con la cuenta impresa, intentar agregar un producto → **no deja**, y sale
+      el aviso con el folio y el botón «Reabrir cuenta». **15-ago.**
+- [x] «A Producción» y «Pedir Cuenta» quedan apagados. **15-ago.**
+- [x] **Reabrir** con una sesión que tenga `autoriza_descuentos` (Admin,
+      Gerente o Capitán) → entra directo, **sin pedir PIN**. **15-ago.**
 - [ ] Reabrir desde una sesión de mesero → **pide PIN**; con el PIN de un
-      encargado, reabre.
-- [ ] Tras reabrir: se puede agregar, y **el folio NO cambió**.
-- [ ] En **Auditoría** aparece `REAPERTURA_CUENTA` con quién autorizó.
+      encargado, reabre. **No se probó**: la tarde se hizo con sesión de dueño.
+- [x] Tras reabrir: se puede agregar, y **el folio NO cambió**. **15-ago.**
+- [x] En **Auditoría** aparece `REAPERTURA_CUENTA` con quién autorizó.
+      **15-ago.**
+
+> **15-ago: aquí salió el fallo 2.** Tras reabrir, «Pedir Cuenta» no vuelve a
+> imprimir y tampoco avisa. Ver el bloque de resultados. Es justo el caso en
+> que hace falta papel nuevo: se reabre para agregar algo, y el total cambia.
 
 ## 5 · Las comandas de cocina
 
-- [ ] Con red, mandar a producción → **no sale papel de cocina** (el KDS ya la
-      tiene).
-- [ ] **Apagar el wifi**, mandar a producción → **sí sale**, unos dos segundos
-      después.
+- [x] Con red, mandar a producción → **no sale papel de cocina** (el KDS ya la
+      tiene). **15-ago, en mesa.**
+- [x] **Apagar el wifi**, mandar a producción → **sí sale**, unos dos segundos
+      después. **15-ago.** Es la mitad que importaba y salió bien.
+
+> **15-ago, y no es un fallo de §5.** En mostrador *con red* sí salieron las
+> comandas. Resultó ser el fallo 1: iban detrás de una venta que moría en el
+> trigger, y el sondeo agotó sus 2 s esperándola. Un cobro de mostrador sin
+> notas imprimió sólo el ticket.
 
 > Ese retraso es el sondeo esperando a ver si la comanda sube. Está acotado a
 > propósito: cocina no puede esperar más.
@@ -169,8 +304,13 @@ Y ya en la caja:
       entera hasta que el cliente devuelve el plato.
 - [ ] Mandar a producción → en el **KDS** salen las opciones en grande y la
       nota con su 📝.
-- [ ] Por la tarde, con impresora: en el **papel de cocina** las opciones salen
+- [~] Por la tarde, con impresora: en el **papel de cocina** las opciones salen
       sangradas debajo del platillo, igual que los componentes de un paquete.
+      **15-ago, a medias:** la **nota libre** sí sale en la comanda impresa. Los
+      **grupos de modificadores no se ejercitaron** — no se llegó a preparar el
+      catálogo ni a atar ninguno en Recetas, así que ninguna venta llevó
+      opciones. La cadena hasta el papel está demostrada para la nota; para las
+      opciones sigue sin verse.
 - [ ] Intentar cambiar la nota de una línea **ya enviada** → lo impide y
       explica por qué (el papel que tiene el cocinero ya salió).
 
@@ -344,10 +484,20 @@ nada:**
 
 ### El respaldo de ventas
 
-- [ ] En **Ajustes → Hub** aparece el bloque **«Respaldo de ventas»**.
-- [ ] Cobrar en la caja → **«Sin confirmar» sube y vuelve a bajar** en unos
-      segundos, cuando la venta llega a Supabase.
-- [ ] Existe `%APPDATA%\app.invventa.pos\respaldo-ventas.ndjson`.
+- [x] En **Ajustes → Hub** aparece el bloque **«Respaldo de ventas»**. **15-ago.**
+- [x] Cobrar en la caja → **«Sin confirmar» sube y vuelve a bajar** en unos
+      segundos, cuando la venta llega a Supabase. **15-ago.**
+- [x] Existe `%APPDATA%\app.invventa.pos\respaldo-ventas.ndjson`. **15-ago.**
+
+> **15-ago: el respaldo se verificó con un fallo real, no con uno simulado.** La
+> venta `AZULJ3-V-000006` (total 209) es la que el trigger rechazó, y estaba
+> entera en el `.ndjson`, con su folio y sus dos líneas. «Sin confirmar» se
+> quedó en **1** y no bajó, que es exactamente lo correcto: esa venta no va a
+> llegar a Supabase hasta que se arregle el fallo 1. El contador es una alarma
+> fiel. Mejor prueba que la planeada.
+>
+> **No borrar los datos del navegador de la caja** mientras esa venta siga sin
+> subir.
 
 La prueba que de verdad demuestra que esto sirve, y la única que vale:
 
@@ -363,11 +513,14 @@ La prueba que de verdad demuestra que esto sirve, y la única que vale:
 
 ### El descuento de inventario, que ahora es idempotente
 
-- [ ] Mandar a producción una mesa → el stock baja **una vez**.
-- [ ] Cortar la red justo después y dejar que la cola reintente → **no vuelve a
-      bajar**.
+- [x] Mandar a producción una mesa → el stock baja **una vez**. **15-ago.**
+- [x] Cortar la red justo después y dejar que la cola reintente → **no vuelve a
+      bajar**. **15-ago.** Medido con naranja: **80 kg antes, 79.8 kg después**
+      de un jugo que consume 0.2. Un solo descuento tras el reintento.
 - [ ] En Supabase, `stock_salidas` tiene una fila por comanda (o por venta en
-      mostrador).
+      mostrador). **Pendiente**: el número se leyó en la caja, no en la nube.
+      Son cinco minutos y es la prueba dura del guardia — el contador local
+      podría estar bien y `stock_salidas` tener dos filas.
 
 > Esto arregla un fallo que **ya existía**: hasta hoy, un reintento tras un
 > timeout post-commit descontaba dos veces sin decir nada.
@@ -382,10 +535,11 @@ La prueba que de verdad demuestra que esto sirve, y la única que vale:
 
 ### El updater
 
-Ver `docs/CHECKLIST_ACTUALIZACIONES.md`: **no funciona hasta que generes las
-llaves y pegues la pública en `tauri.conf.json`**. Hoy dice
-`PEGA_AQUI_LA_CLAVE_PUBLICA`, así que la compilación del bundle fallará al
-firmar si no se hace.
+Ver `docs/CHECKLIST_ACTUALIZACIONES.md`. **Corregido el 15-ago:** la `pubkey`
+ya está pegada de verdad en `tauri.conf.json`, no el marcador de posición. Lo
+que sigue haciendo falta para compilar el bundle es exportar
+`TAURI_SIGNING_PRIVATE_KEY` y su contraseña **en la misma sesión de shell**, o
+la compilación revienta al firmar, al final del build.
 
 ## 11 · Lo responsivo del 13-ago (3.10)
 
