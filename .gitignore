@@ -56,3 +56,10 @@ test-results/
 # El latest.json se GENERA (npm run release). Versionarlo invita a editarlo a
 # mano, que es como se cuela una firma mal copiada.
 release/
+
+# Scripts de firma y compilación. Su sitio es FUERA del repositorio, porque
+# llevan dentro la contraseña de la llave privada del updater. Se ignoran aquí
+# por si alguien deja una copia dentro sin darse cuenta — el mismo motivo por el
+# que se ignora la carpeta `~/`.
+firmar.ps1
+compilar.ps1
