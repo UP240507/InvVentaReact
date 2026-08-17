@@ -8,21 +8,18 @@ puerta está abierta — pero delante de todo lo demás va lo que salió del loc
 
 ## 0 · Lo que salió de la verificación del 15-ago
 
-Cuatro fallos, con causa y línea. El detalle está en
+Cinco fallos, con causa y línea; **el 1 ya está arreglado**. El detalle está en
 `docs/VERIFICADO_15-AGO.md`; aquí sólo el orden y por qué.
 
 **El orden no es por gravedad, es por dependencia.** Mientras una venta muera en
 el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
 15-ago eso produjo un falso quinto fallo que costó dos pruebas descartar.
 
-1. **El trigger que castea `it->>'id'` a `bigint`.** Toda venta con nota o
-   modificador se queda fuera de Supabase, con 22P02 y sin reintento. El item ya
-   trae `receta_id` al lado; el trigger tiene que leerlo y caer a `id` sólo si
-   falta. Una línea, y desbloquea medir lo demás.
-
-   > **Hasta que esté:** que nadie use notas ni modificadores en ventas reales,
-   > y no borrar los datos del navegador de la caja — la venta
-   > `AZULJ3-V-000006` (total 209) sólo vive ahí.
+1. ~~**El trigger que castea `it->>'id'` a `bigint`.**~~ **HECHO el 17-ago.**
+   Migración `20260817090000_verificar_total_venta_id_de_linea_no_numerico.sql`,
+   aplicada a la base de AZUL y comprobada en `pg_proc`. La venta
+   `AZULJ3-V-000006` (total 209) está en la nube, entera. Ya no hay restricción
+   sobre usar notas ni modificadores en ventas reales.
 
 2. **La reimpresión tras reabrir una cuenta no imprime, y no avisa.** Es **el
    mismo mecanismo que describe §1 de este documento**, y de hecho §1 ya lo
@@ -46,7 +43,25 @@ el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
    > Y con esto, una pregunta abierta: por qué una venta cobrada **por la caja**
    > pasó a «Por adoptar» al reiniciar la app, si la caja se excluye a sí misma
    > comparando tokens. Hipótesis: al reiniciar toma un token distinto. Se
-   > comprueba en diez segundos y está anotado en el checklist.
+   > comprueba en diez segundos y está anotado en el checklist. **Ver el fallo
+   > 5: la carrera que esa exclusión existe para evitar ya ocurrió.**
+
+5. **La exclusión por token, y el `23505` que se marca como fallo.** Al subir la
+   venta tras arreglar el 1, llegó por los **dos caminos a la vez**: la adopción
+   del hub con `upsert`, y la cola del propio dispositivo con `insert`, que
+   chocó contra `ventas_pkey`. Es literalmente la carrera que el comentario de
+   `hub/servidor.rs:465` dice que se evita no adoptando lo propio — o sea que la
+   exclusión no se aplicó.
+
+   Dos cosas, y la segunda vale por sí sola:
+
+   - Averiguar por qué la caja deja de reconocerse (hipótesis del token nuevo al
+     reiniciar) y arreglar la exclusión.
+   - **Un `23505` sobre una fila que ya existe no es un fallo.** El objetivo se
+     cumplió: la venta está. Marcarlo en rojo, dejarlo en el log de auditoría y
+     exigir que alguien lo borre a mano es alarmar por algo que salió bien, y lo
+     que consigue es que se deje de mirar ese panel — que es donde vive el aviso
+     de verdad.
 
 ### Y una cosa que el checklist pedía y el binario no permite
 

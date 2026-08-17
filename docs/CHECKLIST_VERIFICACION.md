@@ -13,16 +13,14 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
 
 ## Antes de medir nada del camino de la cola
 
-Los tres fallos del 15-ago están sin arreglar, y el primero **ensucia cualquier
-medición** que dependa de que una venta suba: mientras una venta muera en el
-trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa.
-
-1. El trigger que castea `it->>'id'` a `bigint`.
+1. ~~El trigger que castea `it->>'id'` a `bigint`.~~ **Arreglado el 17-ago.**
+   Era el que ensuciaba cualquier medición del camino de la cola; ya no estorba.
 2. La reimpresión tras reapertura.
 3. El centavo de más en el total.
 4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
+5. La exclusión por token de la caja, y el `23505` marcado como fallo.
 
-Ver `docs/VERIFICADO_15-AGO.md`. Los cuatro son de pocas líneas.
+Ver `docs/VERIFICADO_15-AGO.md`. Los que quedan son de pocas líneas.
 
 - [ ] **Pendiente de comprobar, y va con el fallo 4:** comparar el
       `"dispositivo":"840ce96da4be84e5"` de la anotación en el `.ndjson` con el

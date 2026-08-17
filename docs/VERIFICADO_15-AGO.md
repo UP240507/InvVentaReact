@@ -147,13 +147,30 @@ sin probarse.
 
 ---
 
-## Los cuatro fallos encontrados
+## Los cinco fallos encontrados
 
 En el orden en que conviene atacarlos, que no es el de gravedad sino el de
 dependencia: hasta que el primero esté arreglado, su ruido se mete en cualquier
 medición del camino de la cola.
 
-### 1 · La venta con nota o modificador NO llega a Supabase
+### 1 · La venta con nota o modificador NO llega a Supabase — **ARREGLADO el 17-ago**
+
+> **Cerrado, y comprobado por el lado que cuenta.** La corrección está en
+> `supabase/migrations/20260817090000_verificar_total_venta_id_de_linea_no_numerico.sql`,
+> aplicada a la base de AZUL y verificada en `pg_proc` (el cast viejo ya no está
+> en el cuerpo de la función).
+>
+> La venta que lo destapó está en la nube, entera:
+>
+> | | |
+> |---|---|
+> | folio | `AZULJ3-V-000006` |
+> | total | 209.00 |
+> | subtotal / IVA / propina | 163.79 / 26.21 / 19.00 |
+> | líneas | Jugo + Hamburguesa |
+> | `total_divergente` | `false` |
+>
+> No es un `success: true`: es la fila consultada en `public.ventas`.
 
 Síntoma exacto, tal cual salió en pantalla:
 
@@ -286,15 +303,53 @@ dispositivo muerto. Si es así, la caja se ofrece a adoptar lo suyo bajo otra
 identidad — justo la carrera que ese `if` existe para evitar.
 
 Se confirma comparando el `"dispositivo":"840ce96da4be84e5"` que lleva esa
-anotación en el `.ndjson` con el token que la caja tenga ahora. **Sin comprobar.**
+anotación en el `.ndjson` con el token que la caja tenga ahora. **Sin comprobar
+directamente — pero ver el fallo 5, que es evidencia fuerte de que sí ocurrió.**
+
+### 5 · Un reintento sobre una fila que ya existe se marca como fallo permanente
+
+Apareció al arreglar el fallo 1, y trae dentro la confirmación de la pregunta de
+arriba.
+
+Al aplicar la corrección del trigger y pulsar **Recuperar ahora**, la venta subió
+— y en el log de auditoría quedó esto:
+
+```
+ventas INSERT · PERMANENTE (23505)
+folio: AZULJ3-V-000006 · total: 209
+duplicate key value violates unique constraint "ventas_pkey"
+```
+
+Ya no es `22P02`. Es una fila que **ya existe**: la venta llegó por los **dos
+caminos a la vez**. La adopción del hub usa `upsert` y funcionó; la cola propia
+del dispositivo usa `insert` y chocó.
+
+Y eso es exactamente lo que `hub/servidor.rs:465` decía que no debía pasar:
+
+> «La caja no adopta lo suyo propio: eso lo sube su propia cola, y hacerlo por
+> los dos caminos a la vez sería pedirle a `upsert` que arregle una carrera que
+> se puede evitar.»
+
+**La carrera ocurrió.** Así que la exclusión por token no se aplicó, y la
+hipótesis de que la caja toma un token distinto al reiniciar pasa de plausible a
+bastante probable. Sigue faltando la comparación directa de los dos tokens, que
+es lo que la confirmaría del todo.
+
+Lo que hay que corregir, aparte de la exclusión: **un `23505` al reintentar algo
+que ya está no es un fallo.** La fila existe, el objetivo se cumplió. Marcarlo en
+rojo y dejarlo en el log de auditoría es alarmar por algo que salió bien — y
+entrena a ignorar el panel donde vive el aviso de verdad.
 
 ---
 
-## Lo operativo, hasta que el fallo 1 esté arreglado
+## Lo operativo — resuelto el 17-ago
 
-- **Que nadie use notas ni modificadores** en ventas reales. Cada una es una
-  venta que no sube.
-- **No borrar los datos del navegador de la caja.**
+Las dos restricciones que hubo que imponer el fin de semana **ya no aplican**:
+
+- ~~Que nadie use notas ni modificadores en ventas reales.~~ El trigger está
+  arreglado; las ventas con nota o modificador suben con normalidad.
+- ~~No borrar los datos del navegador de la caja.~~ La venta que sólo vivía en
+  ese equipo ya está en Supabase.
 
 ## Lo que el checklist decía mal, y ya está corregido
 
