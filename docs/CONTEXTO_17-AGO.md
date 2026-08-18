@@ -22,12 +22,15 @@ mexicanos. Repo `UP240507/InvVentaReact`, carpeta
 ## 2 · Estado exacto ahora mismo
 
 - Versión **0.2.4**, compilada, publicada e **instalada en la caja de AZUL**.
-- **19 commits el 17-ago**, todos **locales**. No hay push: si se quiere respaldo
-  fuera de esa máquina, hace falta configurar remoto y empujar.
-- Sin confirmar: `src-tauri/Cargo.lock`.
-- Pruebas: **663 en verde** en `src/lib` y `src/store`. **Las suites de pantalla
-  no se han corrido desde los cambios**, y `PosScreen.jsx` y `HubScreen.jsx`
-  están tocados. `npm run test:run` completo es obligatorio antes de compilar.
+- **~22 commits el 17-ago.** El remoto es `UP240507/InvVentaReact` y está al día
+  salvo los últimos de documentación; comprobar con `git status -sb`.
+- Pruebas: **663 en verde** en `src/lib` y `src/store`, corridas aquí. La suite
+  completa (`npm run test:run`) la corrió Chris en su máquina tras los cambios.
+
+> **Lo que NO se pudo correr desde el sandbox:** las suites de DOM. jsdom tarda
+> más de lo que aguanta la herramienta, así que `PosScreen.integration` y
+> `TicketImpresion` **siempre** hay que correrlas en la máquina. `compilar.ps1`
+> lo hace solo antes de compilar.
 - `--isolate=false` (`npm run test:rapido`) sigue con **6 fallos intermitentes**
   conocidos en `useConectividad`. Preexistentes.
 - Dos avisos de lint preexistentes que no son de esta tanda: el `no-unused-vars`
