@@ -431,6 +431,15 @@ Se confirma comparando el `"dispositivo":"840ce96da4be84e5"` que lleva esa
 anotación en el `.ndjson` con el token que la caja tenga ahora. **Sin comprobar
 directamente — pero ver el fallo 5, que es evidencia fuerte de que sí ocurrió.**
 
+> **Hipótesis mejor, del 17-ago.** La exclusión compara el campo `dispositivo` de
+> la anotación con `token_de(headers)`, y ése es el **token de administrador del
+> hub** (`autorizado_admin` lo contrasta con `estado.token`). Si la anotación se
+> escribe con un identificador de dispositivo distinto del token de admin, la
+> comparación **nunca** puede acertar, y entonces no hace falta ningún reinicio
+> para que falle: la caja no se reconoce a sí misma *jamás*. Encaja mejor con lo
+> observado que la teoría del token que cambia. Se decide leyendo de dónde sale
+> el campo `dispositivo` al escribir el respaldo.
+
 ### 5 · Un reintento sobre una fila que ya existe se marca como fallo permanente
 
 Apareció al arreglar el fallo 1, y trae dentro la confirmación de la pregunta de

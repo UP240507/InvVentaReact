@@ -109,6 +109,42 @@ qué**. Lo que no vale es dejarlo con su aspecto de siempre y que no responda.
    ocupadas y veinte comandas, es fricción constante contra un error barato. Las
    confirmaciones se ganan cuando el error es caro o irreversible.
 
+### 10 · Revocar todos los dispositivos al cerrar turno (Chris, 17-ago)
+
+**Lo que pidió Chris:** una opción para revocar todos los dispositivos del hub al
+terminar el turno. Hoy se acumulan: cada teléfono que alguna vez escaneó el QR
+sigue emparejado para siempre, incluido el del mesero que se fue en marzo.
+
+**No hay riesgo de dejar la caja fuera.** `autorizado_admin` (`hub/servidor.rs`)
+compara contra `estado.token`, el token propio del hub, que **no** está en el
+registro de dispositivos emparejados. Revocar todos no puede revocar la caja.
+
+**Y hay una sinergia que conviene aprovechar.** Revocar un dispositivo lo saca de
+la ventana de «vivo», así que sus ventas sin confirmar pasan a **«Por adoptar»
+de inmediato** —sin esperar los 15 minutos—. O sea que cerrar turno es
+exactamente el momento en que la caja debería recoger lo que quedó suelto en los
+teléfonos.
+
+**El orden importa, y al revés destruye trabajo:**
+
+1. **Revocar todos.**
+2. **Drenar el respaldo** («Recuperar ahora»), que ahora sí ve todo lo huérfano.
+3. Sólo entonces dar el turno por cerrado.
+
+Si se revoca y no se drena, esas ventas se quedan en el disco de la caja
+esperando a un dispositivo que ya no va a volver. No se pierden —el respaldo las
+tiene— pero nadie las va a ir a buscar.
+
+**Y por eso no lo haría automático al cerrar turno.** Un turno se cierra mientras
+alguien puede seguir cobrando una última mesa, y un mesero al que le revocan el
+teléfono a media cuenta no entiende qué pasó: la app deja de imprimir sin decir
+por qué. Un botón explícito en la pantalla del hub, que diga cuántos va a
+revocar y cuántas ventas pendientes hay, y que ofrezca drenar después.
+
+**Lo mínimo que tiene que decir antes de ejecutar:** cuántos dispositivos, y si
+alguno tiene ventas sin confirmar. Revocar a ciegas es barato de deshacer
+—se vuelve a escanear el QR— pero a media comida cuesta un servicio.
+
 ### 9 · La URL por nombre funciona y nadie puede descubrirla
 
 `http://invventa-caja.local:3000` abre la app — comprobado el 17-ago desde
