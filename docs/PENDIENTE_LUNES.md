@@ -156,6 +156,29 @@ pero a media comida cuesta un servicio.
 > su pantalla llena de rojo por ventas que sí llegaron — y lo que se aprende de
 > eso es a no mirar ese panel nunca más.
 
+### 11 · El updater no avisa solo — y eso está decidido, no roto
+
+Revisado el 17-ago y **se mantiene como está**. Se anota porque casi se
+«arregla» por error: mirando quién llama a `buscarActualizacion` parece un
+descuido —sólo el botón de `HubScreen`— pero la cabecera de `Actualizacion.js`
+lo explica: nada al arrancar, porque el arranque de la caja es a las once
+abriendo el local, y la política es «sólo actualizaciones de seguridad, raras y
+avisadas».
+
+**De qué depende, que es lo que hay que vigilar:** «avisadas» significa que Chris
+avisa al cliente. Eso funciona con UN restaurante. Con tres, el local que se
+quede sin su llamada no se entera nunca — la caja no comprueba por su cuenta, y
+una versión con un arreglo urgente puede no llegar jamás sin que nada falle a la
+vista.
+
+**Disparador para reconsiderarlo: el segundo cliente.** Y la forma que respetaría
+el motivo original es un sondeo diario **fuera de horas de servicio**, con aviso
+discreto. Nunca al arrancar, nunca instalando solo — eso último es intocable
+mientras no haya certificado de firma.
+
+Queda escrito en el propio módulo para que el siguiente que mire no repita la
+confusión.
+
 ### 9 · La URL por nombre funciona y nadie puede descubrirla
 
 `http://invventa-caja.local:3000` abre la app — comprobado el 17-ago desde

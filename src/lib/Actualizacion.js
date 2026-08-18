@@ -20,6 +20,22 @@
  * que hace el local a las once de la mañana y no es el momento de proponer
  * nada. La política acordada es «sólo actualizaciones de seguridad, raras y
  * avisadas», así que un sondeo automático sería ruido casi todo el año.
+ *
+ * ── EL SUPUESTO EN QUE SE APOYA, Y CUÁNDO CADUCA (17-ago) ──────────────────
+ * Se revisó esta decisión y **se mantiene**, pero conviene dejar escrito de qué
+ * depende: «avisadas» significa que **Chris avisa al cliente**. Eso funciona
+ * con UN restaurante.
+ *
+ * Con tres, «avisar» deja de ser un mensaje y pasa a ser tres llamadas, y el
+ * local que se quede sin la suya no se entera **nunca**: la caja no comprueba
+ * por su cuenta, así que una versión con un arreglo urgente puede no llegar
+ * jamás sin que nada falle a la vista. Toda la maquinaria del updater —las
+ * llaves, el `latest.json`, `publicar.mjs`— queda detrás de un botón que vive
+ * en una pantalla de diagnóstico que el dueño de un restaurante no abre.
+ *
+ * **Disparador para reconsiderarlo: el segundo cliente.** La forma que
+ * respetaría el motivo original es un sondeo diario fuera de horas de servicio
+ * con un aviso discreto — nunca al arrancar, nunca instalando solo.
  */
 import { check } from '@tauri-apps/plugin-updater';
 import { enTauri, invocar } from './Hub';
