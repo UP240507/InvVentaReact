@@ -310,7 +310,21 @@ caer a `id` sólo si falta.
 > Queda escrito porque la primera prueba que se diseñó para separarlos comparaba
 > mesa contra mostrador cuando la variable real era nota contra sin nota.
 
-### 2 · Tras reabrir una cuenta, volver a pedirla no imprime nada. Y no avisa.
+### 2 · Tras reabrir una cuenta, volver a pedirla no imprime nada — **ARREGLADO el 17-ago**
+
+> Commit `655916e`. `orden_actual` lleva un contador de impresiones que entra en
+> el id, y el ticket deja de estampar el aviso de copia —texto de cocina en el
+> papel de un cliente—. Las comandas lo conservan.
+>
+> **Y salió un tercero por el camino:** «A Producción» armaba `orden_actual`
+> desde cero y **borraba el folio reservado**, así que reabrir, mandar algo a
+> cocina y cobrar acuñaba un folio nuevo. Es una explicación del hueco
+> `AZULHN-V-000004` más mundana que la del teléfono muerto, y no necesita que
+> muera nada. Arreglado en el mismo commit.
+>
+> `Comanda.test.js` en verde con cuatro pruebas nuevas, y la suite entera en la
+> máquina de Chris. **Falta verlo en papel**, con impresora: los cuatro pasos
+> están en `CHECKLIST_VERIFICACION.md`.
 
 Con el flujo en `ticket_final`, `handlePedirCuenta` llama a `enviarTicket`, y
 `construirTicket` arma el id así (`lib/Comanda.js:450`):

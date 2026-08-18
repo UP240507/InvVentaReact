@@ -15,7 +15,8 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
 
 1. ~~El trigger que castea `it->>'id'` a `bigint`.~~ **Arreglado el 17-ago.**
    Era el que ensuciaba cualquier medición del camino de la cola; ya no estorba.
-2. La reimpresión tras reapertura.
+2. ~~La reimpresión tras reapertura.~~ **Arreglado el 17-ago** (`655916e`),
+   pendiente de verse en papel.
 3. El centavo de más en el total.
 4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
 5. La exclusión por token de la caja, y el `23505` marcado como fallo.
@@ -69,9 +70,18 @@ compartir estado global entre archivos con `--isolate=false`.
 > false` explícito, y `handlePedirCuenta` lo vuelve a pasar al reusar el ticket.
 > Falta el papel —o mejor, el cajón— que lo demuestre.
 
-- [ ] **Reimprimir tras reabrir** — bloqueado por el fallo 2. Cuando esté
-      arreglado: reabrir, agregar algo, volver a pedir la cuenta, y que **salga
-      un papel nuevo** con el total nuevo, el mismo folio y su aviso de copia.
+### La reapertura, con impresora — 18-ago
+
+Ya no está bloqueado: el arreglo entró el 17-ago y la suite pasa. Falta el papel.
+Son cuatro, y el tercero es el que junta los dos arreglos:
+
+- [ ] Mesa con productos → **Pedir Cuenta** → sale **un** papel.
+- [ ] **Pedir Cuenta otra vez**, sin tocar nada → sale **otro** papel, idéntico.
+      Antes no salía nada y tampoco avisaba.
+- [ ] **Reabrir**, agregar algo, **A Producción**, Pedir Cuenta → papel con el
+      **total nuevo** y **el mismo folio**.
+- [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
+      `public.ventas`.
 
 ## 10 · Lo que queda del 13-ago
 
