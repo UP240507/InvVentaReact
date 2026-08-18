@@ -939,6 +939,35 @@ export default function PosScreen() {
       }
     });
 
+    // ── EL FOLIO IMPRESO QUEDA REGISTRADO, AUNQUE LA CUENTA NO SE COBRE ─────
+    // Pedir la cuenta acuña un folio y lo reserva en `mesa.orden_actual`, que
+    // vive en el aparato hasta que la cola lo sincroniza. Si el aparato muere
+    // antes —o si la cuenta acaba no cobrándose— esa reserva se pierde y queda
+    // un HUECO en la serie de ventas: el cliente tiene un papel citando un
+    // número que ninguna venta va a llevar. Pasó en AZUL el 17-ago con
+    // `AZULHN-V-000004`.
+    //
+    // `Folio.js` separó las series de venta y comanda precisamente para no
+    // dejar huecos, «porque un hueco en una serie de ventas es exactamente la
+    // señal que un auditor busca». Esto no impide el hueco —para eso haría
+    // falta que la reserva sobreviva al aparato, y eso es una decisión de
+    // sincronización aparte— pero sí lo deja EXPLICADO: queda dicho qué folio
+    // se imprimió, en qué mesa y por cuánto.
+    //
+    // Y la auditoría ya sí sobrevive al aparato: entró en el respaldo hoy.
+    if (folioCuenta) {
+      registrarAuditoria?.({
+        fecha: new Date().toISOString(),
+        usuario: user?.nombre ?? 'Mesero',
+        accion: 'CUENTA_IMPRESA',
+        modulo: 'POS',
+        nivel: 'info',
+        detalles:
+          `Folio ${folioCuenta} impreso para ${mesaActual?.nombre ?? mesaActual?.id}. ` +
+          `Total: $${granTotal}. Impresión ${impresionActual}.`,
+      });
+    }
+
     showToast('Cuenta solicitada. Notificando a caja...', 'info');
     setTimeout(() => {
       navigate('/mesas');
