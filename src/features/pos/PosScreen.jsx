@@ -793,10 +793,27 @@ export default function PosScreen() {
       ...item,
       cantidad_enviada: item.cantidad,
     }));
+    // ── SE CONSERVA LO QUE YA HABÍA EN LA ORDEN ─────────────────────────────
+    // Antes esto se armaba desde cero —`{ items, subtotal, total }`— y **se
+    // llevaba por delante el folio reservado**. La secuencia que lo destapa es
+    // corriente: pedir cuenta (acuña folio), reabrir, agregar algo, mandarlo a
+    // cocina, cobrar. Al cobrar ya no había folio que reutilizar, así que se
+    // acuñaba otro y el cliente se quedaba con un papel citando un número que
+    // ninguna venta iba a tener. Encontrado el 17-ago persiguiendo el hueco
+    // `AZULHN-V-000004`, que primero se atribuyó al teléfono que murió.
+    //
+    // El hueco importa por lo que significa fuera de aquí: `Folio.js` separó las
+    // series de venta y comanda precisamente para no dejar huecos, porque un
+    // hueco en una serie de ventas es la primera señal que busca un auditor.
     const mesaActualizada = {
       ...mesaActual,
       estado: 'ocupada',
-      orden_actual: { items: carritoMarcado, subtotal, total: granTotal },
+      orden_actual: {
+        ...(mesaActual?.orden_actual || {}),
+        items: carritoMarcado,
+        subtotal,
+        total: granTotal,
+      },
     };
     enqueueAction('mesas', 'upsert', mesaActualizada);
     useAppStore.setState((prev) => ({
@@ -831,6 +848,27 @@ export default function PosScreen() {
         })
       : null;
 
+    // ── POR QUÉ SE CUENTAN LAS IMPRESIONES ──────────────────────────────────
+    // El id del documento sale del folio, y el folio NO cambia al reabrir —eso
+    // es correcto y el cliente tiene ese número en la mano—. Pero el hub
+    // descarta por id ya impreso (`hub/cola.rs`), así que la segunda cuenta de
+    // la misma mesa llegaba con el id de la primera y se tiraba **en silencio**:
+    // `Recibo::Duplicado` no es un error para el hub, la promesa volvía con
+    // `ok`, y el mesero pulsaba sin obtener papel ni aviso. Encontrado en AZUL
+    // el 15-ago, y es justo el caso en que hace falta un papel nuevo: se reabre
+    // para agregar algo, y el total cambia.
+    //
+    // El contador va en la orden y no en un `Date.now()` a propósito. Con el
+    // reloj, un POST duplicado por la LAN sería otro id y saldrían dos papeles
+    // por una sola pulsación, que es lo que el deduplicado existe para evitar.
+    // Con el contador, dos pulsaciones distintas dan documentos distintos y la
+    // misma pulsación repetida da el mismo: cada uno protege de lo suyo.
+    const impresionesPrevias = safeNumber(
+      mesaActual?.orden_actual?.impresiones,
+      0,
+    );
+    const impresionActual = impresionesPrevias + 1;
+
     const mesaActualizada = {
       ...mesaActual,
       estado: 'por_cobrar',
@@ -838,6 +876,7 @@ export default function PosScreen() {
         items: carrito,
         subtotal,
         total: granTotal,
+        impresiones: impresionActual,
         ...(folioCuenta ? { folio: folioCuenta } : {}),
       },
     };
@@ -882,6 +921,10 @@ export default function PosScreen() {
     const enviar = esTicketFinal
       ? enviarTicket({ ...datosCuenta, folio: folioCuenta }, configuracion, {
           abrirCajon: false,
+          // Distingue esta impresión de la anterior de la MISMA cuenta. Sólo
+          // cambia el id del documento: el papel sale idéntico, sin aviso de
+          // copia. Ver `construirTicket`.
+          copia: impresionActual,
         })
       : enviarPreCuenta(datosCuenta, configuracion);
 

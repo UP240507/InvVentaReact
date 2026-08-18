@@ -447,6 +447,7 @@ export function construirTicket(
   meta.push({ etiqueta: 'Hora', valor: horaDe(venta.fecha) });
 
   return {
+    // `copia` SÓLO entra en el id, nunca en el papel. Ver `avisos` abajo.
     id: `ticket::${venta.id ?? venta.folio}${sufijoCopia(copia)}`,
     tipo: 'ticket',
     zona: null,
@@ -454,7 +455,23 @@ export function construirTicket(
     subtitulo: '',
     emisor: datosDelEmisor(configuracion),
     meta,
-    avisos: avisosDeCopia(copia),
+    // ── EL TICKET NO LLEVA AVISO DE COPIA, Y ES DELIBERADO ──────────────────
+    // Aquí estaba `avisosDeCopia(copia)`, que estampa «REIMPRESIÓN (copia 2) —
+    // NO PREPARAR DE NUEVO». Ese texto está escrito para la cocina: le dice a
+    // un cocinero que no vuelva a hacer el platillo. En el papel de un cliente
+    // no significa nada, y encima insinúa que su cuenta es un borrador.
+    //
+    // La copia de un ticket es un DUPLICADO EXACTO. Decisión de Chris, 17-ago:
+    // dos papeles con el mismo folio y distinto total —lo que pasa al reabrir
+    // una cuenta— no se distinguen entre sí, y se acepta esa ambigüedad a
+    // cambio de que el comprobante no lleve texto que el cliente no entiende.
+    // Quien necesite saber qué pasó tiene la auditoría: `REAPERTURA_CUENTA`
+    // registra la reapertura con folio y con quién autorizó.
+    //
+    // `avisosDeCopia` sigue viva y aplicándose a las COMANDAS, donde el
+    // duplicado silencioso cuesta comida: cocina ve dos papeles iguales y
+    // prepara el platillo dos veces.
+    avisos: [],
     cuerpo,
     totales,
     pie,

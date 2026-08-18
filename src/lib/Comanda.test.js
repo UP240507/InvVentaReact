@@ -175,6 +175,53 @@ describe('idempotencia y reimpresión', () => {
     expect(a.id).toBe('ticket::99');
     expect(b.id).toBe('ticket::99::c3');
   });
+
+  // El id sale del folio cuando la venta aún no tiene id — que es el caso de la
+  // cuenta que se imprime ANTES de cobrar. Sin `copia`, la segunda cuenta de la
+  // misma mesa llegaba al hub con el id de la primera y se descartaba como
+  // duplicada, en silencio. Es el fallo encontrado en AZUL el 15-ago.
+  it('dos impresiones de la MISMA cuenta dan documentos distintos', () => {
+    const cuenta = { folio: 'AZULHN-V-000004', items: [], total: 0 };
+    const primera = construirTicket(cuenta, {
+      configuracion: config,
+      copia: 1,
+    });
+    const segunda = construirTicket(cuenta, {
+      configuracion: config,
+      copia: 2,
+    });
+
+    expect(primera.id).toBe('ticket::AZULHN-V-000004');
+    expect(segunda.id).toBe('ticket::AZULHN-V-000004::c2');
+    expect(segunda.id).not.toBe(primera.id);
+  });
+
+  // La contraparte, y la razón de que el contador NO sea `Date.now()`: la misma
+  // pulsación repetida por la LAN tiene que seguir dando el mismo id, o el
+  // deduplicado del hub deja de servir para lo que existe.
+  it('la misma impresión repetida conserva el id', () => {
+    const cuenta = { folio: 'AZULHN-V-000004', items: [], total: 0 };
+    const a = construirTicket(cuenta, { configuracion: config, copia: 2 });
+    const b = construirTicket(cuenta, { configuracion: config, copia: 2 });
+    expect(a.id).toBe(b.id);
+  });
+
+  // El aviso de copia es de COCINA: le dice a un cocinero que no vuelva a hacer
+  // el platillo. En el papel de un cliente no significa nada y sugiere que su
+  // cuenta es un borrador. La copia de un ticket es un duplicado exacto.
+  it('el TICKET no lleva aviso de reimpresión, ni siquiera en la copia', () => {
+    const venta = { id: 99, folio: 'POS-00099', items: [], total: 0 };
+    const copia = construirTicket(venta, { configuracion: config, copia: 4 });
+    expect(copia.avisos).toEqual([]);
+  });
+
+  it('pero la COMANDA lo conserva: ahí el duplicado cuesta comida', () => {
+    const copia = construirComandas(comandaBase, {
+      configuracion: config,
+      copia: 2,
+    });
+    expect(copia[0].avisos.join(' ')).toMatch(/REIMPRESIÓN/);
+  });
 });
 
 describe('construirTicket — dinero', () => {
