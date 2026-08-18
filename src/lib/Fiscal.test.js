@@ -301,3 +301,74 @@ describe('calcularVenta · descuento por producto', () => {
 });
 
 const round = (n) => Math.round(n * 100) / 100;
+
+// ─── El centavo de más, encontrado en AZUL el 15-ago ─────────────────────────
+//
+// Chris lo vio en un papel, no en una prueba: dos jugos de $40 salían a $80.01.
+// El IVA se calculaba sobre el subtotal YA REDONDEADO, así que el medio centavo
+// del desglose hacia atrás se propagaba al total.
+//
+// La regla que fija esto: cuando el precio de menú incluye IVA, **el precio ES
+// el total** y el desglose tiene que sumar exactamente eso.
+describe('calcularVenta · el desglose suma exactamente el total', () => {
+  it('dos jugos de $40 se cobran a $80.00, no a $80.01', () => {
+    const r = calcularVenta({ items: [{ precio: 40, cantidad: 2 }] });
+    expect(r.total).toBe(80);
+    expect(r.subtotal).toBe(68.97);
+    expect(r.iva).toBe(11.03);
+  });
+
+  // La invariante de verdad, y la que hay que conservar al tocar esto: da igual
+  // el caso, lo que se enseña tiene que cuadrar. Un ticket cuyo subtotal e IVA
+  // no suman su total es un ticket que un cliente puede discutir.
+  const casos = [
+    ['un solo jugo', { items: [{ precio: 40, cantidad: 1 }] }],
+    [
+      'hamburguesa y jugo',
+      { items: [{ precio: 150, cantidad: 1 }, { precio: 40, cantidad: 1 }] },
+    ],
+    [
+      'con propina fija',
+      {
+        items: [{ precio: 150, cantidad: 1 }, { precio: 40, cantidad: 1 }],
+        propinaMonto: 19,
+      },
+    ],
+    [
+      'con descuento de ticket',
+      { items: [{ precio: 40, cantidad: 2 }], descuentoPct: 10 },
+    ],
+    [
+      'con descuento de línea',
+      {
+        items: [
+          { precio: 40, cantidad: 2, descuento: { tipo: 'pct', valor: 50 } },
+        ],
+      },
+    ],
+    ['con IVA en cero', { items: [{ precio: 40, cantidad: 2 }], ivaRate: 0 }],
+    [
+      'con precios SIN IVA incluido',
+      { items: [{ precio: 100, cantidad: 1 }], preciosIncluyenIva: false },
+    ],
+  ];
+
+  it.each(casos)('%s: subtotal + IVA + propina === total', (_, params) => {
+    const r = calcularVenta(params);
+    const suma = Math.round((r.subtotal + r.iva + r.propina) * 100) / 100;
+    expect(suma).toBe(r.total);
+  });
+
+  // El trigger `verificar_total_venta` calcula `round(base * (1 + rate), 2)`
+  // sin redondear en medio. Antes el front y Postgres discrepaban POR
+  // CONSTRUCCIÓN, y lo único que impedía que cada venta saliera marcada como
+  // divergente era la tolerancia de dos centavos. Esta prueba fija que los dos
+  // motores de dinero digan lo mismo.
+  it('coincide con lo que calcula el trigger de Postgres', () => {
+    const items = [{ precio: 40, cantidad: 2 }];
+    const r = calcularVenta({ items });
+    const bruto = 80;
+    const esperadoTrigger = Math.round((bruto / 1.16) * 1.16 * 100) / 100;
+    expect(r.total).toBe(esperadoTrigger);
+  });
+});

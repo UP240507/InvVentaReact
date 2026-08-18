@@ -104,10 +104,41 @@ export function calcularVenta({
   // 2) Descuento de TICKET sobre lo que quedó
   const descPct = Math.min(100, Math.max(0, num(descuentoPct)));
   const descuentoTicket = round2(baseAntesDesc * (descPct / 100));
-  const subtotal = round2(baseAntesDesc - descuentoTicket);
 
-  // IVA sobre la base NETA (post-descuentos)
-  const iva = round2(subtotal * rate);
+  // La base neta SIN redondear todavía. El redondeo se hace una sola vez, al
+  // final, y sobre cada cifra que se va a enseñar — no en cascada.
+  const baseNeta = baseAntesDesc - descuentoTicket;
+  const subtotal = round2(baseNeta);
+
+  // ── DE DÓNDE SALE EL IVA, Y POR QUÉ NO DE `subtotal * rate` ───────────────
+  // Aquí estaba `round2(subtotal * rate)`, y con eso dos jugos de $40 se
+  // cobraban a **$80.01**: 80/1.16 = 68.9655 → subtotal 68.97, y el IVA salía
+  // del subtotal YA REDONDEADO —68.97 × 0.16 = 11.0352 → 11.04—, así que el
+  // medio centavo del primer redondeo se propagaba hacia arriba. Encontrado en
+  // AZUL el 15-ago, en un papel: apareció en tres tickets del mismo día.
+  //
+  // Cuando el precio de menú YA INCLUYE IVA, el total no se deriva: **el precio
+  // es el total**, y el subtotal y el IVA son un desglose suyo que tiene que
+  // sumar exactamente eso. Así que se calcula lo cobrable y el IVA es el resto.
+  //
+  // Con `precios_incluyen_iva` en false el caso es el contrario —el IVA se suma
+  // encima de un precio que no lo trae— y ahí `subtotal * rate` sí es la cuenta
+  // correcta.
+  //
+  // Efecto secundario que importa: `verificar_total_venta` en Postgres calcula
+  // `round(base * (1 + rate), 2)` sin redondear en medio, o sea que **antes el
+  // front y el trigger discrepaban por construcción** y sólo la tolerancia de
+  // dos centavos impedía que cada venta saliera marcada como divergente. Ahora
+  // coinciden exactamente.
+  let cobrable; // lo que paga el cliente, sin propina
+  let iva;
+  if (preciosIncluyenIva) {
+    cobrable = round2(baseNeta * (1 + rate));
+    iva = round2(cobrable - subtotal);
+  } else {
+    iva = round2(subtotal * rate);
+    cobrable = round2(subtotal + iva);
+  }
 
   // Propina: fija o % de la base neta. NUNCA gravada.
   const propina =
@@ -115,7 +146,7 @@ export function calcularVenta({
       ? round2(num(propinaMonto))
       : round2(subtotal * (num(propinaPct) / 100));
 
-  const total = round2(subtotal + iva + propina);
+  const total = round2(cobrable + propina);
 
   return {
     subtotal,
