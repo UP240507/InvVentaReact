@@ -198,13 +198,32 @@ export default function HubScreen() {
   const ejecutarDrenaje = useCallback(async () => {
     setDrenando(true);
     try {
-      const n = await drenarRespaldo();
-      showToast(
-        n > 0
-          ? `${n} venta${n === 1 ? '' : 's'} recuperada${n === 1 ? '' : 's'}.`
-          : 'No había nada que recuperar.',
-        n > 0 ? 'success' : 'info',
-      );
+      // Tres casos, y antes los tres decían lo mismo. «Falló todo» y «no había
+      // nada que hacer» compartían el cero, así que un fallo al recuperar una
+      // venta se anunciaba como «No había nada que recuperar» — la peor de las
+      // dos verdades posibles, porque invita a no volver a mirar.
+      const { subidas, fallidas, total, errores } = await drenarRespaldo();
+      const plural = (n) => (n === 1 ? '' : 's');
+
+      if (total === 0) {
+        showToast('No había nada que recuperar.', 'info');
+      } else if (fallidas === 0) {
+        showToast(
+          `${subidas} venta${plural(subidas)} recuperada${plural(subidas)}.`,
+          'success',
+        );
+      } else {
+        // El motivo va en el aviso, no sólo a la consola: en un build de
+        // release no hay consola que abrir, así que ahí el error no existe.
+        const causa = errores[0] ? ` (${errores[0]})` : '';
+        showToast(
+          subidas > 0
+            ? `${subidas} recuperada${plural(subidas)}, ${fallidas} sin subir${causa}. Vuelve a intentarlo.`
+            : `No se pudo recuperar ninguna de las ${fallidas}${causa}. Siguen guardadas en esta caja.`,
+          'error',
+        );
+      }
+
       await refrescarRespaldo();
     } finally {
       setDrenando(false);
@@ -690,9 +709,9 @@ export default function HubScreen() {
               </h2>
               <p className="text-sm text-adm-muted mb-4">
                 Versión instalada:{' '}
-                <strong>{version || novedad?.actual || '—'}</strong>. No
-                se busca sola al arrancar: las once de la mañana no es momento
-                de proponerle nada a nadie.
+                <strong>{version || novedad?.actual || '—'}</strong>. No se
+                busca sola al arrancar: las once de la mañana no es momento de
+                proponerle nada a nadie.
               </p>
 
               {novedad?.hay ? (

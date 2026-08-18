@@ -727,19 +727,35 @@ export const useSyncStore = create((set, get) => ({
    *
    * Las tres RPC son idempotentes por su cuenta desde que `decrementar_stock`
    * tiene su ledger; si no lo fueran, esto descontaría inventario dos veces.
+   *
+   * ── DEVUELVE UN RECUENTO, NO UN NÚMERO, Y NO PINTA NADA ─────────────────
+   * Antes devolvía `subidas.length` y además sacaba su propio aviso. Con eso,
+   * «falló todo» y «no había nada que hacer» daban el mismo cero, así que la
+   * pantalla decía **«No había nada que recuperar»** cuando la verdad era que
+   * sí había y no se pudo. El único rastro iba a `console.warn`, y la consola
+   * no se abre en un build de release: un fallo al recuperar una venta era
+   * literalmente invisible. Encontrado en AZUL el 15-ago.
+   *
+   * Ahora informa de los tres casos y deja el aviso a quien tiene la pantalla
+   * delante. Una función de sincronización que además pinta toasts acaba
+   * dando dos mensajes distintos para el mismo suceso, que es lo que pasaba.
+   *
+   * @returns {Promise<{subidas:number, fallidas:number, total:number, errores:string[]}>}
    */
   drenarRespaldo: async () => {
+    const vacio = { subidas: 0, fallidas: 0, total: 0, errores: [] };
     let anotaciones;
     try {
       const r = await respaldoPendiente();
-      if (!r?.ok) return 0;
+      if (!r?.ok) return vacio;
       anotaciones = Array.isArray(r.anotaciones) ? r.anotaciones : [];
     } catch {
-      return 0;
+      return vacio;
     }
-    if (anotaciones.length === 0) return 0;
+    if (anotaciones.length === 0) return vacio;
 
     const subidas = [];
+    const errores = [];
 
     for (const a of anotaciones) {
       const t = a?.tarea;
@@ -760,29 +776,22 @@ export const useSyncStore = create((set, get) => ({
         // hay FK entre ellas (comprobado el 10-ago). Se queda sin confirmar, o
         // sea que sigue en el disco de la caja para el siguiente intento —que
         // es exactamente lo que se quiere.
-        console.warn(
-          `[respaldo] no se pudo adoptar ${a?.clave}:`,
-          e?.message || e,
-        );
+        const detalle = e?.message || String(e);
+        errores.push(detalle);
+        console.warn(`[respaldo] no se pudo adoptar ${a?.clave}:`, detalle);
       }
     }
 
     if (subidas.length > 0) {
       await confirmarRespaldo(subidas).catch(() => {});
-      try {
-        const { useAppStore } = await import('./useAppStore');
-        useAppStore
-          .getState()
-          .showToast?.(
-            `${subidas.length} venta${subidas.length === 1 ? '' : 's'} recuperada${subidas.length === 1 ? '' : 's'} de un dispositivo desconectado.`,
-            'success',
-          );
-      } catch {
-        /* noop */
-      }
     }
 
-    return subidas.length;
+    return {
+      subidas: subidas.length,
+      fallidas: errores.length,
+      total: anotaciones.length,
+      errores,
+    };
   },
 
   // ── Gestión de dead-letter ───────────────────────────────────────────────
