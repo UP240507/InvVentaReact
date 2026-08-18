@@ -44,8 +44,11 @@ Ver `docs/VERIFICADO_15-AGO.md`. Los que quedan son de pocas líneas.
   El lote de lógica pura, sin DOM ni globales. `--isolate=false` aquí es seguro
   y rápido.
 
-> `cargo test` y `npm run test:run` se corrieron el 15-ago, los dos en verde.
-> Hay que repetirlos después de arreglar los tres fallos.
+> **Obligatorio antes de compilar el 18-ago.** El 17 se tocaron `Fiscal.js`,
+> `Comanda.js`, `PosScreen.jsx`, `useSyncStore.js`, `useAppStore.js`,
+> `Respaldo.js` y `HubScreen.jsx`. Se corrieron **663 pruebas de `src/lib` y
+> `src/store` en verde**, pero **las suites de pantalla no**, y `PosScreen` y
+> `HubScreen` están tocados. `compilar.ps1` las corre solo.
 
 ### Sobre `--isolate=false`, que costó dos días de fantasmas
 
@@ -153,13 +156,14 @@ contra una base que se sabe buena.
 
 - `ModalCobro` aún no usa `lib/Autorizacion.js` — tercera copia evitada, segunda
   pendiente de migrar.
-- El `id` de `auditoria` sigue saliendo de `Date.now()` (ver backlog §7).
+- ~~El `id` de `auditoria` sale de `Date.now()`.~~ Arreglado el 17-ago: usa
+  `SERIE_AUDITORIA`, que llevaba reservada sin usar desde `IdVenta.js`.
 - CSP nulo en `tauri.conf.json` y `CorsLayer::permissive()` en el hub.
-- La reimpresión de documentos existe en `Comanda.js` y **nadie la llama** —
-  ahora se sabe que hace falta: es el fallo 2.
+- ~~La reimpresión de documentos existe en `Comanda.js` y nadie la llama.~~ Ya
+  se llama: el contador de impresiones de `orden_actual` entra en el id.
 - `mesas.mesero_id` sigue muerto: bloquea tres de las cinco propuestas de sala.
 - Queda por localizar el archivo que ensucia `matchMedia` entre ficheros. No
   rompe nada con aislamiento; sólo estorba al correr sin él.
-- `total_divergente` lo calcula un trigger y **nada en el front lo lee**. Con el
-  fallo 3 se supo además que su tolerancia de `0.02` es lo único que impide que
-  cada venta salga marcada.
+- `total_divergente` lo calcula un trigger y **nada en el front lo lee**. Desde
+  el arreglo del fallo 3 el front y Postgres coinciden exacto, así que el
+  detector ya no vive al borde de gritar por todo: leerlo pasa a ser útil.
