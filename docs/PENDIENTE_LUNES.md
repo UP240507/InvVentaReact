@@ -58,12 +58,6 @@ produjo un falso fallo que costó dos pruebas descartar.
    release no se abre. De paso, el store dejó de pintar toasts: sacaba el suyo
    además del de `HubScreen`.
 
-   > Y con esto, una pregunta abierta: por qué una venta cobrada **por la caja**
-   > pasó a «Por adoptar» al reiniciar la app, si la caja se excluye a sí misma
-   > comparando tokens. Hipótesis: al reiniciar toma un token distinto. Se
-   > comprueba en diez segundos y está anotado en el checklist. **Ver el fallo
-   > 5: la carrera que esa exclusión existe para evitar ya ocurrió.**
-
 5. **La exclusión por token, y el `23505` que se marca como fallo.** De las dos
    mitades, **una hecha y otra abierta**:
 
