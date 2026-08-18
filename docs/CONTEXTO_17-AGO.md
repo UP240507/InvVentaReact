@@ -24,8 +24,10 @@ mexicanos. Repo `UP240507/InvVentaReact`, carpeta
 - Versión **0.2.4**, compilada, publicada e **instalada en la caja de AZUL**.
 - **~22 commits el 17-ago.** El remoto es `UP240507/InvVentaReact` y está al día
   salvo los últimos de documentación; comprobar con `git status -sb`.
-- Pruebas: **663 en verde** en `src/lib` y `src/store`, corridas aquí. La suite
-  completa (`npm run test:run`) la corrió Chris en su máquina tras los cambios.
+- Pruebas: **`npm run test:run` completo, en verde**, corrido por Chris en su
+  máquina el 17-ago **después** de los siete arreglos. Es lo que autoriza a
+  compilar. (Aparte, 663 de `src/lib` y `src/store` se corrieron desde el
+  sandbox durante el trabajo.)
 
 > **Lo que NO se pudo correr desde el sandbox:** las suites de DOM. jsdom tarda
 > más de lo que aguanta la herramienta, así que `PosScreen.integration` y
@@ -119,7 +121,8 @@ Está escrito en `CHECKLIST_VERIFICACION.md`. En corto:
 6. Descartar los rojos del teléfono y hacer una venta sin red: **no deben
    volver** al reconectar.
 
-Antes de todo eso: **`npm run test:run` completo**.
+La suite ya está en verde tras los arreglos, así que lo de mañana es sólo papel:
+lo que falta es ver en una tira lo que las pruebas no pueden ver.
 
 ## 8 · Peticiones de diseño con decisión tomada
 
