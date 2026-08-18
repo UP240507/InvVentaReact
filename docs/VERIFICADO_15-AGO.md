@@ -111,6 +111,88 @@ correo.
   semanas, no la de hoy. Si guardara la actual, el registro diría que estuvo 40
   días dentro.
 
+### §8 · El aviso del KDS — sonido y notificaciones
+
+Verificado entre el 15 y el 17-ago, sobre binarios que ya llevaban el arreglo:
+`tauri-plugin-notification` entró en `0b07b88`, anterior a los modificadores, así
+que la 0.2.2 ya lo tenía.
+
+- Como **Chef**, aparece «Activar avisos», y al pulsarlo Windows pide permiso.
+- El **cartel** sale con la mesa y los platillos, y se va a los 6 s.
+- Marcar un item listo **no vuelve a sonar** — el error clásico de recalcular la
+  lista y confundir cualquier cambio con una llegada.
+- **Recargar con comandas en curso no suena**, ni al cambiar a Barra por lo que
+  ya había, ni una comanda sólo de barra estando en Cocina.
+- **Minimizado sale la notificación de Windows**, al volver el cartel sigue
+  puesto, y dos comandas seguidas dan **una sola** notificación.
+- Como **Gerente o Admin**, no aparece el botón y no suena nada.
+
+Y dos cosas del teléfono que conviene dejar escritas:
+
+- **El sonido dura ~1.6 s y eso es por diseño.** `lib/Campana.js`: tres notas de
+  0.14 s, repetidas hasta tres veces. Es un timbre, no una alarma: suena y se
+  calla en vez de insistir hasta que alguien lo reconozca. Si en AZUL se queda
+  corto con el ruido de la cocina, se sube `repeticiones` — pero un aviso que
+  insiste se acaba silenciando, y entonces no avisa nunca.
+- **Suena con la pantalla apagada.** No estaba garantizado: los navegadores
+  móviles suelen suspender el audio al bloquear.
+- Las **notificaciones del sistema en teléfono** quedan fuera por decisión, no
+  como pendiente. El sonido es la vía en el móvil.
+
+### §9 · La salida del KDS — el barista puede irse
+
+Verificado el 17-ago, entero: como Barista el botón dice «Mi perfil» y lleva ahí,
+el gorro de chef del encabezado también, y en Mi perfil aparece el riel con
+«Monitor Cocina» para volver. Como Admin el mismo botón dice «Salir» y lleva a
+`/dashboard`, cerrar sesión cae en `/loginempleados`, y con entrada abierta
+primero exige marcar salida. En el POS, salir desde Mostrador con sesión de
+mesero cae en `/mesas`.
+
+El destino lo calcula `lib/Escape.js` y `Escape.test.js` lo comprueba contra
+todos los roles y contra roles inventados. Lo que se acaba de ver en pantalla es
+que esa garantía llega hasta los botones de verdad.
+
+> **De aquí salió una petición nueva**, que no es un fallo sino diseño: el KDS
+> debería ser **sólo lectura fuera de tu estación**. Ver `PENDIENTE_LUNES.md` §7.
+
+### §10 · mDNS
+
+Verificado el 17-ago: `http://invventa-caja.local:3000` abre la app **desde el
+teléfono y desde otra PC**. La caja se encuentra por nombre, que es lo que evita
+que un cambio de IP por DHCP deje a todos los teléfonos del local sin hub a la
+vez, en hora de comida y sin ningún error a la vista.
+
+Se probó estando la caja en un hotspot. Conviene repetirlo una vez en el wifi de
+AZUL, que es la red donde va a vivir — el tethering aísla clientes y rompe
+multicast con facilidad, así que si funcionó ahí, en una red normal debería ir
+mejor, no peor.
+
+> **El primer punto del checklist era inejecutable** y se retira: pedía leer
+> `[hub] anunciado como…` en la consola de la caja, y esa consola no existe en un
+> build de release. Lo que importa es que la dirección abra, y abre.
+>
+> **Y falta enseñarla.** `Anuncio::url()` está escrita, probada, y su comentario
+> dice «para enseñarla junto a la de IP en la pantalla del hub» — pero nadie la
+> llama salvo un `println!`. El servidor no la expone y `HubScreen` no la pinta.
+> Hoy el nombre funciona y **ningún usuario tiene forma de descubrirlo**. Ver
+> `PENDIENTE_LUNES.md`.
+
+### §11 · Lo responsivo, en aparatos de verdad
+
+Verificado el 17-ago, entero y fuera del simulador del navegador: con el teclado
+abierto en un modal del ERP **el botón de guardar sigue siendo tocable**, el zoom
+con dos dedos funciona, y en **tablet en horizontal** el Dashboard enseña los
+cuatro KPIs en fila.
+
+Era la única sección que no se podía delegar a una prueba: `modales-teclado.test.js`
+impide que vuelva a colarse un `vh`, pero no puede ver si el resultado se ve bien.
+
+### §4 · El PIN de mesero
+
+Comprobado el 17-ago: reabrir una cuenta desde una sesión de mesero **pide PIN**,
+y con el de un encargado reabre. Con eso §4 queda entero salvo la reimpresión,
+que es el fallo 2.
+
 ### §10 · El descuento de inventario es idempotente
 
 Medido con naranja, en el corte de red:
@@ -142,12 +224,26 @@ arregle el fallo 1. El contador es una alarma fiel.
 > **Mientras esa venta siga sin subir, no borrar los datos del navegador de la
 > caja.** Sólo vive ahí.
 
-La otra mitad —«Por adoptar», el teléfono que muere con la venta dentro— sigue
-sin probarse.
+**La otra mitad, verificada el 17-ago.** Se montó un hotspot sin salida a
+internet con la caja y un teléfono dentro, se cobró, y se le borraron al teléfono
+los datos de sitio antes de devolverle nada — matarlo a propósito con la venta
+dentro. Tras revocar el dispositivo, «Por adoptar» marcó **5** y «Recuperar
+ahora» las subió: 3 ventas de la caja, 1 del teléfono y 1 comanda. Las cinco
+comprobadas en `public.ventas` y `public.comandas`, no en el mensaje de la app.
+
+Lo escrito el 13-ago deja de ser una suposición.
+
+De aquí salieron los fallos **6** y **7**, que no van del respaldo sino de lo que
+el respaldo *no* cubre.
+
+> **Y una etiqueta que engaña, de las baratas de arreglar:** el bloque se llama
+> «Respaldo de ventas» y sus contadores incluyen **comandas**. Por eso «5» no
+> cuadraba con las 4 ventas y costó diez minutos de susto pensando que se había
+> perdido una. Que separe las dos cosas, o que diga «pendientes».
 
 ---
 
-## Los cinco fallos encontrados
+## Los siete fallos encontrados
 
 En el orden en que conviene atacarlos, que no es el de gravedad sino el de
 dependencia: hasta que el primero esté arreglado, su ruido se mete en cualquier
@@ -339,6 +435,67 @@ Lo que hay que corregir, aparte de la exclusión: **un `23505` al reintentar alg
 que ya está no es un fallo.** La fila existe, el objetivo se cumplió. Marcarlo en
 rojo y dejarlo en el log de auditoría es alarmar por algo que salió bien — y
 entrena a ignorar el panel donde vive el aviso de verdad.
+
+### 6 · La auditoría tiene un agujero justo donde muere un dispositivo
+
+Salió el 17-ago al probar el respaldo con un teléfono muerto de verdad, y es lo
+más serio que ha aparecido en toda la verificación.
+
+Las dos fuentes, consultadas directamente:
+
+| | |
+|---|---|
+| `public.ventas` | `AZULHN-V-000005`, $188, Diego Perez, **20:09:18** |
+| `public.auditoria` | última entrada a las **19:40:12** |
+
+**Hay un cobro en los libros sin ningún `COBRO_TICKET` en el registro.** Tampoco
+está la comanda de las 20:08. Y la pantalla se titula «Registro inmutable de
+seguridad y operaciones».
+
+La causa está en `lib/Respaldo.js:33`:
+
+```js
+export const TABLAS_RESPALDADAS = ['ventas', 'comandas', 'movimientos'];
+```
+
+`auditoria` no está en la lista. La venta se salvó porque el hub la respalda; su
+fila de auditoría se fue con el teléfono.
+
+No es un descuido cualquiera por dónde cae: **el hueco aparece exactamente en el
+escenario que un auditor miraría con más atención** — un dispositivo que
+desapareció con dinero dentro. Los libros y el registro discrepan justo ahí, y
+la discrepancia no distingue un teléfono sin batería de alguien borrando su
+rastro.
+
+Al arreglarlo conviene pensar qué más comparte esa condición. `movimientos` sí
+está respaldado; `auditoria` no. La pregunta no es sólo «añadir auditoría», es
+**qué otras tablas se pierden cuando muere un dispositivo** y si la lista se
+escribió pensando en el dinero y olvidando el rastro.
+
+### 7 · Un folio impreso puede no llegar a existir nunca
+
+Consecuencia del mismo escenario, y explica el hueco `AZULHN-V-000004` que
+apareció al contar las ventas recuperadas.
+
+`handlePedirCuenta` acuña el folio **antes de cobrar** —tiene que hacerlo: el
+papel que se lleva a la mesa es el comprobante y necesita número— y lo guarda en
+`mesa.orden_actual.folio`, que vive en el almacenamiento local del dispositivo.
+
+El teléfono pidió cuenta (acuñó `V-000004`), murió con esa reserva dentro, y el
+cobro posterior acuñó `V-000005`. Resultado: **el cliente se quedó con un papel
+que cita un folio que no existe en los libros**, y la serie de ventas tiene un
+hueco.
+
+Es justo lo que `Folio.js` dice que quiere evitar —«un hueco en una serie de
+ventas es exactamente la señal que un auditor busca»— entrando por otra puerta:
+allí se separaron las series para que las comandas no gastaran números de venta,
+y aquí los gasta una cuenta que nunca se cobró.
+
+> **Lo que está bien y conviene no romper al arreglarlo:** que el folio se acuñe
+> antes es correcto, y que no cambie al reabrir también — se comprobó el mismo
+> día en producción (`REAPERTURA_CUENTA` de la mesa 12 a las 19:39:59 con folio
+> `AZULHN-V-000003`, cobrada a las 19:40:12 con ese mismo folio). El problema no
+> es acuñar pronto: es que la reserva sólo exista en un aparato que puede morir.
 
 ---
 

@@ -63,6 +63,138 @@ el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
      que consigue es que se deje de mirar ese panel — que es donde vive el aviso
      de verdad.
 
+### 7 · El KDS, sólo lectura fuera de tu estación (Chris, 17-ago)
+
+**Lo que pidió Chris:** que un barista no pueda marcar listo un platillo de
+cocina por error, ni al revés. Y que los demás roles —dueño, gerente, admin—
+entren al KDS **en sólo lectura**: se meten a ver cuánto lleva una mesa
+esperando, no a cocinar un viernes por la noche.
+
+Es la continuación natural de §8, donde ya se decidió que a Gerente y Admin no
+les suena nada porque entran a supervisar. Aquí es lo mismo un paso más allá: si
+entran a mirar, no deberían poder tocar.
+
+**Dónde va.** `lib/Permisos.js` ya tiene `CAPACIDADES_BASE` por rol y
+`tieneFlag()` con lectura estricta —capacidades corruptas o ausentes cuentan como
+`false`—, así que esto es una capacidad más, no una pantalla nueva. La regla vive
+ahí y el KDS la consulta; no un `if` por rol repartido por los botones.
+
+**Cómo se ve, y esto importa más que la regla.** Un botón que está y no hace nada
+es exactamente el fallo del «Salir» del barista que se arregló el 12-ago. Las dos
+salidas honestas son: **no pintar el botón**, o pintarlo apagado **diciendo por
+qué**. Lo que no vale es dejarlo con su aspecto de siempre y que no responda.
+
+**Tres decisiones, tomadas el 17-ago:**
+
+1. **No se codifica la regla: se configura.** Las estaciones entran en la
+   pantalla de **Roles y Permisos**, como una capacidad más por rol, y cada local
+   activa lo que necesite. Así se resuelve solo el caso del Chef que lleva
+   también la barra a las tres de la tarde: en AZUL se desactiva, en un local que
+   trabaje de otra forma se activa. `roles_permisos.capacidades` ya es `jsonb`
+   editable por tenant, así que el sitio existe.
+
+2. **Con escotilla, y por PIN.** «Sólo lectura» sin salida deja la pantalla
+   bloqueada la noche que el KDS se atasca y el único en el local es el dueño.
+   Se usa `lib/Autorizacion.js` y el PIN de encargado, el mismo patrón que
+   reabrir una cuenta. Es la diferencia entre una regla y una trampa — y de paso
+   queda auditado quién tocó qué, que es más de lo que hay hoy.
+
+3. **Una sola guarda para las dos direcciones.** Marcar listo y deshacer son el
+   mismo botón: `estado: listo ? 'pendiente' : 'listo'`. Bloquear la acción
+   bloquea las dos, y eso es lo que se quiere: «no tocas esta estación» se
+   explica a un cocinero; «puedes desmarcar pero no marcar», no.
+
+   **Sin confirmación de doble toque**, que se valoró y se descartó. Marcar por
+   error cuesta un toque deshacerlo; una confirmación por platillo, con las manos
+   ocupadas y veinte comandas, es fricción constante contra un error barato. Las
+   confirmaciones se ganan cuando el error es caro o irreversible.
+
+### 9 · La URL por nombre funciona y nadie puede descubrirla
+
+`http://invventa-caja.local:3000` abre la app — comprobado el 17-ago desde
+teléfono y desde otra PC. Pero **no aparece en ninguna pantalla**.
+
+`Anuncio::url()` existe en `hub/anuncio.rs`, tiene su prueba, y su comentario
+dice literalmente «para enseñarla junto a la de IP en la pantalla del hub». Nadie
+la llama salvo un `println!` que en release no ve nadie: el servidor no la expone
+y `HubScreen` pinta sólo la IP.
+
+Es media hora, y convierte una función que funciona en una que sirve. Hoy el
+mDNS resuelve el problema para el que se escribió —que un cambio de IP deje a
+todos los teléfonos sin hub a la vez— **y ningún usuario tiene forma de
+enterarse**.
+
+Va con la misma familia: la reimpresión que existe y nadie llama, la pestaña
+Impresoras que guardaba una lista que nadie lee, `total_divergente` que calcula
+un trigger y nada en el front consulta.
+
+### 8 · Lo que el respaldo NO cubre (fallos 6 y 7, del 17-ago)
+
+Salieron al probar el respaldo con un teléfono muerto de verdad. El respaldo
+funcionó; lo que falló es lo que quedó fuera de él. Detalle completo en
+`docs/VERIFICADO_15-AGO.md`.
+
+**La auditoría no se respalda.** `lib/Respaldo.js:33` lista `['ventas',
+'comandas', 'movimientos']`. Resultado medido: la venta `AZULHN-V-000005` está
+en los libros a las 20:09 y la auditoría se corta a las 19:40. Un cobro sin
+rastro, en la pantalla que se llama «Registro inmutable».
+
+Al arreglarlo, la pregunta no es sólo «añadir `auditoria`»: es **qué más se
+pierde cuando muere un dispositivo**, y si esa lista se escribió mirando el
+dinero y olvidando el rastro.
+
+**Y el folio reservado vive sólo en el aparato.** `handlePedirCuenta` acuña el
+folio antes de cobrar —tiene que hacerlo, el papel lleva número— y lo guarda en
+`mesa.orden_actual`, en el almacenamiento local. Si el aparato muere, la reserva
+muere con él: el cliente se queda con un papel citando `V-000004` y el cobro
+posterior emite `V-000005`. Hueco en la serie de ventas, que es exactamente la
+señal que `Folio.js` dice querer evitar.
+
+Al tocarlo, **no romper lo que ya está bien**: acuñar pronto es correcto, y que
+el folio no cambie al reabrir también — comprobado en producción el mismo día.
+Lo que hay que mover es dónde vive la reserva.
+
+### 6 · Dos recortes de la interfaz (Chris, 17-ago)
+
+Ninguno toca lógica. Los dos son lo mismo de fondo: **algo se pinta fuera de la
+caja que lo contiene, y nadie le dejó sitio.**
+
+**La tarjeta de mesa seleccionada se corta.** No es el `gap` del grid —ya tiene
+`gap-3 lg:gap-5`, 12 a 20 px, de sobra entre tarjetas—. Es el contenedor con
+scroll, `features/operacion/MesasScreen.jsx:846`:
+
+```
+flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10
+```
+
+Tiene margen a la derecha y abajo, y **nada arriba ni a la izquierda**. La
+tarjeta seleccionada (línea 957) lleva `ring-4 ring-offset-2` y `-translate-y-1`:
+el anillo se pinta **6 px por fuera de la caja** en los cuatro lados y la tarjeta
+sube 4. Como `overflow-y-auto` recorta lo que sobresale, la primera columna y la
+primera fila pierden el anillo. A la derecha se salva por 2 px.
+
+Arreglo: **padding en el contenedor** (`p-2`, o `pt-2 pl-2` conservando lo que
+ya hay). Subir el `gap` no sirve — el `gap` separa tarjetas entre sí, y el
+recorte ocurre contra el borde del contenedor, donde no hay `gap` que valga.
+
+**La etiqueta `Enviado: n` parte en dos renglones.** `features/pos/PosScreen.jsx:1544`:
+
+```
+text-[10px] ... px-2 py-1 rounded-ui mt-2 inline-block uppercase tracking-widest
+```
+
+No es que el texto sea pequeño: **le falta `whitespace-nowrap`**. Con `uppercase`
+y `tracking-widest` ocupa mucho más de lo que aparenta, la caja no da, y rompe
+por el espacio — «Enviado:» arriba y el número debajo.
+
+Importa más que la estética: ese número dice que esas unidades **ya están en
+cocina**, o sea que no se pueden quitar sin autorización de gerente — hay código
+en `PosScreen` dedicado a impedirlo. Partido en dos y en 10 px, un mesero con
+prisa no lo lee, y se pelea con un botón que no responde sin saber por qué.
+
+Si con `nowrap` sigue sin caber, entonces sí toca mirar el ancho de la columna o
+aflojar el `tracking`. Pero primero lo simple.
+
 ### Y una cosa que el checklist pedía y el binario no permite
 
 El paso de §2 —y el de mDNS— piden la consola de la ventana, pero

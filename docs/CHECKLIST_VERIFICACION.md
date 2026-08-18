@@ -19,6 +19,8 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
 3. El centavo de más en el total.
 4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
 5. La exclusión por token de la caja, y el `23505` marcado como fallo.
+6. La auditoría no se respalda: un cobro puede quedar sin rastro.
+7. El folio reservado al pedir la cuenta vive sólo en el aparato.
 
 Ver `docs/VERIFICADO_15-AGO.md`. Los que quedan son de pocas líneas.
 
@@ -71,130 +73,44 @@ compartir estado global entre archivos con `--isolate=false`.
       arreglado: reabrir, agregar algo, volver a pedir la cuenta, y que **salga
       un papel nuevo** con el total nuevo, el mismo folio y su aviso de copia.
 
-## 4 · Lo que queda del bloqueo de la cuenta
-
-- [ ] Reabrir desde una sesión de **mesero** → **pide PIN**; con el PIN de un
-      encargado, reabre.
-
-> La tarde del 15-ago se hizo entera con sesión de dueño, así que el camino del
-> PIN no se tocó.
-
-## 8 · El aviso del KDS — sonido y notificaciones
-
-Se prueba **con una sesión de Chef o Barista** (por PIN). Con la sesión de dueño
-por correo no debe sonar nada, y eso también se verifica.
-
-- [ ] Entrar al KDS como **Chef** → arriba aparece **«Activar avisos»**.
-
-> Sale a propósito. El navegador no deja sonar hasta que alguien toca la
-> pantalla, así que en vez de fallar callado —que es igual a no tener aviso— se
-> pide el toque a la vista. **Si no aparece ese botón y tampoco suena, eso sí es
-> un fallo.**
-
-- [ ] Pulsarlo → Windows pide permiso de notificaciones. **Aceptar.** El botón
-      desaparece.
-- [ ] Desde el POS, mandar una comanda a **Cocina** → suena y sale el cartel
-      abajo a la derecha con la mesa y cuántos platillos. Se va solo a los 6 s.
-- [ ] Marcar un item listo → **no vuelve a sonar**. Es el error clásico: la
-      lista se recalcula y cualquier cambio parece una llegada.
-- [ ] **Recargar el KDS con comandas en curso → NO suena.** Lo que ya estaba en
-      pantalla al abrir no acaba de llegar.
-- [ ] Cambiar a la pestaña **Barra** → tampoco suena por lo que ya había.
-- [ ] Mandar una comanda **sólo de barra** estando en la pestaña Cocina → **no
-      suena**; el aviso es de la estación que se está mirando.
-
-- [ ] **Minimizar la ventana** (o irse a otra app) y mandar una comanda → sale
-      la **notificación de Windows**.
-- [ ] Al volver a la ventana, **el cartel sigue puesto** y recién entonces
-      empieza a contar sus 6 s.
-- [ ] Mandar dos seguidas estando fuera → **una sola notificación**, no dos
-      apiladas.
-
-- [ ] Entrar al KDS como **Gerente o Admin** → **no aparece el botón y no suena
-      nada.** Entran a supervisar; un pitido por comanda es ruido.
-
-> **Esto falló el 12-ago y se arregló.** Sonaba y la notificación no salía nunca.
-> Dos causas, las dos del mismo tipo de siempre:
->
-> 1. **WebView2 no implementa la API web `Notification`.** `Notification.permission`
->    se quedaba en `'default'` para siempre y no había error que mirar. Ahora se
->    usa `tauri-plugin-notification`.
-> 2. **Minimizar no es «oculto».** Una ventana de Tauri minimizada —o tapada por
->    WhatsApp— **sigue diciendo `'visible'`**. Ahora manda el **foco**.
->
-> **Dos avisos para cuando no aparezca la notificación, y no sean bugs:**
->
-> - En Windows el plugin **sólo funciona con la app INSTALADA**. Con el `.exe`
->   suelto, o en `tauri dev`, el toast sale con el icono de PowerShell o no sale.
->   La caja tiene la 0.2.3 instalada, así que esta condición ya se cumple.
-> - El **asistente de concentración** de Windows silencia los toasts sin
->   decírselo a nadie. Es lo primero que hay que mirar.
-
-## 9 · La salida del KDS — que el barista pueda irse
-
-- [ ] Como **Barista**, el botón de arriba dice **«Mi perfil»**, no «Salir», y
-      lleva ahí. El texto sigue al destino: mandar a alguien al perfil bajo un
-      cartel que dice «Salir» es mentirle, y ese botón se lee todos los días.
-- [ ] El **gorro de chef** del encabezado también lleva al perfil. Es un extra
-      de escritorio: en teléfono ese bloque está oculto.
-- [ ] Como **Admin**, el mismo botón dice **«Salir»** y lleva a `/dashboard`.
-- [ ] Desde ahí, **Cerrar sesión** funciona y lleva a `/loginempleados`.
-- [ ] Si tiene entrada abierta sin salida, primero exige marcar salida. La
-      sesión no debe ser la puerta de atrás del checador.
-- [ ] En **Mi perfil** aparece el riel con **«Monitor Cocina»** para volver.
-- [ ] En el **POS**, salir desde Mostrador con una sesión de mesero → cae en
-      `/mesas`.
-
-> **Si mañana se agrega una tercera pantalla sin riel**, hay que anotarla en
-> `RUTAS_PANTALLA_COMPLETA` (`lib/Navegacion.js`). Entra sola en la matriz de
-> `Escape.test.js` y la suite no pasará hasta que tenga salida para todos los
-> roles.
-
 ## 10 · Lo que queda del 13-ago
 
 - [ ] `scripts/pruebas-rust.sh` — incluye `respaldo`, así que la lógica del
       respaldo se puede verificar también fuera de Windows.
 
-### El respaldo de ventas — la mitad que falta
+### El respaldo de ventas — **cerrado el 17-ago**
 
-El respaldo de la caja ya se verificó, y con un fallo real. Lo que no se ha
-probado es el camino del **teléfono que muere con la venta dentro**, que es la
-razón por la que existe: «Por adoptar» sigue marcando 0.
+Verificado con un teléfono muerto de verdad: hotspot sin internet, cobro, borrado
+de los datos de sitio, revocación del dispositivo, «Por adoptar» en 5 y las cinco
+anotaciones subidas y comprobadas en la base. Ver `VERIFICADO_15-AGO.md`.
 
-- [ ] Cobrar **desde el teléfono, sin internet** (wifi del local sí, datos no).
-- [ ] **Cerrar la pestaña del teléfono y borrar sus datos de sitio** — o sea,
-      simular que el teléfono murió con la venta dentro.
-- [ ] Esperar 15 minutos (o revocar el dispositivo desde la caja para acelerar).
-- [ ] En la caja, **«Por adoptar» marca 1** → pulsar **Recuperar ahora**.
-- [ ] La venta está en Supabase, con su folio y su total.
-
-> Sin ese último paso, lo escrito el 13-ago es una suposición. Es exactamente el
-> tipo de cosa que parece funcionar hasta el día que hace falta.
-
-> **Ojo:** hazlo con una venta **sin notas ni modificadores** hasta que el fallo
-> 1 esté arreglado, o no se sabrá si no llegó por el teléfono o por el trigger.
+De ahí salieron los fallos 6 y 7, que no son del respaldo sino de lo que deja
+fuera.
 
 ### El descuento de inventario — la prueba dura
 
-- [ ] En Supabase, `stock_salidas` tiene **una fila por comanda** (o por venta en
-      mostrador).
+- [x] En Supabase, `stock_salidas` tiene **una fila por comanda** (o por venta en
+      mostrador). **Comprobado el 17-ago**: seis orígenes desde el 15-ago, todos
+      con exactamente una fila. Ninguno duplicado.
 
-> El 15-ago se comprobó en la caja: 80 kg → 79.8 kg tras el reintento, un solo
-> descuento. Pero el contador local podría estar bien y `stock_salidas` tener dos
-> filas. Son cinco minutos y cierran §10.
+> Con esto §10 queda cerrado por los dos lados: el contador de la caja (80 kg →
+> 79.8 tras el reintento) y la tabla de la nube.
+>
+> Un hallazgo de paso: `1829724086159641` —la venta que estuvo dos días sin
+> llegar a Supabase— **sí tiene su salida de stock**, aplicada a los once
+> segundos del cobro. El inventario nunca dependió de que la venta subiera. Son
+> dos caminos separados y el que evita vender lo que no hay funcionó aunque el
+> otro estuviera roto.
 
-### mDNS
+### Al cerrar la sesión de pruebas — NO OLVIDAR
 
-- [ ] En la consola de la caja sale `[hub] anunciado como
-      http://invventa-caja.local:3000`.
-- [ ] Desde un **iPhone** o desde otra PC, esa dirección abre la app.
-- [ ] Desde **Android puede que no funcione**, y no es un fallo: Chrome resuelve
-      `.local` de forma irregular. Por eso el QR sigue llevando la IP.
+El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
+**Simulador**. Las dos cosas hay que devolverlas antes de que abra el local:
 
-> La consola de la caja **no se abre en un build de release** (`tauri` sin la
-> feature `devtools`). El primer punto necesita otra vía: o un build con
-> devtools, o leerlo del log, o simplemente probar la dirección desde el
-> teléfono, que es lo que de verdad importa.
+- [ ] La caja **al wifi de AZUL**. Si se queda en el hotspot y ese teléfono se
+      va, los meseros pierden el hub y el QR guardado apunta a una IP muerta.
+- [ ] El transporte **a la impresora de Windows**. Éste muerde en silencio: los
+      cobros pasan, todo «funciona», y no sale un papel en todo el servicio.
 
 ### El updater
 
@@ -204,23 +120,6 @@ en `docs/CHECKLIST_ACTUALIZACIONES.md`.
 > `tauri.conf.json` ya tiene la `pubkey` pegada de verdad. Para compilar el
 > bundle hay que exportar `TAURI_SIGNING_PRIVATE_KEY` y su contraseña **en la
 > misma sesión de shell**, o revienta al firmar, al final del build.
-
-## 11 · Lo responsivo del 13-ago (3.10)
-
-Dos reglas globales, no veintinueve revisiones. Se comprueban en un teléfono de
-verdad, no en el simulador del navegador — el teclado del simulador no ocupa
-espacio y es justo lo que se está probando.
-
-- [ ] Abrir cualquier modal del ERP con formulario (Clientes, Proveedores,
-      Ingredientes…) en un **teléfono**, tocar un campo para que salga el
-      teclado → **el botón de guardar sigue siendo tocable**.
-- [ ] Hacer **zoom con dos dedos** en cualquier pantalla → ahora deja. Antes no.
-- [ ] En una **tablet en horizontal**, el Dashboard enseña **cuatro KPIs en
-      fila**, no dos.
-
-> El barrido de `src/test/modales-teclado.test.js` impide que vuelva a colarse
-> un `vh`, pero no puede comprobar que el resultado se vea bien. Eso son tus
-> ojos y un teléfono.
 
 ---
 
