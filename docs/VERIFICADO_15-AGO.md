@@ -394,7 +394,13 @@ Es el aviso de la cabecera de `Comanda.js` cumpliéndose por el otro lado: allí
 prohibió que el hub hiciera aritmética para no tener dos motores de dinero. El
 segundo motor acabó estando en Postgres, y no coinciden.
 
-### 4 · «Recuperar ahora» falla y dice «No había nada que recuperar»
+### 4 · «Recuperar ahora» falla y dice «No había nada que recuperar» — **ARREGLADO el 17-ago**
+
+> Commit `f5fea58`. `drenarRespaldo` devuelve ahora un recuento —subidas,
+> fallidas, total, errores— y la pantalla distingue los tres casos. El motivo
+> del fallo va en el aviso, no sólo a una consola que en release no se abre.
+> De paso, el store dejó de pintar toasts: sacaba el suyo además del de
+> `HubScreen`, dos mensajes para el mismo suceso.
 
 Encontrado al final del día, y por accidente: al reabrir la app, el panel del
 respaldo pasó a **«Sin confirmar: 1 · Por adoptar: 1»**. Al pulsar **Recuperar
@@ -440,7 +446,16 @@ directamente — pero ver el fallo 5, que es evidencia fuerte de que sí ocurri�
 > observado que la teoría del token que cambia. Se decide leyendo de dónde sale
 > el campo `dispositivo` al escribir el respaldo.
 
-### 5 · Un reintento sobre una fila que ya existe se marca como fallo permanente
+### 5 · Un reintento sobre una fila que ya existe se marca como fallo permanente — **ARREGLADO el 17-ago**
+
+> Commit `140415d`. Un `23505` al insertar en `ventas`, `comandas`,
+> `movimientos` o `auditoria` se da por subido: la fila está, el objetivo se
+> cumplió. Sólo en esas tablas, porque su id lleva carril de dispositivo y ahí
+> un duplicado significa «la misma fila», nunca «alguien te pisó el número».
+> La decisión vive en `esFilaYaExistente`, función pura con seis pruebas.
+>
+> **Queda abierta la otra mitad:** por qué la caja no se reconoce a sí misma al
+> comparar tokens. Ya no reparte rojos, pero sigue adoptando lo propio.
 
 Apareció al arreglar el fallo 1, y trae dentro la confirmación de la pregunta de
 arriba.
@@ -490,7 +505,19 @@ entrena a ignorar el panel donde vive el aviso de verdad.
 > que ese botón multiplicaría el problema por el número de teléfonos y por el
 > número de cierres de turno.
 
-### 6 · La auditoría tiene un agujero justo donde muere un dispositivo
+### 6 · La auditoría tiene un agujero justo donde muere un dispositivo — **ARREGLADO el 17-ago**
+
+> Commit `7021425`, y el diagnóstico era más hondo que la lista de tablas.
+> `registrarAuditoria` **no pasaba por la cola**: hacía un insert directo bajo
+> un `if (navigator.onLine)`. Sin red no se intentaba siquiera y nadie recordaba
+> subirlo después; con red pero sin llegar a Supabase, el error moría en un
+> `console.error`. Añadir `auditoria` a la lista de respaldo no habría servido
+> de nada, porque nunca llegaba a la cola que la lista protege.
+>
+> Ahora usa `enqueueAction`, su id pasa de `Date.now()` a `SERIE_AUDITORIA` —que
+> llevaba reservada sin usar— y la tabla entra en `TABLAS_RESPALDADAS` y en
+> `TABLAS_ID_CON_CARRIL`. Ese orden no era negociable: sin carril, dar por buena
+> una clave duplicada habría tapado dos líneas distintas del mismo milisegundo.
 
 Salió el 17-ago al probar el respaldo con un teléfono muerto de verdad, y es lo
 más serio que ha aparecido en toda la verificación.
@@ -526,7 +553,7 @@ está respaldado; `auditoria` no. La pregunta no es sólo «añadir auditoría»
 **qué otras tablas se pierden cuando muere un dispositivo** y si la lista se
 escribió pensando en el dinero y olvidando el rastro.
 
-### 7 · Un folio impreso puede no llegar a existir nunca
+### 7 · Un folio impreso puede no llegar a existir nunca — **MITIGADO el 17-ago**
 
 Consecuencia del mismo escenario, y explica el hueco `AZULHN-V-000004` que
 apareció al contar las ventas recuperadas.
@@ -550,6 +577,21 @@ y aquí los gasta una cuenta que nunca se cobró.
 > día en producción (`REAPERTURA_CUENTA` de la mesa 12 a las 19:39:59 con folio
 > `AZULHN-V-000003`, cobrada a las 19:40:12 con ese mismo folio). El problema no
 > es acuñar pronto: es que la reserva sólo exista en un aparato que puede morir.
+
+> **Lo hecho el 17-ago, y hasta dónde llega.**
+>
+> - La **causa frecuente** está arreglada (`655916e`): «A Producción» ya no
+>   reconstruye `orden_actual` desde cero, así que deja de borrar el folio. Para
+>   perderlo ya no hace falta que muera nada, y ese camino era el corriente.
+> - El hueco por muerte del aparato **sigue siendo posible**, y ahora queda
+>   **explicado**: `CUENTA_IMPRESA` registra qué folio se imprimió, en qué mesa,
+>   por cuánto y en qué número de impresión (`cfbc428`). Un auditor que vea el
+>   salto encuentra la línea que lo justifica.
+> - **Lo que NO se hizo, a propósito:** meter `mesas` en `TABLAS_RESPALDADAS`
+>   para que la reserva sobreviva al aparato. Cambia cómo se resuelven los
+>   conflictos de sala —adoptar el estado de una mesa desde un aparato muerto
+>   puede resucitar una que otro ya cerró— y esa decisión merece pensarse con
+>   luz. Queda como pendiente de diseño, no como olvido.
 
 ---
 

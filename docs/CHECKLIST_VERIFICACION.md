@@ -19,10 +19,13 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
    pendiente de verse en papel.
 3. ~~El centavo de más en el total.~~ **Arreglado el 17-ago** (`7cdd689`),
    pendiente de verse en papel.
-4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
-5. La exclusión por token de la caja, y el `23505` marcado como fallo.
-6. La auditoría no se respalda: un cobro puede quedar sin rastro.
-7. El folio reservado al pedir la cuenta vive sólo en el aparato.
+4. ~~«Recuperar ahora» que falla y dice «No había nada que recuperar».~~ **Arreglado** (`f5fea58`).
+5. ~~El `23505` marcado como fallo.~~ **Arreglado** (`140415d`). Sigue abierta
+   la exclusión por token: ya no reparte rojos, pero la caja adopta lo suyo.
+6. ~~La auditoría no se respalda.~~ **Arreglado** (`7021425`).
+7. El folio reservado vive sólo en el aparato. **Mitigado** (`655916e`,
+   `cfbc428`): la causa frecuente arreglada y el hueco queda explicado en
+   auditoría. Falta decidir si `mesas` se respalda.
 
 Ver `docs/VERIFICADO_15-AGO.md`. Los que quedan son de pocas líneas.
 
