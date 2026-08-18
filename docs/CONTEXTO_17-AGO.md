@@ -135,6 +135,22 @@ En `docs/PENDIENTE_LUNES.md`, con su porqué:
   `MesasScreen` (no el `gap`), y el `whitespace-nowrap` que le falta al
   `Enviado: n` de `PosScreen`.
 
+## 8b · El botón de reimprimir un ticket ya cobrado — a medio camino
+
+`PENDIENTE_LUNES.md` §1, y está **al día**: de sus tres cambios, dos entraron el
+17-ago sin querer, arreglando el fallo 2 — que resultó ser este mismo mecanismo
+ocurriendo ya en el flujo de la cuenta.
+
+- **Hecho:** el ticket ya no estampa el aviso de copia, y el id cambia en cada
+  impresión gracias al contador.
+- **Falta:** el botón en **Reportes → Tickets del turno**, y el contador
+  equivalente para una venta **ya cobrada**. El de hoy vive en
+  `mesa.orden_actual.impresiones` y sirve para la cuenta *antes* de cobrar;
+  al cobrar, la mesa se limpia y ese número no llega a la venta. Para reimprimir
+  desde Reportes hace falta `ventas.copias_impresas`.
+- **Y la auditoría de la reimpresión** ya tiene hermana y precedente:
+  `CUENTA_IMPRESA` (`cfbc428`). Conviene que las dos digan lo mismo.
+
 ## 9 · Deuda conocida que sigue ahí
 
 `ModalCobro` sin migrar a `lib/Autorizacion.js`; CSP nulo y

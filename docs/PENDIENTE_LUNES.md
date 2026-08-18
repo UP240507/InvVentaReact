@@ -300,6 +300,11 @@ fallo silencioso de siempre.
 
 **Regla, entonces: el id cambia en cada copia; el papel no cambia nunca.**
 
+> **AL DÍA EL 17-AGO — dos de los tres cambios ya están hechos.** No se hicieron
+> por esta sección, sino arreglando el fallo 2 (que resultó ser este mismo
+> mecanismo ocurriendo ya en el flujo de la cuenta). Lee lo de abajo sabiendo
+> que **1 y 2 están en el código y sólo queda el 3**.
+
 ### Los tres cambios
 
 1. **`avisosDeCopia()` deja de aplicarse a los TICKETS.** Hoy imprime
@@ -307,9 +312,23 @@ fallo silencioso de siempre.
    comandas de cocina y en un ticket de cliente no significa nada. **Se
    conserva para las comandas**, donde sí evita que cocina prepare dos veces.
 
+   > **HECHO el 17-ago** (`655916e`). `construirTicket` devuelve `avisos: []`
+   > siempre; `avisosDeCopia` sigue viva y aplicándose sólo a las comandas.
+
 2. **Contador persistido en la venta** (`copias_impresas`). En estado local se
    perdería al recargar y volvería el descarte por duplicado. Además es un dato
    que el dueño quiere: «este ticket se reimprimió tres veces» es una señal.
+
+   > **HECHO a medias el 17-ago** (`655916e`), y conviene saber dónde vive: el
+   > contador está en **`mesa.orden_actual.impresiones`**, no en la venta. Sirve
+   > para la cuenta antes de cobrar, que es lo que había roto. Para reimprimir
+   > una venta **ya cobrada** desde Reportes hace falta el equivalente en
+   > `ventas.copias_impresas`, porque a esas alturas la mesa ya se limpió.
+   >
+   > Y ojo con el arrastre: `orden_actual` se pierde al cobrar, así que el
+   > número de impresiones de la cuenta **no** llega a la venta. Si se quiere el
+   > recuento completo —«este documento salió cinco veces»— hay que pasarlo al
+   > cobrar.
 
 3. **Botón en Reportes → «Tickets del turno»**, que ya lista cada venta con
    folio, hora y total. Esa pantalla ya está gateada por `gestion`, así que
@@ -320,6 +339,13 @@ fallo silencioso de siempre.
 
 Acción `REIMPRESION_TICKET`, con folio, número de copia y quién la pidió. Mismo
 patrón que `REAPERTURA_CUENTA`.
+
+> **Precedente del 17-ago:** `CUENTA_IMPRESA` ya registra cada impresión de la
+> cuenta con folio, mesa, total y número de impresión (`cfbc428`). La de
+> reimpresión desde Reportes es la hermana de ésa y conviene que digan lo mismo.
+>
+> Y desde hoy **la auditoría se respalda** (`7021425`), así que ese rastro
+> sobrevive al aparato que lo escribió. Antes no: era el fallo 6.
 
 **Y aquí está el porqué, que conviene no perder:** al ser la copia un duplicado
 exacto, **desde el papel es imposible distinguir un original de una copia**. Es
