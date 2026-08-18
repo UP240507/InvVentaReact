@@ -325,12 +325,20 @@ describe('calcularVenta · el desglose suma exactamente el total', () => {
     ['un solo jugo', { items: [{ precio: 40, cantidad: 1 }] }],
     [
       'hamburguesa y jugo',
-      { items: [{ precio: 150, cantidad: 1 }, { precio: 40, cantidad: 1 }] },
+      {
+        items: [
+          { precio: 150, cantidad: 1 },
+          { precio: 40, cantidad: 1 },
+        ],
+      },
     ],
     [
       'con propina fija',
       {
-        items: [{ precio: 150, cantidad: 1 }, { precio: 40, cantidad: 1 }],
+        items: [
+          { precio: 150, cantidad: 1 },
+          { precio: 40, cantidad: 1 },
+        ],
         propinaMonto: 19,
       },
     ],

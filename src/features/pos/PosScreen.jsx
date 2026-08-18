@@ -2065,7 +2065,9 @@ export default function PosScreen() {
               )}
               <button
                 onClick={confirmarModificadores}
-                disabled={!seleccionCompleta(gruposDelModal, modalMods.seleccion)}
+                disabled={
+                  !seleccionCompleta(gruposDelModal, modalMods.seleccion)
+                }
                 className="w-full bg-ops-accent text-ops-accent-fg py-4 rounded-ui font-black uppercase tracking-widest shadow-lg disabled:bg-ops-panel-2 disabled:dark:bg-ops-border disabled:text-ops-muted disabled:shadow-none active:scale-95 transition-all"
               >
                 {modalMods.lineaId ? 'Guardar cambios' : 'Agregar al pedido'}
