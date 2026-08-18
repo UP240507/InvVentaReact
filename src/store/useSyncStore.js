@@ -61,6 +61,30 @@ const respaldarEnSegundoPlano = (items) => {
 //    el refresh de token o el D1 pueden revivirlo.
 //  - HTTP 4xx, EXCEPTO 401 (token vencido → refresh lo arregla), 408 (timeout)
 //    y 429 (rate-limit) que son transitorios.
+// Tablas cuyo `id` lleva CARRIL DE DISPOSITIVO y por tanto no puede colisionar
+// entre aparatos (ver `lib/IdVenta.js` y `siguienteIdComanda`). Sólo en éstas un
+// 23505 al insertar significa «esta fila ya está» y no «alguien te pisó el id».
+// Es la misma lista que respalda el hub, y no es casualidad: son justo las que
+// la caja puede haber subido ya al adoptar un dispositivo caído.
+export const TABLAS_ID_CON_CARRIL = ['ventas', 'comandas', 'movimientos'];
+
+/**
+ * ¿Este error significa «la fila ya estaba», o sea que el objetivo se cumplió?
+ *
+ * Se saca a función pura para poder probarla sin montar Dexie ni Supabase: la
+ * decisión de tratar un error como éxito es delicada y merece prueba propia.
+ *
+ * @param {{tabla?:string, metodo?:string}} item  tarea de la cola
+ * @param {{code?:string}} error                  error de Supabase
+ */
+export function esFilaYaExistente(item, error) {
+  return (
+    item?.metodo === 'insert' &&
+    String(error?.code || '') === '23505' &&
+    TABLAS_ID_CON_CARRIL.includes(item?.tabla)
+  );
+}
+
 const esErrorPermanente = (error) => {
   const code = String(error?.code || '');
   if (/^(22|23|42)/.test(code)) return true;
@@ -503,6 +527,36 @@ export const useSyncStore = create((set, get) => ({
         } catch (error) {
           const attempts = (item.intentos || 0) + 1;
           const msg = error?.message || String(error);
+
+          // ── LA FILA YA ESTABA: ESO ES ÉXITO, NO FALLO ───────────────────
+          // El caso que lo destapó, en AZUL el 17-ago: la caja adopta el
+          // trabajo de un teléfono que daba por muerto —con `upsert`, y bien— y
+          // cuando el teléfono revive su propia cola inserta lo mismo y choca.
+          // Resultado: tres errores permanentes en rojo en la pantalla del
+          // mesero por ventas que **sí llegaron**, y que alguien tiene que
+          // descartar a mano.
+          //
+          // `drenarRespaldo` ya había razonado exactamente esta carrera y la
+          // resolvió por su lado poniendo `upsert`. Faltaba el otro lado.
+          //
+          // Por qué es seguro tratarlo como éxito, y por qué SÓLO en estas
+          // tablas: sus ids llevan carril de dispositivo (`lib/IdVenta.js`,
+          // `siguienteIdComanda`), así que dos aparatos no pueden acuñar el
+          // mismo id para cosas distintas. Un 23505 aquí significa «esta misma
+          // fila ya está», nunca «otra fila te robó el número». En una tabla con
+          // una restricción única de negocio —un nombre repetido, por ejemplo—
+          // esto sí escondería un problema real, y por eso no se aplica a todas.
+          if (esFilaYaExistente(item, error)) {
+            console.info(
+              `[cola] ${item.tabla}/${item.id}: la fila ya estaba (23505). Se da por subida.`,
+            );
+            await localDB.sync_queue.delete(item.id);
+            processedCount++;
+            const clave = claveDeRespaldo(item);
+            if (clave) confirmadas.push(clave);
+            continue;
+          }
+
           // Errores transitorios de red (reconexión, DNS no listo) → reintentarán.
           const esTransitorio =
             /failed to fetch|networkerror|network ?changed|name_not_resolved|fetch|load failed/i.test(
