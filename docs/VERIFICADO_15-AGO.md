@@ -474,6 +474,22 @@ que ya está no es un fallo.** La fila existe, el objetivo se cumplió. Marcarlo
 rojo y dejarlo en el log de auditoría es alarmar por algo que salió bien — y
 entrena a ignorar el panel donde vive el aviso de verdad.
 
+> **No era una rareza de la caja consigo misma.** Esa misma noche, el teléfono
+> de pruebas acabó con **tres** fallos permanentes por `duplicate key` —dos de
+> `comandas`, uno de `ventas`, de las 20:20 y 20:23— por ventas que la caja ya
+> había adoptado mientras el teléfono estaba desconectado. Al revivir, su cola
+> las insertó otra vez y chocó.
+>
+> Es general: **cada vez que la caja adopta el trabajo de un dispositivo que
+> luego vuelve, ese dispositivo se queda con errores rojos que alguien tiene que
+> descartar a mano.** La adopción usa `upsert`, la cola del dispositivo usa
+> `insert`; los dos hacen su trabajo y el segundo se lleva la bronca.
+>
+> **Y esto convierte al fallo 5 en prerrequisito de «revocar todos»**
+> (`PENDIENTE_LUNES.md` §10): revocar es justo lo que provoca la adopción, así
+> que ese botón multiplicaría el problema por el número de teléfonos y por el
+> número de cierres de turno.
+
 ### 6 · La auditoría tiene un agujero justo donde muere un dispositivo
 
 Salió el 17-ago al probar el respaldo con un teléfono muerto de verdad, y es lo

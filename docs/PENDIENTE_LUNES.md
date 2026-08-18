@@ -141,9 +141,20 @@ teléfono a media cuenta no entiende qué pasó: la app deja de imprimir sin dec
 por qué. Un botón explícito en la pantalla del hub, que diga cuántos va a
 revocar y cuántas ventas pendientes hay, y que ofrezca drenar después.
 
-**Lo mínimo que tiene que decir antes de ejecutar:** cuántos dispositivos, y si
-alguno tiene ventas sin confirmar. Revocar a ciegas es barato de deshacer
-—se vuelve a escanear el QR— pero a media comida cuesta un servicio.
+**Con confirmación** (decidido con Chris, 17-ago). Tiene que decir **cuántos
+dispositivos** va a revocar y **si alguno tiene ventas sin confirmar** antes de
+ejecutar. Revocar a ciegas es barato de deshacer —se vuelve a escanear el QR—
+pero a media comida cuesta un servicio.
+
+> **BLOQUEADO POR EL FALLO 5, y no es opcional.** Revocar es exactamente lo que
+> provoca que la caja adopte el trabajo del dispositivo. Y cuando ese
+> dispositivo vuelve, su cola reinserta lo mismo y se queda con errores rojos
+> permanentes: pasó esa misma noche en el teléfono de pruebas, con tres.
+>
+> Sacar este botón antes de arreglar el 5 multiplica ese problema por el número
+> de teléfonos y por el número de cierres de turno. Cada mesero se encontraría
+> su pantalla llena de rojo por ventas que sí llegaron — y lo que se aprende de
+> eso es a no mirar ese panel nunca más.
 
 ### 9 · La URL por nombre funciona y nadie puede descubrirla
 
