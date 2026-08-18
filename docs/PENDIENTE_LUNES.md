@@ -8,12 +8,22 @@ puerta está abierta — pero delante de todo lo demás va lo que salió del loc
 
 ## 0 · Lo que salió de la verificación del 15-ago
 
-Cinco fallos, con causa y línea; **el 1 ya está arreglado**. El detalle está en
-`docs/VERIFICADO_15-AGO.md`; aquí sólo el orden y por qué.
+**Ocho fallos. Seis arreglados el 17-ago, uno mitigado y uno que resultó no ser
+fallo.** El detalle está en `docs/VERIFICADO_15-AGO.md`; aquí el orden en que se
+atacaron y lo que queda vivo de cada uno.
 
-**El orden no es por gravedad, es por dependencia.** Mientras una venta muera en
-el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
-15-ago eso produjo un falso quinto fallo que costó dos pruebas descartar.
+**El orden fue por dependencia, no por gravedad.** Mientras una venta moría en el
+trigger, lo que iba detrás en la cola se retrasaba y parecía otra cosa: eso
+produjo un falso fallo que costó dos pruebas descartar.
+
+> **LO QUE SIGUE ABIERTO, y es lo único que hay que leer con prisa:**
+>
+> - **La exclusión por token del 5.** La caja adopta lo suyo propio. Ya no
+>   reparte errores rojos, pero la carrera sigue ahí.
+> - **La reserva del folio del 7.** Falta decidir si `mesas` entra en el
+>   respaldo, con el riesgo de resucitar mesas cerradas.
+> - **Ver en papel el 2 y el 3.** Los arreglos están y la suite pasa; falta la
+>   tira.
 
 1. ~~**El trigger que castea `it->>'id'` a `bigint`.**~~ **HECHO el 17-ago.**
    Migración `20260817090000_verificar_total_venta_id_de_linea_no_numerico.sql`,
@@ -21,24 +31,32 @@ el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
    `AZULJ3-V-000006` (total 209) está en la nube, entera. Ya no hay restricción
    sobre usar notas ni modificadores en ventas reales.
 
-2. **La reimpresión tras reabrir una cuenta no imprime, y no avisa.** Es **el
-   mismo mecanismo que describe §1 de este documento**, y de hecho §1 ya lo
-   había previsto en abstracto: el id sale del folio, el folio no cambia al
-   reabrir, y `cola.rs` descarta por id ya impreso sin considerarlo error. Lo
-   que §1 escribió como trampa a evitar resultó estar ya ocurriendo en el flujo
-   de la cuenta. **Conviene arreglar los dos a la vez**: es la misma regla —el
-   id cambia en cada copia, el papel no cambia nunca.
+2. ~~**La reimpresión tras reabrir una cuenta no imprime, y no avisa.**~~
+   **HECHO** (`655916e`), **falta verlo en papel.** Era el mismo mecanismo que
+   describe §1 de este documento: §1 lo había previsto en abstracto sin saber
+   que ya estaba ocurriendo en el flujo de la cuenta. Se arreglaron los dos a la
+   vez, y por eso §1 tiene ahora dos de sus tres cambios hechos.
 
-3. **El centavo de más.** `calcularVenta` redondea el subtotal y luego saca el
-   IVA de esa cifra ya redondeada, así que dos jugos de $40 se cobran a $80.01.
+   > Y salió un tercero por el camino: **«A Producción» borraba el folio
+   > reservado**, porque reconstruía `orden_actual` desde cero. Explicación del
+   > hueco `AZULHN-V-000004` mucho más mundana que la del teléfono muerto.
+
+3. ~~**El centavo de más.**~~ **HECHO** (`7a9268d`), **falta verlo en papel.**
    Con `precios_incluyen_iva` el precio de menú **es** el total y el IVA es el
-   resto: `iva = brutoNeto − subtotal` da 11.03 y cuadra en 80.00. Ojo al
-   tocarlo: hay que repasar el caso con descuento de línea y el de ticket.
+   resto. Se repasaron los casos con descuento de línea, de ticket, propina,
+   cortesía, IVA en cero y precios sin IVA: los nueve cuadran.
 
-4. **«Recuperar ahora» falla y dice «No había nada que recuperar».**
-   `drenarRespaldo` devuelve `subidas.length`, así que fallar y no tener nada
-   que hacer dan el mismo cero; el error sólo va a `console.warn` y la consola
-   no abre en release. Distinguir los tres casos y decir cuántas fallaron.
+   > **Efecto que no se buscaba:** `verificar_total_venta` calcula sin redondear
+   > en medio, así que el front y Postgres discrepaban **por construcción** y
+   > sólo la tolerancia de `0.02` impedía que cada venta saliera marcada como
+   > divergente. Ahora coinciden exacto — o sea que `total_divergente` pasa de
+   > ser un detector al borde de gritar por todo a uno que se puede leer.
+
+4. ~~**«Recuperar ahora» falla y dice «No había nada que recuperar».**~~
+   **HECHO** (`f5fea58`). Devuelve un recuento y la pantalla distingue los tres
+   casos; el motivo del fallo va en el aviso y no sólo a una consola que en
+   release no se abre. De paso, el store dejó de pintar toasts: sacaba el suyo
+   además del de `HubScreen`.
 
    > Y con esto, una pregunta abierta: por qué una venta cobrada **por la caja**
    > pasó a «Por adoptar» al reiniciar la app, si la caja se excluye a sí misma
@@ -46,22 +64,34 @@ el trigger, lo que vaya detrás en la cola se retrasa y parece otra cosa: el
    > comprueba en diez segundos y está anotado en el checklist. **Ver el fallo
    > 5: la carrera que esa exclusión existe para evitar ya ocurrió.**
 
-5. **La exclusión por token, y el `23505` que se marca como fallo.** Al subir la
-   venta tras arreglar el 1, llegó por los **dos caminos a la vez**: la adopción
-   del hub con `upsert`, y la cola del propio dispositivo con `insert`, que
-   chocó contra `ventas_pkey`. Es literalmente la carrera que el comentario de
-   `hub/servidor.rs:465` dice que se evita no adoptando lo propio — o sea que la
-   exclusión no se aplicó.
+5. **La exclusión por token, y el `23505` que se marca como fallo.** De las dos
+   mitades, **una hecha y otra abierta**:
 
-   Dos cosas, y la segunda vale por sí sola:
+   - ~~Un `23505` sobre una fila que ya existe no es un fallo.~~ **HECHO**
+     (`140415d`). Se da por subida en `ventas`, `comandas`, `movimientos` y
+     `auditoria` — sólo ahí, porque su id lleva carril de dispositivo y un
+     duplicado significa «la misma fila». La decisión vive en
+     `esFilaYaExistente`, con seis pruebas incluidos los bordes.
+   - **ABIERTO: por qué la caja no se reconoce a sí misma.** Hipótesis nueva y
+     mejor que la del token que cambia al reiniciar: la exclusión compara el
+     campo `dispositivo` de la anotación con el **token de admin del hub**, y si
+     el respaldo se escribe con otro identificador la comparación **no puede
+     acertar nunca**. Se decide leyendo de dónde sale ese campo al escribir.
 
-   - Averiguar por qué la caja deja de reconocerse (hipótesis del token nuevo al
-     reiniciar) y arreglar la exclusión.
-   - **Un `23505` sobre una fila que ya existe no es un fallo.** El objetivo se
-     cumplió: la venta está. Marcarlo en rojo, dejarlo en el log de auditoría y
-     exigir que alguien lo borre a mano es alarmar por algo que salió bien, y lo
-     que consigue es que se deje de mirar ese panel — que es donde vive el aviso
-     de verdad.
+   > **No era cosa de la caja consigo misma.** Esa noche el teléfono de pruebas
+   > acabó con tres errores permanentes por trabajo que la caja ya había
+   > adoptado. Es general, y por eso el arreglo desbloqueó §10.
+
+6. ~~**La auditoría no se respalda.**~~ **HECHO** (`7021425`), y el diagnóstico
+   era más hondo que la lista de tablas: `registrarAuditoria` **no pasaba por la
+   cola**. Añadirla a `TABLAS_RESPALDADAS` no habría servido de nada.
+
+7. **El folio reservado vive sólo en el aparato.** **MITIGADO** (`655916e`,
+   `cfbc428`): la causa frecuente arreglada, y el hueco queda explicado con
+   `CUENTA_IMPRESA`. **Falta decidir** si `mesas` entra en el respaldo — ver §8.
+
+8. **El updater no avisa solo.** **NO ES FALLO**: decisión escrita, revisada y
+   mantenida (`143cd15`). Ver §11.
 
 ### 7 · El KDS, sólo lectura fuera de tu estación (Chris, 17-ago)
 
