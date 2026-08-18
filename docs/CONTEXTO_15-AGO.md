@@ -1,5 +1,9 @@
 # Contexto para retomar — cierre del 15-ago-2026
 
+> **Superado por `docs/CONTEXTO_17-AGO.md`.** Los siete fallos que este documento
+> deja abiertos están arreglados o decididos. Se conserva por el relato de la
+> verificación en el local.
+
 Documento de traspaso. Sustituye a `CONTEXTO_14-AGO.md`, que sigue siendo válido
 para todo lo que no se toca aquí (§1, §3, §4, §8, §9 y §10 de aquel documento no
 han cambiado).
