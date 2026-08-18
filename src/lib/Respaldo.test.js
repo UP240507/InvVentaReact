@@ -213,8 +213,45 @@ describe('LA PRUEBA QUE IMPORTA · un cobro entero cae dentro de la lista', () =
 });
 
 describe('las listas no se editan sin querer', () => {
-  it('las tablas respaldadas son exactamente estas tres', () => {
-    expect(TABLAS_RESPALDADAS).toEqual(['ventas', 'comandas', 'movimientos']);
+  // Añadir una tabla aquí significa que la caja va a subirla por cuenta de otro
+  // dispositivo. Eso exige dos cosas, y las dos hay que comprobarlas a mano
+  // antes de tocar esta lista:
+  //
+  //   1. Que la operación sea IDEMPOTENTE (el drenaje usa `upsert`).
+  //   2. Que el `id` lleve carril de dispositivo, o dos aparatos acuñarán la
+  //      misma clave y uno pisará al otro sin decir nada.
+  //
+  // `auditoria` entró el 17-ago, y sólo después de que su id dejara de ser
+  // `Date.now()` —que todos los aparatos comparten— y pasara a `SERIE_AUDITORIA`.
+  // El orden de esos dos cambios no es negociable.
+  it('las tablas respaldadas son exactamente estas cuatro', () => {
+    expect(TABLAS_RESPALDADAS).toEqual([
+      'ventas',
+      'comandas',
+      'movimientos',
+      'auditoria',
+    ]);
+  });
+
+  // Lo que se protege con esto: una venta huérfana se acaba descubriendo al
+  // cuadrar la caja, pero un cobro sin línea de auditoría no se descubre nunca.
+  it('la auditoría se respalda: es lo único que no se reconstruye después', () => {
+    expect(TABLAS_RESPALDADAS).toContain('auditoria');
+    expect(
+      claveDeRespaldo({
+        tabla: 'auditoria',
+        metodo: 'insert',
+        data: { id: 7 },
+      }),
+    ).toBe('auditoria::7');
+  });
+
+  // Y sin id no hay clave: una línea sin identificador no se respalda en vez de
+  // inventarle una, que es como dos copias de lo mismo entrarían como distintas.
+  it('una línea de auditoría sin id no se respalda', () => {
+    expect(
+      claveDeRespaldo({ tabla: 'auditoria', metodo: 'insert', data: {} }),
+    ).toBeNull();
   });
 
   it('y las RPC, estas tres', () => {

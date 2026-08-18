@@ -30,7 +30,24 @@
  * de inventario deja el almacén mintiendo, y mentir sin fallar es la peor
  * combinación.
  */
-export const TABLAS_RESPALDADAS = ['ventas', 'comandas', 'movimientos'];
+export const TABLAS_RESPALDADAS = [
+  'ventas',
+  'comandas',
+  'movimientos',
+  // ── AUDITORÍA, DESDE EL 17-AGO ──────────────────────────────────────────
+  // Esta lista se escribió mirando el dinero y se olvidó del rastro. Medido en
+  // AZUL: una venta llegó a los libros a las 20:09 y la auditoría se cortó a las
+  // 19:40, porque el dispositivo que la cobró murió y su línea de auditoría no
+  // estaba respaldada por nadie. Un cobro sin `COBRO_TICKET`, en la pantalla que
+  // se llama «Registro inmutable de seguridad y operaciones».
+  //
+  // No es lo mismo perder una línea de auditoría que perder una venta —la venta
+  // es dinero—, pero es lo único que **no se puede reconstruir después**: una
+  // venta huérfana se descubre cuadrando la caja; un cobro sin rastro no se
+  // descubre nunca, y el hueco aparece exactamente donde alguien que quisiera
+  // esconder algo lo dejaría.
+  'auditoria',
+];
 
 /**
  * RPCs que se respaldan, y **de dónde sale su clave**.

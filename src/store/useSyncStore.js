@@ -66,7 +66,16 @@ const respaldarEnSegundoPlano = (items) => {
 // 23505 al insertar significa «esta fila ya está» y no «alguien te pisó el id».
 // Es la misma lista que respalda el hub, y no es casualidad: son justo las que
 // la caja puede haber subido ya al adoptar un dispositivo caído.
-export const TABLAS_ID_CON_CARRIL = ['ventas', 'comandas', 'movimientos'];
+export const TABLAS_ID_CON_CARRIL = [
+  'ventas',
+  'comandas',
+  'movimientos',
+  // `auditoria` entró el 17-ago, cuando su id dejó de ser `Date.now()` y pasó a
+  // usar `SERIE_AUDITORIA`. El orden importa: sin carril de dispositivo, dar por
+  // buena una clave duplicada habría tapado dos líneas distintas registradas en
+  // el mismo milisegundo por dos aparatos.
+  'auditoria',
+];
 
 /**
  * ¿Este error significa «la fila ya estaba», o sea que el objetivo se cumplió?
