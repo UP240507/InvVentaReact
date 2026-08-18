@@ -351,7 +351,22 @@ Conecta con la deuda ya anotada: «la reimpresión de documentos existe en
 `Comanda.js` y nadie la llama». La reimpresión tras reapertura es justo eso, con
 su aviso impreso y su sufijo de copia.
 
-### 3 · Dos jugos de $40 se cobran a $80.01
+### 3 · Dos jugos de $40 se cobran a $80.01 — **ARREGLADO el 17-ago**
+
+> Commit `7cdd689`. Cuando el precio incluye IVA, el total ya no se deriva: se
+> calcula lo cobrable y **el IVA es el resto**. Con `precios_incluyen_iva` en
+> false se conserva `subtotal * rate`, que ahí sí es la cuenta correcta.
+>
+> No se tocó el significado de `descuento` —sigue en base— porque el trigger de
+> Postgres lo da por hecho.
+>
+> **Y arregló algo que no se buscaba:** `verificar_total_venta` calcula
+> `round(base * (1 + rate), 2)` sin redondear en medio, así que el front y
+> Postgres discrepaban **por construcción**, y lo único que impedía que cada
+> venta saliera marcada como divergente era la tolerancia de dos centavos. Ahora
+> coinciden exacto, y una prueba lo fija.
+>
+> 654 pruebas de `src/lib` en verde. Falta ver un papel con el total nuevo.
 
 Lo vio Chris en el papel. No es cosmético: el total que se cobra no es el que dice
 el menú.

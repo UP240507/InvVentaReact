@@ -17,7 +17,8 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
    Era el que ensuciaba cualquier medición del camino de la cola; ya no estorba.
 2. ~~La reimpresión tras reapertura.~~ **Arreglado el 17-ago** (`655916e`),
    pendiente de verse en papel.
-3. El centavo de más en el total.
+3. ~~El centavo de más en el total.~~ **Arreglado el 17-ago** (`7cdd689`),
+   pendiente de verse en papel.
 4. «Recuperar ahora» que falla y dice «No había nada que recuperar».
 5. La exclusión por token de la caja, y el `23505` marcado como fallo.
 6. La auditoría no se respalda: un cobro puede quedar sin rastro.
@@ -82,6 +83,8 @@ Son cuatro, y el tercero es el que junta los dos arreglos:
       **total nuevo** y **el mismo folio**.
 - [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
       `public.ventas`.
+- [ ] Y de paso, el fallo 3: un ticket de **dos jugos de $40** debe decir
+      `TOTAL $80.00`, con `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
 
 ## 10 · Lo que queda del 13-ago
 
