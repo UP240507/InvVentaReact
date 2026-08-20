@@ -1,6 +1,6 @@
 [package]
 name = "invventa"
-version = "0.2.4"
+version = "0.2.5"
 description = "InvVenta — ERP/POS gastronómico offline-first"
 authors = ["Christo"]
 edition = "2021"
