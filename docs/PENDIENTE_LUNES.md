@@ -18,8 +18,12 @@ produjo un falso fallo que costó dos pruebas descartar.
 
 > **LO QUE SIGUE ABIERTO, y es lo único que hay que leer con prisa:**
 >
-> - **La exclusión por token del 5.** La caja adopta lo suyo propio. Ya no
->   reparte errores rojos, pero la carrera sigue ahí.
+> - ~~**La exclusión por token del 5.**~~ **CERRADO el 18-ago.** La caja se
+>   firmaba con el token de emparejamiento, que se regenera en cada arranque a
+>   propósito; el archivo de respaldo no. Al reiniciar dejaba de reconocer lo
+>   suyo. Ahora se marca con `respaldo::CAJA` y la exclusión vive dentro de
+>   `pendientes()`, no en el cierre de cada llamador. Dos pruebas nuevas, una de
+>   ellas reabriendo el archivo — que es la única que veía el fallo.
 > - **La reserva del folio del 7.** Falta decidir si `mesas` entra en el
 >   respaldo, con el riesgo de resucitar mesas cerradas.
 > - **Ver en papel el 2 y el 3.** Los arreglos están y la suite pasa; falta la
@@ -66,11 +70,28 @@ produjo un falso fallo que costó dos pruebas descartar.
      `auditoria` — sólo ahí, porque su id lleva carril de dispositivo y un
      duplicado significa «la misma fila». La decisión vive en
      `esFilaYaExistente`, con seis pruebas incluidos los bordes.
-   - **ABIERTO: por qué la caja no se reconoce a sí misma.** Hipótesis nueva y
-     mejor que la del token que cambia al reiniciar: la exclusión compara el
-     campo `dispositivo` de la anotación con el **token de admin del hub**, y si
-     el respaldo se escribe con otro identificador la comparación **no puede
-     acertar nunca**. Se decide leyendo de dónde sale ese campo al escribir.
+   - ~~**Por qué la caja no se reconoce a sí misma.**~~ **HECHO el 18-ago.**
+     Se decidió leyendo los dos lados, y **la hipótesis descartada era la
+     buena**: los dos usan el mismo campo y el mismo camino —`hub_respaldar` y
+     `respaldar` escriben `dispositivo` desde el emisor, nunca del cuerpo—, y lo
+     que fallaba es que el valor no sobrevive. La caja se firmaba con
+     `estado.token`, el token de EMPAREJAMIENTO, que `servidor.rs` regenera en
+     cada arranque para que una foto vieja del QR deje de servir (hay una prueba
+     que lo fija). `respaldo-ventas.ndjson` sí sobrevive. Resultado: al
+     reiniciar, la caja no reconocía ninguna anotación suya y se ofrecía a
+     adoptar su propio trabajo.
+
+     El arreglo no persiste el token —eso cambiaría una propiedad de seguridad
+     para resolver un problema de identidad— sino que deja de deducir el autor
+     después: se marca en el momento de escribir, con `respaldo::CAJA`. Y la
+     exclusión se movió DENTRO de `pendientes()`, porque los llamadores son dos
+     y olvidarla en uno no da ningún error.
+
+     > **Lo que hay que saber al instalar:** las anotaciones que ya están en el
+     > disco de AZUL llevan tokens de arranques muertos y no hay forma de
+     > distinguirlas de las de un teléfono revocado, así que se seguirán
+     > ofreciendo una vez. Drenar («Recuperar ahora») después de instalar y
+     > listo — adoptar de más es inofensivo, `upsert` sobre una clave ya única.
 
    > **No era cosa de la caja consigo misma.** Esa noche el teléfono de pruebas
    > acabó con tres errores permanentes por trabajo que la caja ya había
@@ -170,7 +191,13 @@ dispositivos** va a revocar y **si alguno tiene ventas sin confirmar** antes de
 ejecutar. Revocar a ciegas es barato de deshacer —se vuelve a escanear el QR—
 pero a media comida cuesta un servicio.
 
-> **BLOQUEADO POR EL FALLO 5, y no es opcional.** Revocar es exactamente lo que
+> **DESBLOQUEADO el 18-ago** — se cerró el fallo 5. Lo de abajo se conserva
+> porque explica por qué este botón no podía salir antes, y porque el riesgo
+> vuelve en cuanto alguien toque la exclusión: si un teléfono revocado reinserta
+> lo que la caja ya adoptó, se queda con rojos permanentes. Eso lo sostiene
+> `esFilaYaExistente` (`140415d`), no el arreglo de hoy.
+>
+> **LO QUE ESTABA BLOQUEADO, y por qué.** Revocar es exactamente lo que
 > provoca que la caja adopte el trabajo del dispositivo. Y cuando ese
 > dispositivo vuelve, su cola reinserta lo mismo y se queda con errores rojos
 > permanentes: pasó esa misma noche en el teléfono de pruebas, con tres.
@@ -203,7 +230,22 @@ mientras no haya certificado de firma.
 Queda escrito en el propio módulo para que el siguiente que mire no repita la
 confusión.
 
-### 9 · La URL por nombre funciona y nadie puede descubrirla
+### 9 · La URL por nombre funciona y nadie puede descubrirla — **HECHO el 18-ago**
+
+> `EstadoHub` gana `url_nombre`, un `OnceLock` que se rellena **sólo si el
+> anuncio mDNS llegó a salir** —`Anuncio::url()` sabe construir la cadena
+> siempre, y ésa era la trampa: enseñar una dirección bien formada que la red no
+> resuelve manda al usuario a teclear algo que no funciona y a concluir que el
+> hub está roto—. Sale por `hub_estado` y por `/salud`, y `HubScreen` la pinta
+> junto a la IP con una frase que dice para qué sirve, sin decir «mDNS».
+>
+> `OnceLock` y no un campo normal porque el anuncio se levanta DESPUÉS del
+> servidor, que es después de construir el estado. El orden es deliberado y no
+> se tocó.
+>
+> **Sin probar en pantalla:** `HubScreen.jsx` no tiene suite. Se ve en la caja.
+
+Lo que decía antes:
 
 `http://invventa-caja.local:3000` abre la app — comprobado el 17-ago desde
 teléfono y desde otra PC. Pero **no aparece en ninguna pantalla**.
@@ -248,10 +290,22 @@ Al tocarlo, **no romper lo que ya está bien**: acuñar pronto es correcto, y qu
 el folio no cambie al reabrir también — comprobado en producción el mismo día.
 Lo que hay que mover es dónde vive la reserva.
 
-### 6 · Dos recortes de la interfaz (Chris, 17-ago)
+### 6 · Dos recortes de la interfaz (Chris, 17-ago) — **HECHOS el 18-ago**
 
 Ninguno toca lógica. Los dos son lo mismo de fondo: **algo se pinta fuera de la
 caja que lo contiene, y nadie le dejó sitio.**
+
+> **Lo que entró, y una corrección al diagnóstico.** En `MesasScreen` no vale un
+> `p-2` parejo ni el `pt-2 pl-2` que decía este documento: arriba hacen falta
+> **10 px**, no 8. El anillo se pinta 6 px por fuera (2 de `ring-offset-2` + 4 de
+> `ring-4`) **y** la tarjeta sube otros 4 con `-translate-y-1`. Quedó
+> `pt-3 pl-2 pr-2 pb-10`. Con `pt-2` seguiría recortando dos píxeles, que es
+> justo el tipo de casi-arreglo que hace pensar que el diagnóstico estaba mal.
+> En `PosScreen`, `whitespace-nowrap` al `Enviado: n`, tal cual.
+>
+> **Sin probar:** ninguna de las dos pantallas tiene suite que mire el layout.
+> Se ven a ojo, y la de Mesas se ve seleccionando la mesa de la esquina superior
+> izquierda, que es donde se notaba.
 
 **La tarjeta de mesa seleccionada se corta.** No es el `gap` del grid —ya tiene
 `gap-3 lg:gap-5`, 12 a 20 px, de sobra entre tarjetas—. Es el contenedor con
@@ -436,7 +490,13 @@ y quién autorizó**, con el mismo PIN que ya funciona para los descuentos en
 Se corrieron por primera vez en semanas: **7 pasaron, 2 fallaron.** Los dos
 fallos son de naturaleza opuesta y conviene no confundirlos.
 
-### 3.1 · El folio — **la prueba está desactualizada, el código está bien**
+### 3.1 · El folio — **la prueba está desactualizada, el código está bien** — HECHO el 18-ago
+
+> Actualizada a `/[A-Z0-9]{2,6}-V-\d{6}/`, y los comentarios del archivo con
+> ella. El prefijo va con cuantificador y no clavado en seis: `letrasDelLocal()`
+> recorta a cuatro pero **no rellena**, así que un local de nombre corto deja un
+> prefijo más corto y un `{6}` haría fallar la prueba por algo que no tiene que
+> ver con el folio. Sin correr: las E2E necesitan tenant y navegador.
 
 `e2e/flujo-pos.spec.js:123` busca `/POS-\d{5}/`. Ése es el formato **viejo**.
 Los folios cambiaron al escribir `lib/Folio.js`: ahora son `AZUL7K-V-000123`

@@ -17,11 +17,15 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
    Era el que ensuciaba cualquier medición del camino de la cola; ya no estorba.
 2. ~~La reimpresión tras reapertura.~~ **Arreglado el 17-ago** (`655916e`),
    pendiente de verse en papel.
-3. ~~El centavo de más en el total.~~ **Arreglado el 17-ago** (`7cdd689`),
+3. ~~El centavo de más en el total.~~ **Arreglado el 17-ago** (`7a9268d`),
    pendiente de verse en papel.
+   <!-- Aquí decía `7cdd689`, que no es ningún objeto de este repo. -->
+
 4. ~~«Recuperar ahora» que falla y dice «No había nada que recuperar».~~ **Arreglado** (`f5fea58`).
-5. ~~El `23505` marcado como fallo.~~ **Arreglado** (`140415d`). Sigue abierta
-   la exclusión por token: ya no reparte rojos, pero la caja adopta lo suyo.
+5. ~~El `23505` marcado como fallo.~~ **Arreglado** (`140415d`). Y ~~la
+   exclusión por token~~ **también, el 18-ago**: la caja se firmaba con el token
+   de emparejamiento, que muere en cada arranque; ahora se marca con
+   `respaldo::CAJA`. Ver `PENDIENTE_LUNES.md` §0.5.
 6. ~~La auditoría no se respalda.~~ **Arreglado** (`7021425`).
 7. El folio reservado vive sólo en el aparato. **Mitigado** (`655916e`,
    `cfbc428`): la causa frecuente arreglada y el hueco queda explicado en
@@ -29,11 +33,13 @@ salían de más en mostrador parecían un bug propio y eran síntoma de otro.
 
 Ver `docs/VERIFICADO_15-AGO.md`. Los que quedan son de pocas líneas.
 
-- [ ] **Pendiente de comprobar, y va con el fallo 4:** comparar el
+- [x] ~~**Pendiente de comprobar, y va con el fallo 4:** comparar el
       `"dispositivo":"840ce96da4be84e5"` de la anotación en el `.ndjson` con el
-      token que la caja tiene ahora. Si son distintos, la caja deja de
-      reconocer sus propias ventas pendientes tras un reinicio y se ofrece a
-      adoptarlas bajo otra identidad.
+      token que la caja tiene ahora.~~ **Resuelto el 18-ago leyendo el código,
+      sin necesidad del archivo.** Era exactamente eso: `token_de_arranque()` se
+      llama en cada `arrancar()` y el `.ndjson` no. Ya no hace falta comparar
+      nada — a partir de 0.2.5 las anotaciones de la caja dicen `"::caja::"`, y
+      eso sí se puede mirar de un vistazo en el archivo.
 
 ---
 

@@ -29,10 +29,15 @@ mexicanos. Repo `UP240507/InvVentaReact`, carpeta
   compilar. (Aparte, 663 de `src/lib` y `src/store` se corrieron desde el
   sandbox durante el trabajo.)
 
-> **Lo que NO se pudo correr desde el sandbox:** las suites de DOM. jsdom tarda
-> más de lo que aguanta la herramienta, así que `PosScreen.integration` y
-> `TicketImpresion` **siempre** hay que correrlas en la máquina. `compilar.ps1`
-> lo hace solo antes de compilar.
+> **Corregido el 18-ago: el sandbox SÍ corre la suite entera.**
+> `npm run test:run` completo tarda **55 s** ahí — 41 archivos, 781 pruebas,
+> incluidas `PosScreen.integration` y `TicketImpresion`. Ya no hay que dar por
+> buenas las de DOM sin verlas. Compilar sigue exigiendo correrla en la máquina,
+> y `compilar.ps1` lo hace solo.
+>
+> Y `scripts/pruebas-rust.sh` corre en Linux: `documento`, `escpos` y
+> **`respaldo`**, 51 pruebas. Lo que no compila fuera de Windows es todo lo
+> demás de `src-tauri` — `servidor.rs`, `lib.rs`, `mod.rs`.
 - `--isolate=false` (`npm run test:rapido`) sigue con **6 fallos intermitentes**
   conocidos en `useConectividad`. Preexistentes.
 - Dos avisos de lint preexistentes que no son de esta tanda: el `no-unused-vars`
@@ -94,13 +99,18 @@ porque el de AZUL está averiado y sólo abre con llave.
 
 ### Lo que sigue abierto de esos
 
-- **Del 5**, la otra mitad: **por qué la caja no se reconoce a sí misma** al
-  comparar tokens. Ya no reparte errores rojos, pero sigue adoptando lo suyo.
-  Hipótesis actual, mejor que la del token que cambia al reiniciar: la exclusión
-  compara el campo `dispositivo` de la anotación con el **token de admin del
-  hub** (`autorizado_admin` lo contrasta con `estado.token`), y si el respaldo
-  se escribe con otro identificador **la comparación no puede acertar nunca**.
-  Se decide leyendo de dónde sale ese campo al escribir el respaldo.
+- ~~**Del 5**, la otra mitad.~~ **CERRADO el 18-ago, y la hipótesis buena era la
+  que se había descartado.** No hay dos identificadores: los dos lados usan el
+  mismo campo y el mismo camino. Lo que falla es que el valor **no sobrevive al
+  reinicio** — la caja se firmaba con `estado.token`, que es el token de
+  emparejamiento y `token_de_arranque()` lo regenera en cada `arrancar()` a
+  propósito, mientras que `respaldo-ventas.ndjson` sí persiste. Ahora se marca
+  con `respaldo::CAJA` al escribir y la exclusión vive dentro de `pendientes()`.
+  Detalle en `PENDIENTE_LUNES.md` §0.5.
+
+  > La lección, que es la de siempre con otra cara: **descartar una hipótesis
+  > por elegante que sea la siguiente es tan caro como no tener ninguna.** La
+  > vieja decía «el token cambia al reiniciar» y era literal.
 
 - **Del 7**: que la reserva del folio sobreviva al aparato exigiría meter `mesas`
   en `TABLAS_RESPALDADAS`, y eso cambia cómo se resuelven conflictos de sala —
@@ -123,6 +133,40 @@ Está escrito en `CHECKLIST_VERIFICACION.md`. En corto:
 
 La suite ya está en verde tras los arreglos, así que lo de mañana es sólo papel:
 lo que falta es ver en una tira lo que las pruebas no pueden ver.
+
+> **Antes de dar por buenos los pasos 2 y 3, mirar en qué flujo está AZUL.**
+> El contador de impresiones que arregló el fallo 2 sólo entra por la rama
+> `ticket_final`; con `precuenta_y_ticket` se va por `enviarPreCuenta`, cuyo id
+> ya llevaba `Date.now()` + secuencia y por tanto **nunca se dedupló**. Si AZUL
+> está en `precuenta_y_ticket`, esos dos papeles no prueban el arreglo: prueban
+> un camino que ya funcionaba. Se mira en `configuracion.flujo_cuenta`.
+
+## 7b · Lo que entró el 18-ago
+
+Todo lo que no dependía de otra cosa ni del papel. Nada de esto toca el camino
+del cobro.
+
+| Qué | Dónde | Probado |
+|---|---|---|
+| **Fallo 5, la mitad abierta** — la caja adoptaba lo suyo tras reiniciar | `hub/respaldo.rs`, `hub/servidor.rs`, `lib.rs` | Sí: 51 pruebas de Rust, 2 nuevas, y comprobado que fallan sin el arreglo |
+| **§9** — la URL por nombre se ve en la pantalla del hub | `hub/servidor.rs`, `hub/mod.rs`, `lib.rs`, `HubScreen.jsx` | No: `HubScreen` no tiene suite |
+| **§6** — el anillo de la mesa seleccionada y el `Enviado: n` | `MesasScreen.jsx`, `PosScreen.jsx` | No: ninguna suite mira el layout |
+| **§3.1** — el regex del folio en la E2E | `e2e/flujo-pos.spec.js` | No: las E2E piden tenant y navegador |
+
+`npm run test:run` sigue en 781/781 y el lint no gana ni un aviso.
+
+**Lo que hay que hacer al instalar la 0.2.5:** drenar una vez con «Recuperar
+ahora». Las anotaciones que ya están en el disco llevan tokens de arranques
+muertos y no se pueden distinguir de las de un teléfono revocado, así que se
+ofrecerán esa última vez. Adoptar de más es inofensivo.
+
+**Y una que no se tocó, a propósito:** `prettier` **no está en
+`devDependencies`**. `npm run format` usa el que cada máquina tenga instalado
+global, así que dos personas pueden formatear el mismo archivo de dos maneras y
+el diff aparecer solo. Los tres ficheros pendientes (`Modificadores.js`, su
+prueba y `scripts/version.mjs`) se dejaron sin tocar para no meter ruido con una
+versión que a lo mejor no es la tuya. Fijarlo en `devDependencies` es lo que
+cierra eso.
 
 ## 8 · Peticiones de diseño con decisión tomada
 
