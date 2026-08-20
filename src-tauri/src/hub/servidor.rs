@@ -51,6 +51,21 @@ pub struct EstadoHub {
     pub dispositivos: Registro,
     pub puerto: u16,
     pub ip_lan: Option<IpAddr>,
+    /// `http://invventa-caja.local:3000`, y **sólo si el anuncio mDNS salió**.
+    ///
+    /// Es la dirección que no caduca: el DHCP puede cambiar la IP y dejar a
+    /// todos los teléfonos sin hub a la vez, y ésta sigue valiendo. Funcionaba
+    /// desde el 3.3 y no aparecía en ninguna pantalla — la sabía un `println!`
+    /// que en release no lee nadie.
+    ///
+    /// `OnceLock` y no un campo normal porque el anuncio se levanta DESPUÉS del
+    /// servidor (publicar un servicio que todavía no escucha es invitar a un
+    /// teléfono a un puerto cerrado), o sea después de construir esto.
+    ///
+    /// Y va vacío si mDNS falló, que es lo importante: enseñar una URL que la
+    /// red no resuelve es peor que no enseñar ninguna. El usuario la teclea, no
+    /// funciona, y concluye que el hub está roto.
+    pub url_nombre: std::sync::OnceLock<String>,
     pub version: String,
     /// Carpeta del build de React que se sirve a la LAN, y cuándo se compiló.
     ///
@@ -72,6 +87,9 @@ struct RespuestaSalud {
     puerto: u16,
     ip_lan: Option<String>,
     cola: crate::hub::cola::Resumen,
+    /// Ver `EstadoHub::url_nombre`. Va también por aquí porque la pantalla del
+    /// hub se abre desde un teléfono tanto como desde la caja.
+    url_nombre: Option<String>,
     web: Option<String>,
     web_ms: u128,
     /// Columnas del papel vigentes. Va aquí y no en una ruta propia porque la
@@ -146,6 +164,7 @@ async fn salud(State(estado): State<Arc<EstadoHub>>) -> impl IntoResponse {
         puerto: estado.puerto,
         ip_lan: estado.ip_lan.map(|i| i.to_string()),
         cola: estado.cola.resumen(),
+        url_nombre: estado.url_nombre.get().cloned(),
         web: estado.web.clone(),
         web_ms: estado.web_ms,
         ancho_papel: estado.cola.ancho(),
@@ -603,6 +622,7 @@ mod tests {
             dispositivos: Registro::nuevo(dir),
             puerto: 3000,
             ip_lan: None,
+            url_nombre: std::sync::OnceLock::new(),
             version: "test".into(),
             web: None,
             web_ms: 0,

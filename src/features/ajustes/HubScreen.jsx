@@ -415,7 +415,24 @@ export default function HubScreen() {
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <Dato etiqueta="Dirección" valor={info.url} mono />
                     <Dato etiqueta="Transporte" valor={resumen.transporte} />
+                    {/* La dirección por nombre existía y no se veía en ninguna
+                        pantalla: la sabía un mensaje de consola que en la caja
+                        instalada no lee nadie. `Dato` se oculta solo si viene
+                        vacía, que es lo que pasa cuando la red no permite el
+                        anuncio — y entonces es correcto no enseñarla. */}
+                    <Dato
+                      etiqueta="Dirección por nombre"
+                      valor={info.url_nombre}
+                      mono
+                    />
                   </div>
+                  {info.url_nombre && (
+                    <p className="text-xs text-adm-muted mt-2">
+                      La dirección de arriba lleva un número que el módem puede
+                      cambiar al reiniciarse. Si un día los teléfonos dejan de
+                      encontrar la caja, esta segunda dirección sigue valiendo.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-adm-muted mt-1">

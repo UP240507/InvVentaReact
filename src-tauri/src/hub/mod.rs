@@ -152,6 +152,8 @@ pub fn arrancar(
         dispositivos: Registro::nuevo(carpeta_datos.join("dispositivos.json")),
         puerto: puerto_real,
         ip_lan: servidor::ip_lan(),
+        // Se rellena abajo, sólo si el anuncio mDNS llega a salir.
+        url_nombre: std::sync::OnceLock::new(),
         version,
         web: web_ruta,
         web_ms,
@@ -202,6 +204,14 @@ pub fn arrancar(
     let anuncio_mdns = estado
         .ip_lan
         .and_then(|ip| anuncio::arrancar(ip, puerto_real));
+
+    // La URL por nombre se publica a las pantallas SÓLO si el anuncio salió.
+    // `Anuncio::url()` sabe construirla siempre, y ésa era justamente la trampa:
+    // una dirección bien formada que la red no resuelve manda al usuario a
+    // teclear algo que no funciona y a concluir que el hub está roto.
+    if anuncio_mdns.is_some() {
+        let _ = estado.url_nombre.set(Anuncio::url(puerto_real));
+    }
 
     Ok(HubVivo {
         estado,

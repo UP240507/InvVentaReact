@@ -34,6 +34,9 @@ fn hub_estado(estado: tauri::State<'_, EstadoApp>) -> serde_json::Value {
             "url": h.estado.ip_lan
                 .map(|ip| format!("http://{}:{}", ip, h.estado.puerto))
                 .unwrap_or_else(|| format!("http://localhost:{}", h.estado.puerto)),
+            // La dirección que NO caduca cuando el DHCP cambia la IP. Va vacía
+            // si mDNS no salió. Ver `EstadoHub::url_nombre`.
+            "url_nombre": h.estado.url_nombre.get(),
             "cola": h.estado.cola.resumen(),
             // El ancho VIVO del rollo. Lo devolvía `/salud` (el camino HTTP del
             // teléfono) y NO este comando, que es el que usa la caja —donde
