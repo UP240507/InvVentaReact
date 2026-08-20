@@ -353,10 +353,47 @@ compila con devtools, o esos datos salen a una pantalla.
 
 ---
 
-## 1 · Reimpresión del ticket
+## 1 · Reimpresión del ticket — **CERRADO el 18-ago**
 
 **Lo que pidió Chris:** un botón para cuando un cliente quiere una copia. **La
 copia es un duplicado EXACTO del original — sin texto extra de ningún tipo.**
+
+> **HECHO.** Entró el tercer cambio —el botón— y con él la columna
+> `ventas.copias_impresas` (migración `20260818200000`), la auditoría
+> `REIMPRESION_TICKET` y dos decisiones de Chris. Lo de abajo se conserva porque
+> explica el porqué de cada pieza; aquí lo que cambió al construirlo:
+>
+> - **El contador NO puede nacer en 0**, y esto no se había visto.
+>   `sufijoCopia(1)` devuelve cadena vacía, así que la primera reimpresión de
+>   una venta que arrancara en 0 pediría el id **pelado** —el mismo del ticket
+>   original— y `cola.rs` lo descartaría en silencio. Es la trampa de §1
+>   esperando en la puerta, un escalón más abajo de donde estaba escrita. La
+>   columna cuenta **impresiones totales del documento** y su DEFAULT es 1, que
+>   es lo cierto para toda venta anterior a la migración. La excepción la
+>   escribe la app: en `ticket_final` con mesa no se imprime nada al cobrar, así
+>   que esa venta nace en 0.
+>
+> - **El contador NO arrastra las impresiones de la cuenta** (decisión de Chris,
+>   18-ago). La cuenta y el ticket no son el mismo papel, y `CUENTA_IMPRESA` ya
+>   registra las de la cuenta una por una. El agregado se reconstruye desde
+>   auditoría si algún día hace falta.
+>
+> - **En `ticket_final` la copia NO es exacta, y se acepta** (decisión de Chris,
+>   18-ago). El papel que se llevó el cliente es la *cuenta* —`ticket::<folio>`,
+>   sin bloque de pago— y la reimpresión se construye desde la fila de `ventas`
+>   —`ticket::<venta.id>`, con «Pago: EFECTIVO»—. Sale el ticket completo, que
+>   es más informativo. **Queda dicho aquí porque contradice el requisito
+>   literal de arriba en ese flujo concreto.**
+>
+> - **Y un hallazgo del camino:** `cambio_entregado` **no se guarda en la base**.
+>   Se calcula en el modal de cobro y muere con él. Sin tocarlo, la reimpresión
+>   habría impreso «Cambio: $0.00» —una cifra falsa en un papel que se lleva el
+>   cliente, no un hueco—. `construirTicket` ahora exige que el campo **venga**,
+>   no que valga algo: un cambio de cero de verdad sí se imprime; uno que no
+>   sabemos, no. Dos pruebas nuevas en `Comanda.test.js`.
+>
+> **Sin probar en pantalla:** `ReportesScreen.jsx` no tiene suite. El botón se
+> verifica en la caja, con papel.
 
 ### Lo que ya está hecho, y nadie llama
 
@@ -412,6 +449,15 @@ fallo silencioso de siempre.
    folio, hora y total. Esa pantalla ya está gateada por `gestion`, así que
    reimprimir queda en Admin/Gerente sin añadir permisos nuevos.
    **`abrirCajon: false`**, obviamente: una copia no mueve dinero.
+
+   > **HECHO el 18-ago.** Un icono de impresora por fila, apagado mientras esa
+   > copia está en vuelo. El contador sube **después** de que el papel salga: al
+   > revés, una impresora apagada gastaría números de copia y el siguiente
+   > intento saltaría a `::c3` sin que hubiera existido nunca una `::c2`.
+   >
+   > Y como la fila de `ventas` guarda el **id** de la mesa y el ticket enseña
+   > el **nombre**, se resuelve contra `mesas` antes de imprimir. Sin eso, la
+   > copia de una mesa saldría como «Mostrador».
 
 ### Auditoría — decisión de Chris: SÍ
 
