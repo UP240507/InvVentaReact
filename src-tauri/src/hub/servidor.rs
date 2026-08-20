@@ -461,15 +461,16 @@ async fn respaldo_pendiente(
         );
     }
 
-    let quien_pregunta = token_de(&headers).to_string();
+    // La caja no adopta lo suyo propio —eso lo sube su propia cola, y hacerlo
+    // por los dos caminos a la vez sería pedirle a `upsert` que arregle una
+    // carrera evitable— pero esa regla ya NO vive aquí: la aplica `pendientes()`
+    // mirando la marca `respaldo::CAJA`. Estaba comparando contra el token de
+    // quien pregunta, que se regenera en cada arranque, así que después de un
+    // reinicio no acertaba nunca. Era la mitad abierta del fallo 5.
     let huerfanas = estado.respaldo.pendientes(|dispositivo| {
-        // La caja no adopta lo suyo propio: eso lo sube su propia cola, y
-        // hacerlo por los dos caminos a la vez sería pedirle a `upsert` que
-        // arregle una carrera que se puede evitar.
-        dispositivo == quien_pregunta
-            || estado
-                .dispositivos
-                .visto_hace_menos_de(dispositivo, VENTANA_VIVO_MS)
+        estado
+            .dispositivos
+            .visto_hace_menos_de(dispositivo, VENTANA_VIVO_MS)
     });
 
     (

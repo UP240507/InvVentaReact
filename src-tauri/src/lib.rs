@@ -107,9 +107,11 @@ fn hub_respaldar(
     let mut invalidos = 0;
 
     for mut a in anotaciones {
-        // La caja se identifica con su propio token, igual que la ruta HTTP
-        // toma el emisor de la cabecera y no del cuerpo.
-        a.dispositivo = hub.estado.token.clone();
+        // La caja se marca como tal, no con un token. Aquí estaba
+        // `hub.estado.token`, que se regenera en cada arranque —eso protege el
+        // QR y hay que conservarlo—, así que al reiniciar la caja dejaba de
+        // reconocer lo que ella misma había respaldado. Ver `respaldo::CAJA`.
+        a.dispositivo = hub::respaldo::CAJA.to_string();
         match hub.estado.respaldo.anotar(a) {
             hub::respaldo::Recibo::Anotado => anotados += 1,
             hub::respaldo::Recibo::Duplicado => duplicados += 1,
@@ -140,13 +142,12 @@ fn hub_respaldo_pendientes(
     estado: tauri::State<'_, EstadoApp>,
 ) -> Result<serde_json::Value, String> {
     let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
-    let propio = hub.estado.token.clone();
+    // Lo de la caja ya no se excluye aquí: lo excluye `pendientes()`, que es
+    // donde no se puede olvidar. Este cierre sólo contesta por los teléfonos.
     let huerfanas = hub.estado.respaldo.pendientes(|d| {
-        d == propio
-            || hub
-                .estado
-                .dispositivos
-                .visto_hace_menos_de(d, hub::servidor::VENTANA_VIVO_MS)
+        hub.estado
+            .dispositivos
+            .visto_hace_menos_de(d, hub::servidor::VENTANA_VIVO_MS)
     });
     Ok(serde_json::json!({
         "resumen": hub.estado.respaldo.resumen(),

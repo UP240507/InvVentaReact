@@ -50,6 +50,33 @@ use serde::{Deserialize, Serialize};
 /// clave confirmada son ~40 bytes.
 const MEMORIA_CONFIRMADAS: usize = 5000;
 
+/// Marca reservada para las anotaciones que deja **la propia caja**.
+///
+/// ── POR QUÉ NO VALE SU TOKEN, QUE ES LO QUE SE USABA ────────────────────────
+/// La caja se firmaba con `estado.token`, que es el token de EMPAREJAMIENTO —el
+/// que va en el QR— y `servidor.rs` lo regenera **en cada arranque**. Eso es a
+/// propósito y hay que conservarlo: es lo que hace que una foto vieja del QR
+/// pegado en la cocina deje de servir. Hay incluso una prueba que lo fija,
+/// `el_token_no_es_constante_entre_arranques`.
+///
+/// Pero este archivo SÍ sobrevive al reinicio. O sea que cada anotación de la
+/// caja quedaba firmada con un valor que moría esa misma noche: al volver a
+/// arrancar, `pendientes()` comparaba contra el token nuevo, no reconocía
+/// ninguna de las suyas, y **la caja se ofrecía a adoptar su propio trabajo**.
+/// Nunca dio un error —los dos lados hacían lo correcto con el dato que tenían—
+/// y por eso costó tres hipótesis. Es la mitad que quedaba abierta del fallo 5.
+///
+/// El arreglo no es persistir el token: eso cambiaría una propiedad de seguridad
+/// para resolver un problema de identidad. Es dejar de deducir quién escribió
+/// una anotación comparando cadenas **después**, cuando en el momento de
+/// escribirla se sabe con certeza.
+///
+/// No puede chocar con un token real —`generar_token()` devuelve 16 caracteres
+/// hexadecimales y esto lleva dos puntos— y un teléfono no lo puede falsificar:
+/// ni la ruta HTTP ni el comando de Tauri leen `dispositivo` del cuerpo, los dos
+/// lo sobrescriben con el emisor antes de anotar.
+pub const CAJA: &str = "::caja::";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Anotacion {
     /// `"ventas::1829286241974646"`. Única entre dispositivos gracias a
@@ -57,7 +84,8 @@ pub struct Anotacion {
     /// teléfonos compartirían clave y el segundo se descartaría como duplicado
     /// **en silencio**, que es peor que la pérdida que esto viene a evitar.
     pub clave: String,
-    /// Token del dispositivo que la dejó. Sirve para saber a quién huerfanar.
+    /// Quién la dejó: el token del dispositivo, o `CAJA` si fue la caja misma.
+    /// Sirve para saber a quién huerfanar.
     #[serde(default)]
     pub dispositivo: String,
     /// La tarea tal cual la encola el front: `{ tabla | rpc, metodo, data }`.
@@ -209,6 +237,11 @@ impl Respaldo {
     /// módulo no dependa del registro de dispositivos —y, sobre todo, para que
     /// la regla se pueda probar sin montar medio hub.
     ///
+    /// **Lo de la caja nunca sale de aquí**, y la regla vive dentro y no en el
+    /// cierre de cada llamador. Hay dos llamadores —el comando de Tauri y la
+    /// ruta HTTP— y olvidarla en uno solo no daría ningún error: devolvería el
+    /// fallo 5 por ese camino y en silencio. Ver `CAJA`.
+    ///
     /// Se ordenan por antigüedad. No hace falta para la corrección —no hay FK
     /// entre estas tablas, comprobado el 10-ago— pero si algún día se añade
     /// una, subir en orden de creación es lo que salva.
@@ -217,7 +250,7 @@ impl Respaldo {
         let mut lista: Vec<Anotacion> = interior
             .pendientes
             .values()
-            .filter(|a| !esta_vivo(&a.dispositivo))
+            .filter(|a| a.dispositivo != CAJA && !esta_vivo(&a.dispositivo))
             .cloned()
             .collect();
         lista.sort_by_key(|a| a.creado_ms);
@@ -544,6 +577,67 @@ mod tests {
         assert_eq!(huerfanas[0].clave, "ventas::muerto");
 
         let _ = std::fs::remove_file(&archivo);
+    }
+
+    /// La mitad abierta del fallo 5.
+    ///
+    /// Lo suyo lo sube su propia cola. Que además se lo ofrezca la adopción no
+    /// es un error visible —`upsert` sobre una clave ya única aguanta el
+    /// duplicado— pero es una carrera que se puede evitar, y en pantalla es una
+    /// pila de «Por adoptar» que dice que algo va mal cuando no va mal nada.
+    #[test]
+    fn la_caja_nunca_es_huerfana_de_si_misma() {
+        let archivo = archivo_temp("caja-propia");
+        let r = Respaldo::nuevo(archivo.clone());
+
+        r.anotar(anotacion("ventas::de-la-caja", CAJA));
+        r.anotar(anotacion("ventas::del-telefono", "tel-muerto"));
+
+        // El cierre dice que NADIE está vivo, que es el caso más duro: ni
+        // siquiera así debe salir la de la caja.
+        let huerfanas = r.pendientes(|_| false);
+        assert_eq!(huerfanas.len(), 1);
+        assert_eq!(huerfanas[0].clave, "ventas::del-telefono");
+
+        let _ = std::fs::remove_file(&archivo);
+    }
+
+    /// **Ésta es la prueba que encierra el fallo**, y por eso reabre el archivo.
+    ///
+    /// El defecto no se veía en un solo arranque: dentro de la misma sesión, el
+    /// token del hub coincidía consigo mismo y la exclusión acertaba. Aparecía
+    /// al reiniciar, cuando `estado.token` era otro y las anotaciones de ayer
+    /// seguían firmadas con el de anteayer. Una prueba en memoria habría pasado
+    /// con el código roto — que es exactamente lo que pasó.
+    #[test]
+    fn y_lo_sigue_siendo_despues_de_reiniciar() {
+        let archivo = archivo_temp("caja-reinicio");
+        {
+            let r = Respaldo::nuevo(archivo.clone());
+            r.anotar(anotacion("ventas::de-la-caja", CAJA));
+        }
+
+        // Otro arranque: otro token de emparejamiento, el mismo archivo.
+        let r2 = Respaldo::nuevo(archivo.clone());
+        assert_eq!(
+            r2.resumen().pendientes,
+            1,
+            "la anotación tiene que seguir ahí"
+        );
+        assert!(
+            r2.pendientes(|_| false).is_empty(),
+            "la caja volvió a ofrecerse a adoptar lo suyo: el fallo 5 otra vez"
+        );
+
+        let _ = std::fs::remove_file(&archivo);
+    }
+
+    /// El sentinel no puede ser un token real, o un teléfono con la cadena justa
+    /// dejaría de ser adoptable nunca. `generar_token()` es hexadecimal puro.
+    #[test]
+    fn la_marca_de_la_caja_no_puede_confundirse_con_un_token() {
+        assert!(CAJA.contains(':'));
+        assert!(!CAJA.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
