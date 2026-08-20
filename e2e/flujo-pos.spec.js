@@ -9,11 +9,12 @@
 //         habilita "Confirmar y Cerrar Cuenta" (disabled hasta estaPagado).
 //       · Si falta stock, ANTES del cobro aparece ConfirmacionStockModal
 //         (botón "Continuar al cobro" / "... de todas formas") — se maneja.
-//       · Ticket: "Folio:" + POS-xxxxx (PosScreen.jsx:425) y botón
-//         "Cerrar Venta" (TicketImpresion.jsx).
+//       · Ticket: "Folio:" + el folio de `lib/Folio.js` (AZUL7K-V-000123) y
+//         botón "Cerrar Venta" (TicketImpresion.jsx).
 //
 // ⚠️ Estos tests escriben VENTAS y MOVIMIENTOS reales en el tenant. El folio
-// de la venta queda identificable (POS-xxxxx) por si hay que depurar datos.
+// de la venta queda identificable —lleva el prefijo del dispositivo— por si
+// hay que depurar datos.
 import { test, expect } from '@playwright/test';
 import {
   STATE_CAJERO,
@@ -118,10 +119,22 @@ test.describe('Flujo POS (cajero)', () => {
     await expect(btnConfirmar).toBeEnabled();
     await btnConfirmar.click();
 
-    // ── TicketImpresion (confirmado) ── folio POS-xxxxx (5 dígitos).
+    // ── TicketImpresion (confirmado) ── el folio, en el formato de `Folio.js`.
+    //
+    // Aquí decía `/POS-\d{5}/`, que es el formato VIEJO. Cambió al escribir
+    // `lib/Folio.js` —`AZUL7K-V-000123`: letras del local, dos que distinguen
+    // el dispositivo, serie y consecutivo de seis— y la prueba se quedó atrás.
+    // Falló el 13-ago y el fallo era de la prueba, no del ticket: se comprobó
+    // que `construirTicket` mete `{ etiqueta: 'Folio' }` en `meta` y que
+    // `TicketImpresion` pinta `doc.meta` entero.
+    //
+    // El prefijo va con cuantificador y no fijo en seis: `letrasDelLocal()`
+    // recorta a cuatro pero no rellena, así que un local llamado «Bo» deja un
+    // prefijo más corto. Clavarlo en `{6}` haría fallar la prueba en un tenant
+    // de nombre corto, y por un motivo que no tiene nada que ver con el folio.
     await expect(
-      page.getByText(/POS-\d{5}/),
-      'El ticket no muestra el folio POS-xxxxx (TicketImpresion.jsx)',
+      page.getByText(/[A-Z0-9]{2,6}-V-\d{6}/),
+      'El ticket no muestra el folio (formato de lib/Folio.js, p. ej. AZUL7K-V-000123)',
     ).toBeVisible({ timeout: 15_000 });
 
     // Cerrar ticket: venta directa vuelve al POS con carrito vacío.
