@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
+import { useSyncStore } from '../../store/useSyncStore';
+import { useAuthStore } from '../auth/useAuthStore';
+import { enviarTicket } from '../../lib/Hub';
 import {
   PageShell,
   PageHeader,
@@ -83,9 +86,18 @@ export default function ReportesScreen() {
     movimientos,
     productos,
     recetas,
+    mesas,
+    configuracion,
+    showToast,
+    registrarAuditoria,
   } = useAppStore();
+  const { enqueueAction } = useSyncStore();
+  const { user } = useAuthStore();
 
   const [tab, setTab] = useState('financiero');
+  // Folio que se está reimprimiendo, para apagar su botón. Uno a la vez: dos
+  // pulsaciones seguidas sobre el mismo ticket son el error caro aquí.
+  const [reimprimiendo, setReimprimiendo] = useState(null);
   const hoy = new Date();
   const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   // Fechas LOCALES (ver lib/Fechas.js): con UTC el reporte del mes arrancaba
@@ -304,6 +316,92 @@ export default function ReportesScreen() {
       return f && f >= apertura && f <= cierre;
     });
   }, [turnoSeleccionado, turnosPeriodo, ventas]);
+
+  // ── Reimprimir el ticket de una venta ya cobrada ────────────────────────────
+  //
+  // «La copia es un duplicado EXACTO del original, sin texto extra de ningún
+  // tipo» (Chris). Por eso `construirTicket` ya no estampa el aviso de
+  // reimpresión en los tickets —sólo en las comandas, donde evita que cocina
+  // prepare dos veces—.
+  //
+  // ── LA TRAMPA, QUE ES LO IMPORTANTE ───────────────────────────────────────
+  // El número de copia entra en el ID del documento (`sufijoCopia`) y
+  // `hub/cola.rs` DESCARTA por id ya impreso. El descarte no es un error para
+  // el hub: la promesa vuelve con `ok`. Si se mandara siempre el mismo id, la
+  // segunda copia no saldría y el cajero le diría al cliente «ya salió»
+  // mientras la impresora no hace nada. De ahí que el contador viva en la base
+  // (`ventas.copias_impresas`) y no en estado local, que se pierde al recargar.
+  //
+  // `?? 1` para las filas anteriores a la columna: su ticket se imprimió, así
+  // que la siguiente es la 2. Es la misma razón por la que el DEFAULT de la
+  // columna es 1 y no 0.
+  const reimprimirTicket = async (venta) => {
+    if (!venta || reimprimiendo) return;
+    setReimprimiendo(venta.id);
+    const copia = Number(venta.copias_impresas ?? 1) + 1;
+
+    try {
+      const r = await enviarTicket(
+        {
+          ...venta,
+          // La fila de la base guarda el id de la mesa, no su nombre, y el
+          // ticket enseña el nombre. Sin esto una mesa se reimprimiría como
+          // «Mostrador», que es sencillamente falso.
+          mesa_nombre:
+            (mesas || []).find((m) => String(m.id) === String(venta.mesa))
+              ?.nombre || undefined,
+        },
+        configuracion,
+        {
+          copia,
+          // Una copia no mueve dinero. Sin este `false` explícito,
+          // `construirTicket` decide el pulso por el método de pago y el cajón
+          // se abriría cada vez que un cliente pide su ticket otra vez.
+          abrirCajon: false,
+        },
+      );
+
+      if (!r?.ok) {
+        showToast(
+          'No se pudo imprimir la copia. Revisa la impresora.',
+          'error',
+        );
+        return;
+      }
+
+      // El contador se sube DESPUÉS de que el papel salga. Al revés, una
+      // impresora apagada gastaría números de copia y el siguiente intento
+      // saltaría a `::c3` sin que nunca hubiera existido una `::c2`.
+      const actualizada = { ...venta, copias_impresas: copia };
+      enqueueAction('ventas', 'update', actualizada);
+      useAppStore.setState((prev) => ({
+        ventas: (prev.ventas || []).map((x) =>
+          String(x.id) === String(venta.id) ? actualizada : x,
+        ),
+      }));
+
+      // ── EL ÚNICO RASTRO QUE VA A QUEDAR ─────────────────────────────────
+      // Al ser la copia un duplicado exacto, desde el papel es IMPOSIBLE
+      // distinguir un original de una copia. Es lo que se quiere y es lo que
+      // el cliente espera — pero significa que sin esta línea dos tickets
+      // idénticos circulan sin dejar huella en ninguna parte. Hermana de
+      // `CUENTA_IMPRESA` (`cfbc428`), y dicen lo mismo a propósito.
+      registrarAuditoria?.({
+        fecha: new Date().toISOString(),
+        usuario: user?.nombre ?? 'Sistema',
+        accion: 'REIMPRESION_TICKET',
+        modulo: 'REPORTES',
+        nivel: 'info',
+        detalles:
+          `Folio ${venta.folio} reimpreso. Total: $${venta.total}. ` +
+          `Impresión ${copia}.`,
+      });
+
+      showToast(`Copia ${copia} del folio ${venta.folio}.`, 'success');
+    } finally {
+      setReimprimiendo(null);
+    }
+  };
 
   // ── Imprimir Corte Z ────────────────────────────────────────────────────────
   const imprimirCorteZ = (t, vts) => {
@@ -758,9 +856,27 @@ export default function ReportesScreen() {
                                     })}
                                   </span>
                                 </div>
-                                <span className="font-black text-sm text-adm-ok">
-                                  {fmt(v.total)}
-                                </span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-black text-sm text-adm-ok">
+                                    {fmt(v.total)}
+                                  </span>
+                                  {/* El botón vive aquí y no en una pantalla
+                                      nueva porque esta lista ya está gateada
+                                      por `gestion`: reimprimir queda en
+                                      Admin/Gerente sin inventar permisos. */}
+                                  <button
+                                    type="button"
+                                    onClick={() => reimprimirTicket(v)}
+                                    disabled={reimprimiendo === v.id}
+                                    title={`Imprimir otra copia del folio ${v.folio}`}
+                                    className="p-2 rounded-ui border-2 border-adm-border text-adm-muted hover:text-adm-ink hover:border-adm-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                    <span className="sr-only">
+                                      Imprimir copia
+                                    </span>
+                                  </button>
+                                </div>
                               </div>
                             ))
                           )}

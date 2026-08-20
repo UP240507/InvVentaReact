@@ -1078,6 +1078,21 @@ export default function PosScreen() {
       usuario: user?.nombre ?? 'Sistema',
       fecha: new Date().toISOString(),
       propina: fiscalTicket.propina,
+      // ── CUÁNTAS VECES HA SALIDO ESTE TICKET EN PAPEL ────────────────────
+      // Nace en 1 porque abajo se imprime, y en 0 cuando NO se imprime nada
+      // —flujo de un solo papel en mesa, donde el comprobante salió al pedir
+      // la cuenta—. La condición es la misma que decide el papel; ver
+      // `yaSeImprimioLaCuenta` unas líneas más abajo.
+      //
+      // El número importa porque entra en el id del documento al reimprimir
+      // desde Reportes: `sufijoCopia` no pone sufijo a la copia 1, y
+      // `hub/cola.rs` descarta por id ya impreso SIN dar error. Arrancar en 0
+      // una venta cuyo ticket sí salió haría que su primera reimpresión
+      // pidiera el id del original y el hub la tirara en silencio.
+      copias_impresas:
+        isMesa && (configuracion?.flujo_cuenta || '') === 'ticket_final'
+          ? 0
+          : 1,
       mesa: isMesa ? mesaActual.id : null,
       // CRM: asociación opcional hecha en ModalCobro (null = mostrador).
       cliente_id: datosPago?.clienteId ?? null,

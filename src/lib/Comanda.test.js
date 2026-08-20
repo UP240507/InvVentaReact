@@ -812,6 +812,36 @@ describe('el ticket sin pago — la cuenta que se lleva a la mesa', () => {
     expect(doc.pie.join(' ')).toContain('Pago:');
   });
 
+  it('una fila de `ventas` no trae el cambio, y entonces no se inventa', () => {
+    // `cambio_entregado` se calcula en el modal de cobro y muere con él: NO
+    // está en la base. Una reimpresión desde Reportes trabaja con la fila, y
+    // sin esta guarda `money(undefined)` imprimiría «Cambio: $0.00» — que en
+    // un papel que se lleva el cliente no es un hueco, es una cifra falsa.
+    const filaDeLaBase = {
+      ...base,
+      metodo_pago: 'efectivo',
+      efectivo: 110,
+      // sin `cambio_entregado`, como viene de Supabase
+    };
+    const etiquetas = construirTicket(filaDeLaBase, {
+      configuracion: config,
+    }).totales.map((t) => t.etiqueta);
+    expect(etiquetas).not.toContain('Recibido');
+    expect(etiquetas).not.toContain('Cambio');
+    // Lo demás del ticket sigue entero: esto quita dos filas, no el papel.
+    expect(etiquetas).toContain('TOTAL');
+  });
+
+  it('un cambio de CERO de verdad sí se imprime', () => {
+    // La distinción es «no lo sé» contra «fue cero». Pago exacto es un cero
+    // legítimo y el cliente tiene derecho a verlo en el papel.
+    const doc = construirTicket(
+      { ...base, metodo_pago: 'efectivo', efectivo: 110, cambio_entregado: 0 },
+      { configuracion: config },
+    );
+    expect(doc.totales.map((t) => t.etiqueta)).toContain('Cambio');
+  });
+
   it('la mesa va primero en la meta, y las personas si las hay', () => {
     // Quien revisa una pila de cuentas busca la mesa; el folio se usa después.
     const meta = sinPago().meta.map((m) => m.etiqueta);

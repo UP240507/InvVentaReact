@@ -394,7 +394,18 @@ export function construirTicket(
   // Cambio: $Y"— y con un billete de $1,200 esa línea pasaba de 32 columnas y
   // se partía en dos justo por donde el cliente comprueba que no le robaron.
   // Como filas de total, la impresora las alinea a la derecha y nunca se parten.
-  if (hayPago && metodo === 'efectivo') {
+  //
+  // Y se exige que el cambio VENGA, no que valga algo. `cambio_entregado` no se
+  // guarda en la base: se calcula en el modal de cobro y muere con él. Una
+  // reimpresión desde Reportes trabaja con la fila de `ventas`, donde ese campo
+  // no existe, y `money(undefined)` da «$0.00» — que en un papel que se lleva
+  // el cliente no es un hueco, es una cifra equivocada. Mejor no decirlo que
+  // decirlo mal. Un cambio de 0 de verdad (pago exacto) sí se imprime, porque
+  // entonces el campo viene y vale 0.
+  const sabemosElCambio =
+    venta.cambio_entregado !== undefined && venta.cambio_entregado !== null;
+
+  if (hayPago && metodo === 'efectivo' && sabemosElCambio) {
     totales.push({
       etiqueta: 'Recibido',
       valor: money(venta.efectivo),
