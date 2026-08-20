@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { enviarTicket } from '../../lib/Hub';
+import { enviarTicket, salioPapel } from '../../lib/Hub';
 import {
   PageShell,
   PageHeader,
@@ -361,9 +361,17 @@ export default function ReportesScreen() {
         },
       );
 
-      if (!r?.ok) {
+      // `salioPapel` y no `r.ok`, y la diferencia es todo el punto de esta
+      // pantalla. `imprimir()` devuelve `ok: true` también cuando el hub
+      // DESCARTA el documento por id repetido —ahí `estado` es 'duplicado'—, y
+      // ése es justo el desenlace contra el que existe el contador de copias.
+      // Con `r.ok` a secas, un descarte se celebraría con «Copia 2 impresa» y
+      // el contador subiría solo, tapando el único síntoma que había.
+      if (!salioPapel(r)) {
         showToast(
-          'No se pudo imprimir la copia. Revisa la impresora.',
+          r?.estado === 'duplicado'
+            ? 'El hub descartó esta copia como repetida y no salió papel. Avisa a soporte.'
+            : 'No se pudo imprimir la copia. Revisa la impresora.',
           'error',
         );
         return;

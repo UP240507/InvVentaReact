@@ -328,11 +328,34 @@ export async function estado({ origen = null } = {}) {
 }
 
 /**
+ * ¿De verdad va a salir papel por esto?
+ *
+ * ── POR QUÉ NO BASTA CON `r.ok` ─────────────────────────────────────────────
+ * `imprimir()` devuelve `{ ok: true, estado }` en los TRES desenlaces, y sólo
+ * uno de ellos termina en una tira: `'encolado'`. Un `'duplicado'` significa
+ * que el hub ya tenía ese id y lo tiró; un `'vacio'`, que el documento no
+ * llevaba nada que pintar. En los dos casos `ok` vale `true` y no sale nada.
+ *
+ * Eso es correcto para el reintento por wifi —un POST repetido no es un fallo y
+ * no debe enseñarse como tal, por eso `ok` es `true`— pero es exactamente lo
+ * contrario de lo que necesita quien pulsó un botón esperando un papel. Ahí un
+ * `'duplicado'` es la peor noticia posible: el cajero le dice al cliente «ya
+ * salió» y la impresora no ha hecho nada.
+ *
+ * Se pone aquí, junto a la función que produce el `estado`, y no en cada
+ * pantalla: la distinción es del protocolo del hub, no de quien lo llama.
+ */
+export function salioPapel(r) {
+  return !!r?.ok && r?.estado === 'encolado';
+}
+
+/**
  * Encola un documento. Nunca lanza.
  *
  * `estado` puede ser 'encolado' | 'duplicado' | 'vacio'. Un DUPLICADO no es un
  * error: significa que este documento ya estaba, normalmente porque el wifi
- * parpadeó y el cliente reintentó. Quien llama no debe enseñarlo como fallo.
+ * parpadeó y el cliente reintentó. Quien llama no debe enseñarlo como fallo
+ * — pero tampoco como éxito si estaba esperando papel. Ver `salioPapel`.
  */
 export async function imprimir(
   documento,

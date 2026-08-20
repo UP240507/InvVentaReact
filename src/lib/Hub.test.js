@@ -10,6 +10,7 @@ import {
   imprimir,
   imprimirVarios,
   enTauri,
+  salioPapel,
 } from './Hub';
 
 describe('parsearPairing', () => {
@@ -483,5 +484,32 @@ describe('puente de Tauri (IPC)', () => {
     const r = await imprimir({ id: 'x' });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('el hub no está activo');
+  });
+});
+
+describe('salioPapel — «ok» no significa que haya salido una tira', () => {
+  // El hub contesta `ok: true` en los tres desenlaces y sólo uno acaba en
+  // papel. La distinción existe porque un POST repetido por la LAN no es un
+  // fallo —y por eso `ok` es true— pero para quien pulsó un botón esperando
+  // una copia, un descarte silencioso es el peor de los resultados: el cajero
+  // le dice al cliente «ya salió» y la impresora no ha hecho nada.
+  it('sólo «encolado» cuenta como papel', () => {
+    expect(salioPapel({ ok: true, estado: 'encolado' })).toBe(true);
+  });
+
+  it('un DUPLICADO viene con ok:true y NO sale papel', () => {
+    expect(salioPapel({ ok: true, estado: 'duplicado' })).toBe(false);
+  });
+
+  it('un documento VACÍO tampoco', () => {
+    expect(salioPapel({ ok: true, estado: 'vacio' })).toBe(false);
+  });
+
+  it('sin estado no se asume que sí: el hub siempre lo manda', () => {
+    // Una respuesta sin `estado` es una respuesta que no entendemos, y en el
+    // camino del papel la lectura conservadora es «no salió».
+    expect(salioPapel({ ok: true })).toBe(false);
+    expect(salioPapel(null)).toBe(false);
+    expect(salioPapel({ ok: false, estado: 'encolado' })).toBe(false);
   });
 });
