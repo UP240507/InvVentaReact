@@ -1612,8 +1612,17 @@ export default function PosScreen() {
                       📝 {item.nota}
                     </p>
                   )}
+                  {/* `whitespace-nowrap` no es estética. Con `uppercase` y
+                      `tracking-widest` esta etiqueta ocupa bastante más de lo
+                      que aparenta, la columna no da, y rompía por el espacio:
+                      «Enviado:» en un renglón y el número en otro. Y este
+                      número es el que dice que esas unidades YA están en
+                      cocina —o sea que no se pueden quitar sin autorización de
+                      gerente, y hay código aquí mismo que lo impide—. Partido
+                      en dos y en 10 px, un mesero con prisa no lo lee y se
+                      pelea con un botón que no responde sin saber por qué. */}
                   {(item.cantidad_enviada || 0) > 0 && (
-                    <span className="text-[10px] font-black text-ops-warn bg-ops-warn/10 border border-ops-warn/30 px-2 py-1 rounded-ui mt-2 inline-block uppercase tracking-widest">
+                    <span className="text-[10px] font-black text-ops-warn bg-ops-warn/10 border border-ops-warn/30 px-2 py-1 rounded-ui mt-2 inline-block uppercase tracking-widest whitespace-nowrap">
                       Enviado: {item.cantidad_enviada}
                     </span>
                   )}

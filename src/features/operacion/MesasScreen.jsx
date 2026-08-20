@@ -843,7 +843,21 @@ export default function MesasScreen() {
         </div>
 
         {/* ─── GRID DE MESAS ─── */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10">
+        {/* El `pt-3 pl-2` es lo que impide que se corte la tarjeta
+            seleccionada, y no el `gap` del grid —que ya es de 12 a 20 px y
+            separa tarjetas ENTRE SÍ, no la tarjeta del borde del contenedor,
+            que es donde ocurre el recorte—. La seleccionada lleva `ring-4
+            ring-offset-2`: 2 px de hueco + 4 de anillo = 6 px pintados POR
+            FUERA de su caja en los cuatro lados. Este contenedor tenía margen a
+            la derecha y abajo y NADA arriba ni a la izquierda, así que
+            `overflow-y-auto` recortaba el anillo de la primera fila y de la
+            primera columna.
+            Arriba hace falta más que a los lados y por eso no es un `p-2`
+            parejo: la tarjeta además lleva `-translate-y-1`, que la sube 4 px,
+            así que su borde superior llega a 6 + 4 = 10 px — `pt-2` (8 px) se
+            quedaría dos cortos, que es justo el tipo de casi-arreglo que hace
+            creer que el diagnóstico estaba mal. */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar pt-3 pl-2 pr-2 pb-10">
           {/* Dos vacíos DISTINTOS, no uno genérico: "no hay nada" y "tu filtro no
             encontró nada" son problemas diferentes y tienen salidas diferentes.
             El primero necesita crear una mesa; el segundo, quitar el filtro.
