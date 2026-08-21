@@ -1,6 +1,6 @@
 # Checklist de verificación — lo que FALTA por comprobar
 
-Reescrito el 18-ago para la sesión de campo con la **0.2.5**. Este documento es
+Reescrito el 18-ago para la sesión de campo con la **0.2.6**. Este documento es
 **sólo lo pendiente**: lo verificado el 15-ago vive en `docs/VERIFICADO_15-AGO.md`,
 y el porqué de cada arreglo en `docs/PENDIENTE_LUNES.md`.
 
@@ -35,7 +35,9 @@ cómo se pierde el único que verificaba algo.
   > —vienen de compartir estado global con `--isolate=false`; ese archivo solo
   > pasa 11 de 11—. **Si aparece un séptimo, ESE sí es nuevo.**
 
-- [ ] Las tres versiones en **0.2.5** (`npm run version` lo comprueba).
+- [ ] Las **cinco** versiones en **0.2.6** (`npm run version` lo comprueba —
+      desde el 18-ago también mira `Cargo.lock` y `package-lock.json`, que se
+      quedaban fuera y se desalineaban solos).
 
 ---
 
@@ -115,7 +117,7 @@ opinión.
 el archivo, y comprobado que fallan sin el arreglo. Esto de aquí verifica el
 cableado en la caja de verdad.
 
-- [ ] **Al instalar la 0.2.5, drenar una vez con «Recuperar ahora».** Lo que ya
+- [ ] **Al instalar la 0.2.6, drenar una vez con «Recuperar ahora».** Lo que ya
       está en el disco lleva tokens de arranques muertos y no se distingue de lo
       de un teléfono revocado, así que se ofrecerá esa última vez. Adoptar de
       más es inofensivo: `upsert` sobre una clave ya única.
@@ -144,6 +146,53 @@ teléfonos, que es para lo que existe.
       caja —revocar lo saca de la ventana de vivo al momento, sin esperar los 15
       minutos— y pulsar «Recuperar ahora».
 - [ ] Esa venta **sí** debe aparecer y subir. Comprobarla en `public.ventas`.
+
+### El drenaje en ráfaga — **con SEIS ventas, no con una**
+
+Hasta ahora este documento pedía «hacer una venta sin red y reconectar». Con
+una, la cola se vacía tan rápido que no se ve nada de lo que hay que ver. Y el
+caso real no es una: es el mesero que estuvo media hora en la terraza sin
+cobertura.
+
+**Qué protege ya, para saber qué NO estás probando.** La cola es serial —un
+`for` con `await`, una tarea por vez—, va en orden de creación, no corre dos
+pases a la vez, reintenta con espera creciente de 1 s a 60 s, y manda a
+dead-letter lo que no tiene arreglo. Un `23505` cuenta como éxito. Nada de eso
+está en duda. Lo que se prueba aquí es lo que **no** tiene freno.
+
+- [ ] Con el teléfono **sin red** (modo avión, o fuera del wifi), cobrar
+      **seis** ventas seguidas. Que alguna lleve modificador y alguna nota: son
+      las que tumbaron el trigger el 15-ago.
+- [ ] **Reconectar** y no tocar nada. **Cronometrar cuánto tarda en vaciarse.**
+
+  > Ése es el número que de verdad importa, y por eso se anota: seis ventas son
+  > unas treinta tareas. Si tardan un minuto, doscientas ventas son media hora
+  > de teléfono despierto y en rango. Sin medirlo con seis, nadie sabe si
+  > doscientas son viables.
+
+- [ ] Mientras drena, **mirar el KDS en otro aparato**. El eco de realtime es la
+      parte que no tiene freno: cada fila que entra a la nube es un evento para
+      todos los dispositivos conectados a la vez. Si algo se va a atragantar,
+      es ahí.
+- [ ] Al terminar: las **seis** están en `public.ventas`, y el panel de errores
+      del teléfono está **vacío**.
+- [ ] En `stock_salidas`, **una fila por venta**. Ni cero ni dos. Es la misma
+      comprobación que cerró §10 el 17-ago, ahora bajo carga.
+
+> **Si algo cae en dead-letter, NO lo descartes.** Reencólalo y anota el motivo.
+> Un fallo sistemático —un trigger, una policy— manda las seis de golpe, porque
+> los errores permanentes van a dead-letter en el primer intento a propósito.
+> Es lo que habría pasado el 15-ago con el trigger de los modificadores si
+> hubiera habido cien ventas acumuladas en vez de unas pocas: no se pierde
+> nada, pero alguien tiene que reencolarlas a mano.
+
+> **Y una consecuencia conocida, para que no la apuntes como fallo nuevo:** si
+> la fila de una venta muere en dead-letter, **la RPC de stock que va detrás se
+> ejecuta igual**. El almacén se mueve para una venta que no está en los libros.
+> No es un descuido: es lo que dice el hallazgo del 17-ago —«el inventario nunca
+> dependió de que la venta subiera, son dos caminos separados»— y por eso el que
+> evita vender lo que no hay funcionó mientras el otro estaba roto. Si aparece,
+> se anota; no se arregla en caliente.
 
 ---
 
@@ -217,18 +266,19 @@ probado es la capa de abajo (`Comanda.test.js`, 88 en verde).
 
 ## 7 · El updater — la ronda completa, que por fin se puede
 
-Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.5
+Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6
 **es** esa versión. Guía en `docs/CHECKLIST_ACTUALIZACIONES.md`.
 
-- [ ] Con la **0.2.4 instalada**, pulsar «Buscar actualización» → ofrece la 0.2.5.
+- [ ] Con la versión **anterior instalada**, pulsar «Buscar actualización» →
+      ofrece la 0.2.6.
 - [ ] El aviso enseña **la nota de la versión**, y se entiende sin saber de
       programación. Ver `avisoDeActualizacion()`.
-- [ ] «Versión instalada» dice **0.2.4** y no un guion. Ése fue el arreglo del
-      17-ago que **nunca se ha probado**: sólo actúa desde una 0.2.4 ya
-      instalada, y hasta hoy no había a dónde saltar.
+- [ ] «Versión instalada» dice la **anterior** y no un guion. Ése fue el arreglo
+      del 17-ago que **nunca se ha probado**: sólo actúa desde una versión que
+      ya lo lleve dentro, y hasta ahora no había a dónde saltar desde una.
 - [ ] Instalar. Windows enseña el aviso azul —«Más información» → «Ejecutar de
       todas formas»—, la caja se cierra y se vuelve a abrir sola.
-- [ ] Al volver, «Versión instalada» dice **0.2.5**.
+- [ ] Al volver, «Versión instalada» dice **0.2.6**.
 
 > Para compilar el bundle hay que exportar `TAURI_SIGNING_PRIVATE_KEY` y su
 > contraseña **en la misma sesión de shell**, o revienta al firmar, al final del
@@ -275,6 +325,18 @@ El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
   vieron. Son un par de horas contra una base que se sabe buena.
 
 ## Deuda conocida que sigue ahí
+
+- **El eco de realtime no tiene freno.** La cola de salida es serial y con
+  espera creciente; lo que entra a Supabase, en cambio, sale hacia **todos** los
+  dispositivos conectados sin ninguna contención. Un drenaje de doscientas
+  ventas son más de mil eventos repartidos a la vez entre teléfonos y KDS. No
+  corrompe nada, pero es la parte del camino que nadie ha visto bajo carga — de
+  ahí el paso nuevo de §3.
+- **Una venta en dead-letter no detiene su RPC de stock.** Van como tareas
+  distintas y la cola sigue adelante, así que el almacén se mueve para una venta
+  que no llegó a los libros. Es coherente con lo decidido el 17-ago —los dos
+  caminos son separados a propósito— pero conviene tenerlo escrito aquí y no
+  sólo en un hallazgo suelto.
 
 - ~~`ModalCobro` aún no usa `lib/Autorizacion.js`.~~ **Migrado el 18-ago.** Con
   tres copias, la que divergía siempre era la de «empleado activo», porque su
