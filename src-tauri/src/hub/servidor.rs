@@ -156,8 +156,35 @@ fn autorizado_admin(estado: &EstadoHub, headers: &HeaderMap) -> bool {
     !t.is_empty() && t == estado.token
 }
 
-async fn salud(State(estado): State<Arc<EstadoHub>>) -> impl IntoResponse {
-    Json(RespuestaSalud {
+/// El cuerpo de `/salud`, en dos tamaños.
+///
+/// ── POR QUÉ NO SIEMPRE EL COMPLETO ──────────────────────────────────────────
+/// Esta ruta **no pide token**, y tiene que seguir sin pedirlo: es la que
+/// contesta «¿está viva la caja?», y un teléfono que todavía no se ha
+/// emparejado necesita poder preguntarlo. Pero la respuesta llevaba de todo a
+/// quien fuera: el resumen de la cola, la IP de la LAN y —lo peor— `web`, que
+/// es **la ruta del disco de la caja** donde vive el build.
+///
+/// Y el hub es alcanzable desde cualquier página que abra un teléfono conectado
+/// al wifi del local: basta un `fetch` a `invventa-caja.local:3000/hub/salud`.
+/// El CORS no lo impide (ver `rutas`), y tampoco debe: lo que corresponde es no
+/// contar de más.
+///
+/// Así que sin token se contesta lo justo para saber que está viva. Con token
+/// —la pantalla del hub, que siempre lo tiene— va todo, y no cambia nada de lo
+/// que ya funcionaba.
+fn cuerpo_de_salud(estado: &EstadoHub, completo: bool) -> serde_json::Value {
+    if !completo {
+        return json!({
+            "ok": true,
+            "servicio": "invventa-hub",
+            // La versión se queda: es lo que se le pide al cliente por teléfono
+            // cuando algo va mal, y no dice nada que no diga el instalador.
+            "version": estado.version,
+        });
+    }
+
+    serde_json::to_value(RespuestaSalud {
         ok: true,
         servicio: "invventa-hub",
         version: estado.version.clone(),
@@ -169,6 +196,13 @@ async fn salud(State(estado): State<Arc<EstadoHub>>) -> impl IntoResponse {
         web_ms: estado.web_ms,
         ancho_papel: estado.cola.ancho(),
     })
+    // Un fallo de serialización aquí no puede tumbar el sondeo de salud: se
+    // degrada al cuerpo mínimo, que es justo lo que esta ruta promete.
+    .unwrap_or_else(|_| json!({ "ok": true, "servicio": "invventa-hub" }))
+}
+
+async fn salud(State(estado): State<Arc<EstadoHub>>, headers: HeaderMap) -> impl IntoResponse {
+    Json(cuerpo_de_salud(&estado, autorizado(&estado, &headers)))
 }
 
 async fn imprimir(
@@ -537,10 +571,21 @@ pub fn rutas(estado: Arc<EstadoHub>, dir_web: Option<std::path::PathBuf>) -> Rou
         .with_state(estado);
 
     let mut app = Router::new().nest("/hub", api).layer(
-        // Permisivo a propósito: la ventana de Tauri corre en el origen
-        // `tauri://localhost` y hace fetch a `http://127.0.0.1`, que para el
-        // navegador es otro origen. Lo que protege el endpoint no es el CORS
-        // —que un cliente que no sea navegador se salta— sino el token.
+        // ── SIGUE PERMISIVO, Y ES UNA DECISIÓN ────────────────────────────
+        // La ventana de Tauri corre en el origen `tauri://localhost` y hace
+        // fetch a `http://127.0.0.1`, que para el navegador es otro origen. En
+        // desarrollo hay un tercero, el Vite de `localhost:5173`. Una lista
+        // cerrada tendría que acertar los tres en todas las plataformas, y
+        // fallar en uno significa que la pantalla del hub deja de responder en
+        // la caja — sin error visible.
+        //
+        // Y no compraría gran cosa: **el CORS no protege este servidor**. Sólo
+        // ata a los navegadores; `curl` desde el mismo wifi se lo salta entero.
+        // Lo que protege es el token, y para lo que no lleva token —`/salud`—
+        // lo correcto no es esconder la puerta sino no contar de más. Eso es lo
+        // que hace `cuerpo_de_salud`.
+        //
+        // Revisar el día que este hub sirva algo que un token no cubra.
         CorsLayer::permissive(),
     );
 
@@ -633,6 +678,43 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert("x-invventa-token", t.parse().unwrap());
         h
+    }
+
+    #[test]
+    fn salud_sin_token_no_cuenta_donde_vive_el_build() {
+        // `web` es la ruta del disco de la caja. Esta ruta no pide token —y no
+        // debe pedirlo, es la que contesta si la caja está viva— así que
+        // cualquier página que abra un teléfono del local podía preguntarla.
+        let e = estado_de_prueba("abc123");
+        let publico = cuerpo_de_salud(&e, false);
+
+        assert_eq!(publico["ok"], true);
+        assert_eq!(publico["servicio"], "invventa-hub");
+        // La versión sí: es lo que se le pide al cliente por teléfono.
+        assert!(publico.get("version").is_some());
+
+        for secreto in ["web", "ip_lan", "cola", "puerto", "ancho_papel"] {
+            assert!(
+                publico.get(secreto).is_none(),
+                "«{secreto}» no debería salir sin token"
+            );
+        }
+    }
+
+    #[test]
+    fn con_token_sigue_saliendo_todo_lo_que_la_pantalla_necesita() {
+        // La contraparte: recortar de más rompería la pantalla del hub, que
+        // pide esto cada 5 s y pinta el ancho del papel y el resumen de la cola.
+        let e = estado_de_prueba("abc123");
+        let completo = cuerpo_de_salud(&e, true);
+
+        let obligatorios = ["ok", "servicio", "version", "puerto", "cola", "ancho_papel"];
+        for campo in obligatorios {
+            assert!(
+                completo.get(campo).is_some(),
+                "«{campo}» hace falta en la respuesta con token"
+            );
+        }
     }
 
     #[test]
