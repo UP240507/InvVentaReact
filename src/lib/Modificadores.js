@@ -196,7 +196,10 @@ export function sublineasDe(grupos = [], seleccion = vacia) {
 export function firmaDeLinea(productoId, seleccion = vacia, nota = '') {
   const partes = Object.keys(seleccion)
     .sort()
-    .map((gid) => `${gid}=${[...(seleccion[gid] || [])].map(idTexto).sort().join(',')}`)
+    .map(
+      (gid) =>
+        `${gid}=${[...(seleccion[gid] || [])].map(idTexto).sort().join(',')}`,
+    )
     .filter((p) => !p.endsWith('='));
 
   const n = String(nota || '').trim();

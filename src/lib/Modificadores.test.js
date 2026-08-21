@@ -47,19 +47,28 @@ const EXTRAS = {
   tipo: 'multiple',
   obligatorio: false,
   opciones: [
-    { id_opcion: 21, nombre: 'Extra Arrachera', id_producto: '1', cantidad: 0.1 },
+    {
+      id_opcion: 21,
+      nombre: 'Extra Arrachera',
+      id_producto: '1',
+      cantidad: 0.1,
+    },
     { id_opcion: 22, nombre: 'Extra queso', precio: 15, id_producto: null },
   ],
 };
 
 const CATALOGO = [TERMINO, EXTRAS];
-const HAMBURGUESA = { id: 99, nombre: 'Hamburguesa', grupos_modificadores: [1, 2] };
+const HAMBURGUESA = {
+  id: 99,
+  nombre: 'Hamburguesa',
+  grupos_modificadores: [1, 2],
+};
 
 describe('gruposDeProducto', () => {
   it('resuelve los ids contra el catálogo, en el orden del platillo', () => {
-    expect(gruposDeProducto(HAMBURGUESA, CATALOGO).map((g) => g.nombre)).toEqual(
-      ['Término', 'Extras'],
-    );
+    expect(
+      gruposDeProducto(HAMBURGUESA, CATALOGO).map((g) => g.nombre),
+    ).toEqual(['Término', 'Extras']);
   });
 
   it('compara ids como texto: la base los devuelve como número y el select como string', () => {
@@ -158,7 +167,9 @@ describe('faltantes — qué bloquea el botón, y por qué', () => {
   it('un grupo obligatorio SIN opciones no puede atrapar al mesero', () => {
     // Es imposible de satisfacer: si contara, el platillo no se vendería nunca
     // y no habría forma de salir del modal.
-    const imposible = [{ id: 3, nombre: 'Vacío', obligatorio: true, opciones: [] }];
+    const imposible = [
+      { id: 3, nombre: 'Vacío', obligatorio: true, opciones: [] },
+    ];
     expect(faltantes(imposible, {})).toEqual([]);
     expect(seleccionCompleta(imposible, {})).toBe(true);
   });
@@ -219,7 +230,7 @@ describe('firmaDeLinea — que no se fusionen dos platos distintos', () => {
       firmaDeLinea(99, { 2: ['22', '21'] }),
     );
     expect(firmaDeLinea(99, { 1: ['11'], 2: ['21'] })).toBe(
-      firmaDeLinea(99, { 2: ['21'], 1: ['11'] })
+      firmaDeLinea(99, { 2: ['21'], 1: ['11'] }),
     );
   });
 
@@ -235,10 +246,18 @@ describe('textoDeReglas — la frase que desmiente la contradicción del catálo
   // El formulario decía «puede elegir varios O NINGUNO» y justo debajo tenía
   // una casilla «El cajero DEBE seleccionar» que lo desmentía.
   it('cubre las cuatro casillas', () => {
-    expect(textoDeReglas({ tipo: 'unica', obligatorio: true })).toMatch(/sólo una/);
-    expect(textoDeReglas({ tipo: 'unica', obligatorio: false })).toMatch(/o ninguna/);
-    expect(textoDeReglas({ tipo: 'multiple', obligatorio: true })).toMatch(/al menos una/);
-    expect(textoDeReglas({ tipo: 'multiple', obligatorio: false })).toMatch(/o ninguna/);
+    expect(textoDeReglas({ tipo: 'unica', obligatorio: true })).toMatch(
+      /sólo una/,
+    );
+    expect(textoDeReglas({ tipo: 'unica', obligatorio: false })).toMatch(
+      /o ninguna/,
+    );
+    expect(textoDeReglas({ tipo: 'multiple', obligatorio: true })).toMatch(
+      /al menos una/,
+    );
+    expect(textoDeReglas({ tipo: 'multiple', obligatorio: false })).toMatch(
+      /o ninguna/,
+    );
   });
 
   it('las cuatro frases son distintas entre sí', () => {
