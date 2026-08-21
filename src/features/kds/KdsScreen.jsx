@@ -7,7 +7,12 @@ import { useAuthStore } from '../auth/useAuthStore';
 import { useAtajos } from '../../hooks/useAtajos';
 import { useAvisoKds } from '../../hooks/useAvisoKds';
 import { puedeRecibirAvisos } from '../../lib/AvisoKds';
-import { getRolEfectivo, getCapacidades } from '../../lib/Permisos';
+import {
+  getRolEfectivo,
+  getCapacidades,
+  permisoDeMarcadoKds,
+} from '../../lib/Permisos';
+import { buscarAutorizador } from '../../lib/Autorizacion';
 import { rutaDeEscape, escapeEsPerfil } from '../../lib/Escape';
 import {
   OpsHeader,
@@ -24,6 +29,7 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
+  ShieldAlert,
   Moon,
   Sun,
   Coffee,
@@ -227,12 +233,111 @@ export default function KdsScreen() {
     }
   };
 
+  // ── EL SEGURO POR ESTACIÓN (§7, decidido el 17-ago) ──────────────────────
+  // Lo pidió Chris: que un barista no marque listo un platillo de cocina por
+  // error, ni al revés; y que quien entra a supervisar entre a mirar. No es una
+  // muralla de permisos —el que sabe el PIN entra en dos toques— es un seguro
+  // contra el toque involuntario en una pantalla que se usa con las manos
+  // ocupadas y veinte comandas encima.
+  //
+  // La regla vive en `lib/Permisos.js` y se prueba ahí. Aquí sólo se pregunta.
+  // Y la respuesta trae MOTIVO, no un booleano: un botón que está y no responde
+  // es el fallo del «Salir» del barista del 12-ago otra vez.
+  //
+  // `desbloqueado` es de sesión y a propósito: la escotilla existe para la noche
+  // en que el KDS se atasca y el único en el local es el dueño. «Sólo lectura»
+  // sin salida no es una regla, es una trampa. Y queda auditado quién la abrió,
+  // que es más de lo que hay hoy.
+  const [desbloqueado, setDesbloqueado] = useState(false);
+  const [pinAbierto, setPinAbierto] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
+
+  const estacionDelUsuario =
+    useSessionStore.getState().empleadoActivo?.estacion ||
+    user?.estacion ||
+    null;
+
+  const permisoDeMarcado = (estacionItem) =>
+    desbloqueado
+      ? { puede: true, motivo: 'ok' }
+      : permisoDeMarcadoKds(capDeLaSesion, {
+          estacionUsuario: estacionDelUsuario,
+          estacionItem,
+        });
+
+  // Lo que se enseña arriba. Se calcula contra la estación que se está mirando:
+  // es la que el usuario tiene delante y sobre la que va a tocar.
+  const permisoAqui = permisoDeMarcado(estacionActiva);
+
+  /**
+   * Guarda única para las dos direcciones.
+   *
+   * Marcar listo y deshacer son el mismo botón (`estado: listo ? 'pendiente' :
+   * 'listo'`), así que bloquear la acción bloquea las dos — y eso es lo que se
+   * quiere: «no tocas esta estación» se le explica a un cocinero; «puedes
+   * desmarcar pero no marcar», no.
+   *
+   * Devuelve `true` si hay que DETENERSE. Al detenerse abre el PIN en vez de no
+   * hacer nada: el toque tiene que llevar a algún sitio.
+   */
+  const detenerSiNoPuede = (estacionItem) => {
+    const { puede, motivo } = permisoDeMarcado(estacionItem);
+    if (puede) return false;
+    setPinError('');
+    setPin('');
+    setPinAbierto(true);
+    if (motivo === 'otra_estacion') {
+      showToast(`Ese platillo es de otra estación`, 'info');
+    }
+    return true;
+  };
+
+  const confirmarPin = () => {
+    const p = String(pin).trim();
+    if (p.length < 4) return setPinError('PIN incompleto.');
+
+    // Mismo patrón que reabrir una cuenta: el PIN de alguien con mando, no una
+    // contraseña nueva que nadie va a recordar. `gestion` y no un flag propio
+    // porque un flag nuevo llegaría en `false` a todo local que ya tenga sus
+    // filas de permisos —`getCapacidades` reemplaza, no mezcla— y la escotilla
+    // no se abriría para nadie. Ver `lib/Permisos.js`.
+    const quien = buscarAutorizador({
+      staff: useAppStore.getState().staff,
+      roles_permisos,
+      pin: p,
+      flag: 'gestion',
+    });
+    if (!quien) {
+      setPin('');
+      return setPinError('PIN inválido o sin permiso.');
+    }
+
+    setDesbloqueado(true);
+    setPinAbierto(false);
+    useAppStore.getState().registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quien.nombre,
+      accion: 'KDS_DESBLOQUEADO',
+      modulo: 'KDS',
+      nivel: 'info',
+      detalles: `${quien.nombre} habilitó el marcado en el KDS (${estacionActiva}).`,
+    });
+    showToast(`Marcado habilitado por ${quien.nombre}`, 'success');
+  };
+
   // Marcar un item listo / pendiente. NO finaliza la comanda.
   const toggleItem = (comandaId, itemId) => {
     const comanda = (comandas_activas || []).find(
       (c) => String(c.id) === String(comandaId),
     );
     if (!comanda) return;
+
+    const elItem = comanda.items.find(
+      (i) => String(i.id ?? i.nombre) === String(itemId),
+    );
+    if (detenerSiNoPuede(itemDestino(elItem))) return;
+
     const eraLista = comandaTotalmenteLista(comanda);
 
     const nuevosItems = comanda.items.map((item) => {
@@ -254,6 +359,9 @@ export default function KdsScreen() {
       (c) => String(c.id) === String(comandaId),
     );
     if (!comanda) return;
+    // Marca todo lo de la estación que se está mirando, así que la guarda se
+    // pregunta por esa misma estación.
+    if (detenerSiNoPuede(estacionActiva)) return;
     const eraLista = comandaTotalmenteLista(comanda);
 
     const nuevosItems = comanda.items.map((item) => {
@@ -458,6 +566,53 @@ export default function KdsScreen() {
         }))}
       />
 
+      {/* ── SE DICE QUE ESTÁS MIRANDO, NO SE DEJA ADIVINAR ────────────────
+          Sin esto, la pantalla se ve igual que siempre y no responde, que es
+          exactamente lo que no vale. Y lleva su salida al lado: «sólo lectura»
+          sin escotilla deja el KDS bloqueado la noche que se atasca y el único
+          en el local es el dueño. */}
+      {!permisoAqui.puede && (
+        <div className="relative z-10 mb-4 flex flex-wrap items-center justify-between gap-3 p-4 rounded-ui border-2 border-ops-warn bg-ops-warn/10">
+          <div className="min-w-0">
+            <p className="font-black text-sm text-ops-ink uppercase tracking-widest">
+              {permisoAqui.motivo === 'otra_estacion'
+                ? `Estás viendo ${estacionActiva}, que no es tu estación`
+                : 'Estás mirando, no marcando'}
+            </p>
+            <p className="text-xs font-bold text-ops-muted mt-1">
+              {permisoAqui.motivo === 'otra_estacion'
+                ? 'Puedes verlo todo. Para marcar aquí hace falta el PIN de un encargado.'
+                : 'Tu rol entra al KDS a supervisar. Con el PIN de un encargado se habilita el marcado.'}
+            </p>
+          </div>
+          <OpsButton
+            variante="cobro"
+            onClick={() => {
+              setPin('');
+              setPinError('');
+              setPinAbierto(true);
+            }}
+            className="shrink-0"
+          >
+            Desbloquear con PIN
+          </OpsButton>
+        </div>
+      )}
+
+      {/* El ajuste que no puede cumplir lo que promete: el rol tiene la
+          restricción por estación activada y el empleado no tiene ninguna
+          asignada, así que no hay con qué comparar y no está restringiendo
+          nada. Se dice en vez de dejar creer que sí. */}
+      {permisoAqui.motivo === 'sin_estacion' && (
+        <div className="relative z-10 mb-4 p-3 rounded-ui border border-ops-border bg-ops-panel-2">
+          <p className="text-xs font-bold text-ops-muted">
+            Este rol está configurado para marcar sólo su estación, pero al
+            empleado no se le ha asignado ninguna — así que ahora mismo puede
+            marcar todas. Asígnasela en Empleados.
+          </p>
+        </div>
+      )}
+
       {/* GRID DE TICKETS DE LA ESTACIÓN ACTIVA */}
       <div className="relative z-10">
         {comandasDeEstacion.length === 0 ? (
@@ -507,7 +662,15 @@ export default function KdsScreen() {
                         <div
                           key={itemId || idx}
                           onClick={() => toggleItem(orden.id, itemId)}
-                          className={`flex gap-3 p-4 rounded-ui cursor-pointer transition-all border-2 ${
+                          /* Apagado, no invisible, y clicable: el toque abre la
+                             escotilla en vez de no hacer nada. Un elemento con
+                             su aspecto de siempre que no responde se lee como
+                             una app rota. */
+                          className={`flex gap-3 p-4 rounded-ui transition-all border-2 ${
+                            permisoAqui.puede
+                              ? 'cursor-pointer'
+                              : 'cursor-not-allowed opacity-60'
+                          } ${
                             listo
                               ? 'bg-ops-panel-2 border-ops-border opacity-50 scale-[0.98]'
                               : 'bg-white dark:bg-ops-bg border-ops-border hover:border-ops-accent/30 dark:hover:border-ops-accent/50 shadow-sm'
@@ -573,10 +736,16 @@ export default function KdsScreen() {
                   <div className="p-4 bg-ops-panel-2 border-t-2 border-ops-border">
                     <button
                       onClick={() => marcarEstacionLista(orden.id)}
-                      className="w-full py-4 rounded-ui font-black text-sm tracking-widest uppercase transition-all active:scale-95 shadow-md bg-ops-ok dark:hover:bg-[#00c98c] text-ops-ok-fg shadow-ops-ok/30 dark:shadow-[0_0_20px_rgba(0,229,160,0.3)] flex items-center justify-center gap-2"
+                      className={`w-full py-4 rounded-ui font-black text-sm tracking-widest uppercase transition-all active:scale-95 shadow-md flex items-center justify-center gap-2 ${
+                        permisoAqui.puede
+                          ? 'bg-ops-ok dark:hover:bg-[#00c98c] text-ops-ok-fg shadow-ops-ok/30 dark:shadow-[0_0_20px_rgba(0,229,160,0.3)]'
+                          : 'bg-ops-panel-2 text-ops-muted border-2 border-ops-border cursor-not-allowed'
+                      }`}
                     >
-                      <CheckCheck className="w-5 h-5" /> Marcar {estacionActiva}{' '}
-                      lista
+                      <CheckCheck className="w-5 h-5" />{' '}
+                      {permisoAqui.puede
+                        ? `Marcar ${estacionActiva} lista`
+                        : 'Desbloquear para marcar'}
                     </button>
                   </div>
                 </div>
@@ -615,6 +784,53 @@ export default function KdsScreen() {
             Cancelará <strong>todas</strong> las comandas activas, de todas las
             estaciones. No se puede deshacer.
           </p>
+        </OpsModal>
+      )}
+
+      {pinAbierto && (
+        <OpsModal
+          titulo="Habilitar el marcado"
+          icono={ShieldAlert}
+          ancho="max-w-sm"
+          onClose={() => setPinAbierto(false)}
+          pie={
+            <>
+              <OpsButton
+                className="flex-1"
+                onClick={() => setPinAbierto(false)}
+              >
+                Cancelar
+              </OpsButton>
+              <OpsButton
+                variante="cobro"
+                className="flex-1"
+                onClick={confirmarPin}
+              >
+                Habilitar
+              </OpsButton>
+            </>
+          }
+        >
+          <p className="text-ops-muted font-bold text-sm mb-3">
+            El PIN de un encargado habilita el marcado en esta pantalla hasta
+            que se cierre. Queda registrado quién lo hizo.
+          </p>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={(e) => e.key === 'Enter' && confirmarPin()}
+            maxLength={6}
+            placeholder="••••"
+            className="w-full text-center text-2xl tracking-[0.5em] font-black p-3 rounded-ui border-2 border-ops-border bg-ops-bg text-ops-ink"
+          />
+          {pinError && (
+            <p className="text-xs font-black text-ops-danger mt-2 text-center">
+              {pinError}
+            </p>
+          )}
         </OpsModal>
       )}
     </div>

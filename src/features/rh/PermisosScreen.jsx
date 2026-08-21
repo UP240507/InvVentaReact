@@ -156,6 +156,20 @@ const FLAGS_SISTEMA = [
     nombre: 'Configuración sensible',
     desc: 'Edita jornada, lealtad y ajustes críticos',
   },
+  // ── LOS DOS DEL KDS SON RESTRICCIONES, NO PERMISOS ────────────────────────
+  // Apagados no hacen nada: el KDS se comporta como siempre. Es lo que permite
+  // publicarlos sin romper ninguna cocina — `getCapacidades` reemplaza y un flag
+  // nuevo llega vacío a todo local que ya tenga sus filas. Ver `lib/Permisos.js`.
+  {
+    id: 'kds_solo_lectura',
+    nombre: 'KDS de sólo lectura',
+    desc: 'Entra al KDS a mirar: no marca platillos. Se desbloquea con PIN',
+  },
+  {
+    id: 'kds_estacion_fija',
+    nombre: 'KDS sólo su estación',
+    desc: 'Sólo marca los platillos de su estación. Necesita estación asignada',
+  },
 ];
 
 const uuid = () =>

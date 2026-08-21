@@ -17,6 +17,22 @@
 //   exento_turno        bool     — navega sin turno de caja abierto
 //   admin_config        bool     — edita configuración sensible (jornada, lealtad)
 //   es_sistema          bool     — rol no borrable/renombrable (Admin)
+//   kds_solo_lectura    bool     — entra al KDS a MIRAR: no marca platillos
+//   kds_estacion_fija   bool     — sólo marca los platillos de SU estación
+//
+// ── POR QUÉ LOS DOS ÚLTIMOS SON RESTRICCIONES Y NO PERMISOS ─────────────────
+// Es la diferencia entre añadir una capacidad sin romper nada y romper el KDS
+// de todos los locales a la vez. `getCapacidades` **reemplaza**: si el rol tiene
+// fila en `roles_permisos`, la base de aquí abajo NO se consulta. O sea que un
+// flag nuevo llega como `undefined` a todo tenant que ya tenga sus filas —y los
+// tienen todos— y `tieneFlag` lo lee como `false`.
+//
+// Con un flag en positivo (`kds_marca`) eso significaría que **nadie puede
+// marcar nada** en cuanto se publique la versión: la cocina se queda mirando una
+// pantalla que no responde, sin ningún error. Con el flag en negativo, ausente
+// = sin restricción = exactamente como funcionaba ayer, y cada local activa lo
+// que necesite desde Roles y Permisos. Que es además lo que se decidió el
+// 17-ago: esto se configura, no se codifica.
 
 export const CAPACIDADES_BASE = {
   Admin: {
@@ -154,4 +170,44 @@ export function puedeVerRuta(cap, ruta) {
 // Flag booleano estricto (capacidades corruptas o ausentes = false).
 export function tieneFlag(cap, flag) {
   return cap?.[flag] === true;
+}
+
+/**
+ * ¿Puede este usuario marcar ESTE platillo en el KDS?
+ *
+ * ── QUÉ PROBLEMA RESUELVE ───────────────────────────────────────────────────
+ * Lo pidió Chris el 17-ago: que un barista no marque listo un platillo de
+ * cocina por error, ni al revés; y que quien entra a supervisar —dueño,
+ * gerente— entre a mirar. No es una muralla de permisos: es un seguro contra el
+ * toque involuntario en una pantalla que se usa con las manos ocupadas.
+ *
+ * Devuelve un MOTIVO y no un booleano porque la pantalla tiene que poder decir
+ * por qué. Un botón que está y no responde es exactamente el fallo del «Salir»
+ * del barista que se arregló el 12-ago: las dos salidas honestas son no
+ * pintarlo, o pintarlo apagado **diciendo por qué**.
+ *
+ * `sin_estacion` es el caso incómodo y por eso tiene nombre propio: el rol lleva
+ * la restricción activada pero el empleado no tiene estación asignada, así que
+ * no hay con qué comparar. Se deja pasar —bloquear todo sería un muro que nadie
+ * entiende— y la pantalla avisa de que la restricción no está haciendo nada. Un
+ * ajuste que promete y no cumple es peor que uno apagado.
+ *
+ * @returns {{puede: boolean, motivo: 'ok'|'solo_lectura'|'otra_estacion'|'sin_estacion'}}
+ */
+export function permisoDeMarcadoKds(
+  cap,
+  { estacionUsuario = null, estacionItem = null } = {},
+) {
+  if (tieneFlag(cap, 'kds_solo_lectura')) {
+    return { puede: false, motivo: 'solo_lectura' };
+  }
+  if (!tieneFlag(cap, 'kds_estacion_fija')) {
+    return { puede: true, motivo: 'ok' };
+  }
+  const suya = String(estacionUsuario || '').trim();
+  if (!suya) return { puede: true, motivo: 'sin_estacion' };
+
+  return String(estacionItem || '').trim() === suya
+    ? { puede: true, motivo: 'ok' }
+    : { puede: false, motivo: 'otra_estacion' };
 }
