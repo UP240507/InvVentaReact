@@ -19,6 +19,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
+import { buscarAutorizador } from '../../../lib/Autorizacion';
 import { importeDeLinea } from '../../../lib/Fiscal';
 import { useAcoplado } from '../../../hooks/useAcoplado';
 
@@ -134,17 +135,21 @@ export default function ModalCobro({
       setPinAuthError('PIN incompleto.');
       return;
     }
-    const autorizador = (staff || []).find((s) => {
-      const rolS = s.rol || s.puesto || '';
-      const activo =
-        s.activo !== false && s.activo !== 'false' && s.activo !== 0;
-      const p1 = String(s.pin ?? '').trim();
-      const p2 = String(s.pin_acceso ?? '').trim();
-      return (
-        autorizaDescuento(rolS) &&
-        activo &&
-        ((p1 === p && p1 !== '') || (p2 === p && p2 !== ''))
-      );
+    // ── LA TERCERA COPIA, RETIRADA EL 18-AGO ──────────────────────────────
+    // Aquí estaba escrita a mano la misma búsqueda que hacen el checador y la
+    // reapertura de cuenta: capacidad + empleado activo + PIN en `pin` o en
+    // `pin_acceso`. `lib/Autorizacion.js` nació para eso y esta pantalla era
+    // la que faltaba por migrar.
+    //
+    // La parte que de verdad importa es la de «activo». Con tres copias, la
+    // que diverge es siempre ésa, porque su fallo NO se nota probando: todo
+    // funciona igual, sólo que autoriza descuentos alguien que ya no trabaja
+    // aquí. Un fallo que no da error, otra vez.
+    const autorizador = buscarAutorizador({
+      staff,
+      roles_permisos,
+      pin: p,
+      flag: 'autoriza_descuentos',
     });
     if (!autorizador) {
       setPinAuthError('PIN inválido o sin permiso para autorizar.');
