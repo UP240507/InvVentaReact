@@ -19,13 +19,29 @@ import { construirTicket, MARCA } from '../../../lib/Comanda';
  * imprime en papel, donde el tema del tenant no existe. Sólo el chrome del
  * modal se tematiza con tokens `ops-*`.
  */
-export default function TicketImpresion({ venta, onClose }) {
+export default function TicketImpresion({
+  venta,
+  onClose,
+  onImprimir = null,
+  imprimiendo = false,
+}) {
   const { configuracion } = useAppStore();
 
   const doc = venta ? construirTicket(venta, { configuracion }) : null;
   if (!doc) return null;
 
-  const handleImprimir = () => window.print();
+  // ── POR QUÉ ESTE BOTÓN NO LLAMA A `window.print()` SIN MÁS ────────────────
+  // Porque quien lo pulsa quiere el mismo papel térmico que acabó de salir, y
+  // `window.print()` no lo da: en el navegador manda el modal a una hoja del
+  // sistema, y en la caja —Tauri sobre WebView2— o no hace nada o abre un
+  // diálogo de Windows apuntando a una carta. El componente no sabe imprimir
+  // en térmica y no debe: recibe `onImprimir` de quien sí sabe (`PosScreen`,
+  // que además lleva la cuenta de copias).
+  //
+  // El respaldo a `window.print()` se queda para cuando NO hay `onImprimir`
+  // —pruebas, y una eventual vista fuera del POS—, que es el único sitio donde
+  // imprimir la pantalla es lo que se pretende.
+  const handleImprimir = () => (onImprimir ? onImprimir() : window.print());
 
   // La misma regla que en la térmica: lo que viene después del total
   // enfatizado ya no es desglose de la cuenta, es la liquidación —lo recibido
@@ -202,9 +218,11 @@ export default function TicketImpresion({ venta, onClose }) {
           </button>
           <button
             onClick={handleImprimir}
-            className="flex-1 py-3 bg-ops-cobro text-ops-cobro-fg font-black rounded-ui shadow-lg shadow-ops-cobro/20 transition-transform active:scale-95 flex items-center justify-center gap-2"
+            disabled={imprimiendo}
+            className="flex-1 py-3 bg-ops-cobro text-ops-cobro-fg font-black rounded-ui shadow-lg shadow-ops-cobro/20 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
           >
-            <Printer className="w-5 h-5" /> Imprimir
+            <Printer className="w-5 h-5" />{' '}
+            {imprimiendo ? 'Imprimiendo…' : 'Imprimir'}
           </button>
         </div>
       </div>

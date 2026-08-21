@@ -2,7 +2,12 @@ import { useState, useMemo } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { enviarTicket, salioPapel } from '../../lib/Hub';
+import {
+  enviarTicket,
+  enviarCorteZ,
+  enviarValePropina,
+  salioPapel,
+} from '../../lib/Hub';
 import {
   PageShell,
   PageHeader,
@@ -98,6 +103,11 @@ export default function ReportesScreen() {
   // Folio que se está reimprimiendo, para apagar su botón. Uno a la vez: dos
   // pulsaciones seguidas sobre el mismo ticket son el error caro aquí.
   const [reimprimiendo, setReimprimiendo] = useState(null);
+  // Y lo mismo para los dos documentos del cierre. Ahora que van a la cola del
+  // hub tardan lo que tarde la impresora, y sin un candado por fila el segundo
+  // clic de quien no ve salir el papel manda un segundo corte.
+  const [imprimiendoCorte, setImprimiendoCorte] = useState(null);
+  const [imprimiendoVale, setImprimiendoVale] = useState(null);
   const hoy = new Date();
   const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   // Fechas LOCALES (ver lib/Fechas.js): con UTC el reporte del mes arrancaba
@@ -412,7 +422,12 @@ export default function ReportesScreen() {
   };
 
   // ── Imprimir Corte Z ────────────────────────────────────────────────────────
-  const imprimirCorteZ = (t, vts) => {
+  // Sale por la MISMA impresora que los tickets, no por el diálogo de Windows.
+  // Antes esto era `window.open` + `win.print()`, y dentro de la caja —Tauri
+  // sobre WebView2— `window.open` no devuelve una ventana usable: el botón no
+  // imprimía, no avisaba y no dejaba rastro. Un fallo de los que duelen aquí,
+  // porque el único momento en que se descubre es al cerrar el turno.
+  const imprimirCorteZ = async (t, vts) => {
     const total = vts.reduce((s, v) => s + Number(v.total || 0), 0);
     const efectivo = vts.reduce(
       (s, v) => s + (v.metodo_pago === 'efectivo' ? Number(v.total) : 0),
@@ -425,65 +440,93 @@ export default function ReportesScreen() {
     const propinas = vts.reduce((s, v) => s + Number(v.propina || 0), 0);
     const fondo = Number(t.fondo_inicial || 0);
 
-    const win = window.open('', '_blank', 'width=340,height=700');
-    win.document.write(`
-      <html><head><style>
-        body { font-family: 'Courier New', monospace; font-size: 12px; padding: 20px; max-width: 280px; margin: auto; }
-        h2 { text-align: center; font-size: 16px; }
-        .sep { border-top: 1px dashed #000; margin: 8px 0; }
-        .row { display: flex; justify-content: space-between; margin: 3px 0; }
-        .bold { font-weight: bold; }
-        .big { font-size: 18px; font-weight: 900; text-align: center; margin: 8px 0; }
-      </style></head><body>
-        <h2>★ CORTE DE CAJA Z ★</h2>
-        <p style="text-align:center">Turno #${String(t.id).slice(-5)}</p>
-        <p style="text-align:center">${new Date(t.fecha_apertura).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-        <div class="sep"></div>
-        <div class="row"><span>Apertura</span><span>${new Date(t.fecha_apertura).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</span></div>
-        <div class="row"><span>Cierre</span><span>${t.fecha_cierre ? new Date(t.fecha_cierre).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'En curso'}</span></div>
-        <div class="row"><span>Responsable</span><span>${t.usuario || '—'}</span></div>
-        <div class="sep"></div>
-        <div class="row"><span>Tickets emitidos</span><span>${vts.length}</span></div>
-        <div class="row"><span>Efectivo</span><span>$${efectivo.toFixed(2)}</span></div>
-        <div class="row"><span>Tarjeta</span><span>$${tarjeta.toFixed(2)}</span></div>
-        <div class="row"><span>Propinas</span><span>$${propinas.toFixed(2)}</span></div>
-        <div class="sep"></div>
-        <div class="row bold"><span>FONDO INICIAL</span><span>$${fondo.toFixed(2)}</span></div>
-        <div class="row bold"><span>TOTAL VENTAS</span><span>$${total.toFixed(2)}</span></div>
-        <div class="big">TOTAL EN CAJA: $${(fondo + efectivo).toFixed(2)}</div>
-        <div class="sep"></div>
-        <p style="text-align:center; font-size:10px; margin-top:16px">Generado por AZUL ERP</p>
-        <p style="text-align:center; font-size:10px">${new Date().toLocaleString('es-MX')}</p>
-      </body></html>
-    `);
-    win.document.close();
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 500);
+    setImprimiendoCorte(String(t.id));
+    try {
+      const r = await enviarCorteZ(
+        {
+          // Los últimos cinco dígitos, igual que enseñaba el papel viejo: el id
+          // completo es un uuid y nadie lo lee en una tira de 58 mm.
+          turno: String(t.id).slice(-5),
+          apertura: t.fecha_apertura,
+          cierre: t.fecha_cierre,
+          usuario: t.usuario,
+          tickets: vts.length,
+          efectivo,
+          tarjeta,
+          propinas,
+          fondo,
+          total,
+          // Fondo + efectivo, sin tarjeta y sin propinas. Es lo que tiene que
+          // haber físicamente en el cajón; las tarjetas no pasaron por ahí y
+          // las propinas se pagan aparte. Misma cuenta que la versión de papel
+          // anterior — cambiarla aquí, callando, descuadraría el arqueo.
+          enCaja: fondo + efectivo,
+          impreso: new Date().toISOString(),
+        },
+        configuracion,
+      );
+
+      // `salioPapel` y no `r.ok`: el hub responde `ok` también cuando descarta
+      // el documento, y un corte que se cree impreso y no salió es peor que uno
+      // que falla a la vista.
+      if (!salioPapel(r)) {
+        showToast(
+          'No salió el corte. Revisa la impresora en Configuración › Hub.',
+          'error',
+        );
+        return;
+      }
+      showToast('Corte Z enviado a la impresora.', 'success');
+    } finally {
+      setImprimiendoCorte(null);
+    }
   };
 
   // ── Imprimir vale propina ────────────────────────────────────────────────────
-  const imprimirValePropina = (mesero, monto) => {
-    const win = window.open('', '_blank', 'width=320,height=400');
-    win.document.write(`
-      <html><head><style>body{font-family:'Courier New',monospace;font-size:12px;text-align:center;padding:20px}</style></head>
-      <body>
-        <h2>VALE DE PROPINAS</h2>
-        <br/>
-        <h1 style="font-size:2rem">$${Number(monto).toFixed(2)}</h1>
-        <br/>
-        <p>${mesero.toUpperCase()}</p>
-        <p>Periodo: ${fechaInicio} al ${fechaFin}</p>
-        <hr style="margin-top:50px"/>
-        <p>Firma: _______________</p>
-      </body></html>
-    `);
-    win.document.close();
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 500);
+  // Este papel se FIRMA, así que tiene que existir en papel de verdad. Mismo
+  // arreglo y misma razón que el corte.
+  const imprimirValePropina = async (mesero, monto) => {
+    setImprimiendoVale(mesero);
+    try {
+      const r = await enviarValePropina(
+        {
+          mesero,
+          desde: fechaInicio,
+          hasta: fechaFin,
+          monto,
+          impreso: new Date().toISOString(),
+        },
+        configuracion,
+      );
+      if (!salioPapel(r)) {
+        showToast(
+          'No salió el vale. Revisa la impresora en Configuración › Hub.',
+          'error',
+        );
+        return;
+      }
+
+      // ── POR QUÉ ESTE VALE SÍ SE AUDITA Y EL CORTE NO ────────────────────
+      // El corte es un resumen de datos que ya están en la base: se puede
+      // volver a sacar y sale igual. El vale es un comprobante de dinero que
+      // sale del cajón contra una firma, y el papel es el único sitio donde
+      // consta. Sin esta línea, «ya me pagaron las propinas» y «no me han
+      // pagado» son indistinguibles desde el sistema.
+      registrarAuditoria?.({
+        fecha: new Date().toISOString(),
+        usuario: user?.nombre ?? 'Sistema',
+        accion: 'VALE_PROPINA_IMPRESO',
+        modulo: 'REPORTES',
+        nivel: 'info',
+        detalles:
+          `Vale de propinas de ${mesero} por $${Number(monto || 0).toFixed(2)} ` +
+          `(${fechaInicio} a ${fechaFin}).`,
+      });
+
+      showToast(`Vale de ${mesero} enviado a la impresora.`, 'success');
+    } finally {
+      setImprimiendoVale(null);
+    }
   };
 
   return (
@@ -761,9 +804,13 @@ export default function ReportesScreen() {
                         </div>
                         <button
                           onClick={() => imprimirCorteZ(t, ventasTurno)}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-adm-ink dark:bg-adm-info hover:bg-adm-ink dark:hover:bg-adm-info text-adm-info-fg rounded-ui font-black text-sm shadow-md transition-all active:scale-95"
+                          disabled={imprimiendoCorte === String(t.id)}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-adm-ink dark:bg-adm-info hover:bg-adm-ink dark:hover:bg-adm-info text-adm-info-fg rounded-ui font-black text-sm shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                         >
-                          <Printer className="w-4 h-4" /> Imprimir Z
+                          <Printer className="w-4 h-4" />{' '}
+                          {imprimiendoCorte === String(t.id)
+                            ? 'Imprimiendo…'
+                            : 'Imprimir Z'}
                         </button>
                       </div>
 
@@ -1085,7 +1132,9 @@ export default function ReportesScreen() {
                         onClick={() =>
                           imprimirValePropina(m.nombre, m.propinas)
                         }
-                        className="p-2.5 bg-adm-warn/15 text-adm-warn hover:bg-adm-warn dark:hover:bg-adm-warn/30 rounded-ui transition-all active:scale-95"
+                        disabled={imprimiendoVale === m.nombre}
+                        title={`Imprimir vale de propinas de ${m.nombre}`}
+                        className="p-2.5 bg-adm-warn/15 text-adm-warn hover:bg-adm-warn dark:hover:bg-adm-warn/30 rounded-ui transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                       >
                         <Printer className="w-4 h-4" />
                       </button>

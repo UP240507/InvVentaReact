@@ -9,6 +9,8 @@ import {
   money,
   MARCA,
   debeImprimirComanda,
+  construirCorteZ,
+  construirValePropina,
 } from './Comanda';
 
 const config = {
@@ -908,5 +910,149 @@ describe('modificadores · lo elegido llega al papel', () => {
   it('un item sin modificadores sigue saliendo igual que siempre', () => {
     const [barra] = construirComandas(comandaBase, { configuracion: config });
     expect(barra.cuerpo[0].sublineas).toEqual([]);
+  });
+});
+
+// ─── Los dos papeles del cierre ──────────────────────────────────────────────
+// Corte Z y vale de propinas. Hasta hoy salían por `window.open` + `win.print()`
+// y dentro de la caja eso no imprime nada: código vivo que no puede funcionar.
+// Estas pruebas fijan la forma del documento, que es lo que `escpos.rs` lee.
+
+const corteBase = {
+  turno: '4f2a1',
+  apertura: '2026-07-28T14:00:00.000Z',
+  cierre: '2026-07-28T23:30:00.000Z',
+  usuario: 'Ana',
+  tickets: 37,
+  efectivo: 4210.5,
+  tarjeta: 1890,
+  propinas: 640,
+  fondo: 1000,
+  total: 6100.5,
+  enCaja: 5210.5,
+  impreso: '2026-07-28T23:35:00.000Z',
+};
+
+describe('construirCorteZ — el papel que se pega en la libreta', () => {
+  it('deja el cuerpo vacío: un corte no tiene artículos', () => {
+    // No es un detalle de estilo. `escpos.rs` pinta la cabecera
+    // «CANT DESCRIPCION IMPORTE» encima de cualquier `cuerpo` no vacío, y bajo
+    // ese título «1x Efectivo» no significa nada. Los conceptos van en
+    // `totales`, que es la sección que existe para pares etiqueta/cifra.
+    const doc = construirCorteZ(corteBase, { configuracion: config });
+    expect(doc.cuerpo).toEqual([]);
+  });
+
+  it('lo único enfatizado es la cifra que se cuenta contra el cajón', () => {
+    const doc = construirCorteZ(corteBase, { configuracion: config });
+    const fuertes = doc.totales.filter((t) => t.enfasis);
+    expect(fuertes).toHaveLength(1);
+    expect(fuertes[0].etiqueta).toBe('TOTAL EN CAJA');
+    expect(fuertes[0].valor).toBe(money(5210.5));
+  });
+
+  it('lleva el desglose completo del turno, con dinero ya formateado', () => {
+    // El hub no hace aritmética: todo el dinero viaja como texto hecho.
+    const doc = construirCorteZ(corteBase, { configuracion: config });
+    const filas = Object.fromEntries(
+      doc.totales.map((t) => [t.etiqueta, t.valor]),
+    );
+    expect(filas['Tickets']).toBe('37');
+    expect(filas['Efectivo']).toBe(money(4210.5));
+    expect(filas['Tarjeta']).toBe(money(1890));
+    expect(filas['Propinas']).toBe(money(640));
+    expect(filas['Fondo inicial']).toBe(money(1000));
+    expect(filas['Total ventas']).toBe(money(6100.5));
+  });
+
+  it('un turno sin cerrar dice «En curso», no un hueco', () => {
+    // Mirar cómo va el turno a media tarde es legítimo, y el papel tiene que
+    // decir cuál de las dos cosas es: un cierre en blanco se lee como un corte
+    // definitivo al que le falta el dato.
+    const doc = construirCorteZ(
+      { ...corteBase, cierre: null },
+      { configuracion: config },
+    );
+    const cierre = doc.meta.find((m) => m.etiqueta === 'Cierre');
+    expect(cierre.valor).toBe('En curso');
+  });
+
+  it('NO abre el cajón', () => {
+    // Al cerrar, el cajón lo abre quien cuenta. Un corte no mueve dinero: sólo
+    // cuenta el que ya está.
+    expect(
+      construirCorteZ(corteBase, { configuracion: config }).abrirCajon,
+    ).toBe(false);
+  });
+
+  it('dos cortes seguidos del mismo turno llevan ids distintos', () => {
+    // LA PRUEBA QUE IMPORTA. `hub/cola.rs` descarta por id ya impreso SIN dar
+    // error, así que un id estable haría que el segundo papel —el del dueño,
+    // después del de la libreta— no saliera y nadie se enterara. Este documento
+    // se reimprime a propósito; la comanda hace lo contrario y también por
+    // buenas razones.
+    const a = construirCorteZ(corteBase, { configuracion: config });
+    const b = construirCorteZ(corteBase, { configuracion: config });
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it('sin corte, no hay documento', () => {
+    expect(construirCorteZ(null)).toBeNull();
+  });
+});
+
+describe('construirValePropina — el papel que se firma', () => {
+  const vale = {
+    mesero: 'Ana',
+    desde: '2026-07-01',
+    hasta: '2026-07-28',
+    monto: 640,
+    impreso: '2026-07-28T23:40:00.000Z',
+  };
+
+  it('el importe es lo enfatizado y va formateado', () => {
+    const doc = construirValePropina(vale, { configuracion: config });
+    expect(doc.totales).toHaveLength(1);
+    expect(doc.totales[0].etiqueta).toBe('IMPORTE');
+    expect(doc.totales[0].valor).toBe(money(640));
+    expect(doc.totales[0].enfasis).toBe(true);
+  });
+
+  it('lleva la línea de firma con aire delante', () => {
+    // La firma no es adorno: es lo que convierte este papel en comprobante. Y
+    // una raya pegada al importe no se puede firmar en una tira de 58 mm, de
+    // ahí las dos líneas vacías.
+    const doc = construirValePropina(vale, { configuracion: config });
+    expect(doc.pie[doc.pie.length - 1]).toMatch(/^Firma: _+$/);
+    expect(doc.pie.slice(-3, -1)).toEqual(['', '']);
+  });
+
+  it('lleva el importe con letra, como cualquier comprobante de dinero', () => {
+    const doc = construirValePropina(vale, { configuracion: config });
+    expect(doc.pie[0]).toMatch(/^SON: .+/);
+  });
+
+  it('dice a nombre de quién y de qué periodo', () => {
+    const doc = construirValePropina(vale, { configuracion: config });
+    const meta = Object.fromEntries(doc.meta.map((m) => [m.etiqueta, m.valor]));
+    expect(meta['A nombre de']).toBe('Ana');
+    expect(meta['Periodo']).toBe('2026-07-01 a 2026-07-28');
+  });
+
+  it('no abre el cajón y no hay cuerpo que imprimir', () => {
+    const doc = construirValePropina(vale, { configuracion: config });
+    expect(doc.abrirCajon).toBe(false);
+    expect(doc.cuerpo).toEqual([]);
+  });
+
+  it('dos vales iguales llevan ids distintos', () => {
+    // Mismo motivo que el corte: se reimprime a propósito.
+    const a = construirValePropina(vale, { configuracion: config });
+    const b = construirValePropina(vale, { configuracion: config });
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it('sin vale, no hay documento', () => {
+    expect(construirValePropina(null)).toBeNull();
   });
 });

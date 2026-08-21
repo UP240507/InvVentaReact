@@ -489,6 +489,32 @@ export async function enviarPreCuenta(cuenta, configuracion, opciones = {}) {
   return imprimir(doc, opciones);
 }
 
+/**
+ * El Corte de Caja Z por la térmica.
+ *
+ * Antes salía por `window.open` + `win.print()`, que en la caja —Tauri sobre
+ * WebView2— no hace nada: no hay ventana que manipular, así que el botón
+ * moría en silencio. Ver `construirCorteZ`.
+ *
+ * `enviarCorteZ` recibe el corte YA CALCULADO. El cálculo vive en la pantalla
+ * porque depende de qué ventas están en el turno, y eso es una decisión de la
+ * pantalla; aquí sólo se transporta.
+ */
+export async function enviarCorteZ(corte, configuracion, opciones = {}) {
+  const { construirCorteZ } = await import('./Comanda');
+  const doc = construirCorteZ(corte, { configuracion, ...opciones });
+  if (!doc) return { ok: false, error: 'corte vacío' };
+  return imprimir(doc, opciones);
+}
+
+/** El vale que firma el mesero al cobrar sus propinas. */
+export async function enviarValePropina(vale, configuracion, opciones = {}) {
+  const { construirValePropina } = await import('./Comanda');
+  const doc = construirValePropina(vale, { configuracion, ...opciones });
+  if (!doc) return { ok: false, error: 'vale vacío' };
+  return imprimir(doc, opciones);
+}
+
 // ─── Dispositivos emparejados ────────────────────────────────────────────────
 
 /**

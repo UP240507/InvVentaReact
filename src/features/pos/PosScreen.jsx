@@ -232,6 +232,10 @@ export default function PosScreen() {
   // Copia en vuelo, para apagar su botón. Una a la vez: dos pulsaciones
   // seguidas son el error caro aquí — gastan número de copia y papel.
   const [reimprimiendoCuenta, setReimprimiendoCuenta] = useState(false);
+  // Candado del botón «Imprimir» del ticket recién cobrado: ahora ese papel va
+  // a la cola del hub y tarda, y dos clics seguidos gastarían un número de
+  // copia que el hub descartaría sin decir nada.
+  const [reimprimiendoTicket, setReimprimiendoTicket] = useState(false);
   const [pinReapertura, setPinReapertura] = useState('');
   const [pinReaperturaError, setPinReaperturaError] = useState('');
   const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
@@ -1464,6 +1468,81 @@ export default function PosScreen() {
     setTicketGenerado(ventaVisual);
   };
 
+  /**
+   * El botón «Imprimir» del ticket que se enseña recién cobrada la venta.
+   *
+   * ── LO QUE HACÍA ANTES ──────────────────────────────────────────────────
+   * `window.print()` a secas, dentro de `TicketImpresion`. En el navegador eso
+   * saca el modal por la impresora del sistema en A4; en la caja —Tauri sobre
+   * WebView2— es una de dos: o no hace nada, o abre un diálogo de Windows para
+   * mandar el ticket a una hoja tamaño carta. Ninguna de las dos es lo que
+   * quiere quien lo pulsa, que es papel térmico como el que acaba de salir.
+   *
+   * ── POR QUÉ CUENTA COPIAS ───────────────────────────────────────────────
+   * Porque el ticket original ya salió al cobrar. Éste es, por definición, la
+   * copia 2, y `hub/cola.rs` descarta por id repetido SIN dar error. Sin subir
+   * `copias_impresas` el papel no saldría y el sistema diría que sí. Hermano
+   * exacto del botón de reimpresión de Reportes; comparten razón y forma.
+   */
+  const reimprimirTicketRecien = async () => {
+    const venta = ticketGenerado;
+    if (!venta || reimprimiendoTicket) return;
+
+    setReimprimiendoTicket(true);
+    const copia = safeNumber(venta.copias_impresas, 1) + 1;
+
+    try {
+      const r = await enviarTicket(venta, configuracion, {
+        copia,
+        // Una copia no mueve dinero: el cajón ya se abrió al cobrar.
+        abrirCajon: false,
+      });
+
+      if (!salioPapel(r)) {
+        showToast(
+          r?.estado === 'duplicado'
+            ? 'El hub descartó esta copia como repetida y no salió papel. Avisa a soporte.'
+            : 'No se pudo imprimir la copia. Revisa la impresora.',
+          'error',
+        );
+        return;
+      }
+
+      // El contador sube DESPUÉS del papel, y se sube en los tres sitios donde
+      // vive esta venta: el modal abierto, la lista en memoria y la cola de
+      // sincronización. Dejar fuera el modal haría que el segundo clic pidiera
+      // otra vez la copia 2 y el hub la descartara en silencio.
+      const actualizada = { ...venta, copias_impresas: copia };
+      setTicketGenerado(actualizada);
+      enqueueAction('ventas', 'update', {
+        ...actualizada,
+        _quedaGente: undefined,
+      });
+      useAppStore.setState((prev) => ({
+        ventas: (prev.ventas || []).map((x) =>
+          String(x.id) === String(venta.id)
+            ? { ...x, copias_impresas: copia }
+            : x,
+        ),
+      }));
+
+      registrarAuditoria?.({
+        fecha: new Date().toISOString(),
+        usuario: user?.nombre ?? 'Sistema',
+        accion: 'REIMPRESION_TICKET',
+        modulo: 'POS',
+        nivel: 'info',
+        detalles:
+          `Folio ${venta.folio} reimpreso desde el ticket de cobro. ` +
+          `Impresión ${copia}.`,
+      });
+
+      showToast(`Copia ${copia} del folio ${venta.folio}.`, 'success');
+    } finally {
+      setReimprimiendoTicket(false);
+    }
+  };
+
   const handleCerrarTicket = () => {
     const quedaGente = ticketGenerado?._quedaGente;
     setTicketGenerado(null);
@@ -2316,7 +2395,12 @@ export default function PosScreen() {
       )}
 
       {ticketGenerado && (
-        <TicketImpresion venta={ticketGenerado} onClose={handleCerrarTicket} />
+        <TicketImpresion
+          venta={ticketGenerado}
+          onClose={handleCerrarTicket}
+          onImprimir={reimprimirTicketRecien}
+          imprimiendo={reimprimiendoTicket}
+        />
       )}
     </div>
   );

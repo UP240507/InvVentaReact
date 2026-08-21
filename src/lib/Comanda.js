@@ -716,3 +716,119 @@ export function debeImprimirComanda(modo, llegoALaNube) {
   // papel de más es la degradación segura.
   return true;
 }
+
+/**
+ * El Corte de Caja Z, como documento para la térmica.
+ *
+ * ── POR QUÉ EXISTE ESTA FUNCIÓN ─────────────────────────────────────────────
+ * `ReportesScreen` lo imprimía con `window.open` + `win.print()`. Eso es un
+ * patrón de navegador: **en la caja —Tauri sobre WebView2— `window.open` no
+ * devuelve una ventana manipulable**, así que `win.document` revienta y el
+ * botón no hace absolutamente nada visible. Ni imprime, ni avisa, ni deja
+ * rastro salvo un error en una consola que en release no existe.
+ *
+ * Y aunque funcionara, saldría por el diálogo de Windows a una hoja A4. El
+ * Corte Z es justo lo que el dueño quiere pegado en la libreta al cerrar: tiene
+ * que salir por la misma impresora que los tickets.
+ *
+ * ── POR QUÉ TODO VA EN `totales` Y `cuerpo` QUEDA VACÍO ────────────────────
+ * `cuerpo` son líneas de venta —cantidad, descripción, importe— y `escpos.rs`
+ * les pinta encima una cabecera «CANT DESCRIPCION IMPORTE». Un corte no tiene
+ * artículos: tiene conceptos y cifras, que es exactamente la forma de
+ * `totales`. Usar el sitio equivocado imprimiría «1x Efectivo» bajo un título
+ * de columna que no significa nada aquí.
+ *
+ * El id lleva reloj y contador, como la pre-cuenta y por lo mismo: **este papel
+ * DEBE salir siempre que se pida.** Se reimprime a propósito —uno para la
+ * libreta, otro para el dueño— y `cola.rs` descarta por id repetido. La comanda
+ * hace lo contrario, y también por buenas razones.
+ */
+export function construirCorteZ(corte, { configuracion = {} } = {}) {
+  if (!corte) return null;
+
+  const meta = [
+    { etiqueta: 'Turno', valor: String(corte.turno ?? '—') },
+    { etiqueta: 'Fecha', valor: fechaDe(corte.apertura) },
+    { etiqueta: 'Apertura', valor: horaDe(corte.apertura) },
+    // «En curso» y no un hueco: un corte de un turno sin cerrar es legítimo
+    // —el dueño mira cómo va a media tarde— y el papel tiene que decir cuál de
+    // las dos cosas es.
+    {
+      etiqueta: 'Cierre',
+      valor: corte.cierre ? horaDe(corte.cierre) : 'En curso',
+    },
+    { etiqueta: 'Responsable', valor: corte.usuario || '—' },
+  ];
+
+  const totales = [
+    { etiqueta: 'Tickets', valor: String(num(corte.tickets)), enfasis: false },
+    { etiqueta: 'Efectivo', valor: money(corte.efectivo), enfasis: false },
+    { etiqueta: 'Tarjeta', valor: money(corte.tarjeta), enfasis: false },
+    { etiqueta: 'Propinas', valor: money(corte.propinas), enfasis: false },
+    { etiqueta: 'Fondo inicial', valor: money(corte.fondo), enfasis: false },
+    { etiqueta: 'Total ventas', valor: money(corte.total), enfasis: false },
+    // Lo único enfatizado es la cifra que se cuenta contra el cajón. Es la que
+    // se busca en este papel; las demás son el desglose de cómo se llegó a ella.
+    { etiqueta: 'TOTAL EN CAJA', valor: money(corte.enCaja), enfasis: true },
+  ];
+
+  return {
+    id: `corte::${corte.turno ?? 's-n'}::${Date.now()}-${++secuenciaImpresion}`,
+    tipo: 'corte',
+    zona: null,
+    titulo: nombreDelLocal(configuracion),
+    subtitulo: 'CORTE DE CAJA Z',
+    emisor: [],
+    meta,
+    avisos: [],
+    cuerpo: [],
+    totales,
+    pie: [`Impreso: ${fechaDe(corte.impreso)} ${horaDe(corte.impreso)}`],
+    // Un corte no mueve dinero: se cuenta el que ya está. Y al cerrar, el cajón
+    // lo abre quien cuenta, no el papel.
+    abrirCajon: false,
+    copias: 1,
+    _restaurante: nombreDelLocal(configuracion),
+  };
+}
+
+/**
+ * El vale de propinas que firma el mesero al cobrarlas.
+ *
+ * Mismo problema y mismo arreglo que el Corte Z. La diferencia es que este
+ * papel **se firma**, así que la línea de firma no es adorno: es el documento.
+ * Va al pie con espacio delante, porque una raya pegada al importe no se puede
+ * firmar en una tira de 58 mm.
+ */
+export function construirValePropina(vale, { configuracion = {} } = {}) {
+  if (!vale) return null;
+
+  return {
+    id: `vale::${vale.mesero ?? 's-n'}::${Date.now()}-${++secuenciaImpresion}`,
+    tipo: 'vale',
+    zona: null,
+    titulo: nombreDelLocal(configuracion),
+    subtitulo: 'VALE DE PROPINAS',
+    emisor: [],
+    meta: [
+      { etiqueta: 'A nombre de', valor: String(vale.mesero || '—') },
+      {
+        etiqueta: 'Periodo',
+        valor: `${vale.desde || '—'} a ${vale.hasta || '—'}`,
+      },
+      { etiqueta: 'Fecha', valor: fechaDe(vale.impreso) },
+    ],
+    avisos: [],
+    cuerpo: [],
+    totales: [{ etiqueta: 'IMPORTE', valor: money(vale.monto), enfasis: true }],
+    pie: [
+      `SON: ${importeEnLetra(vale.monto)}`,
+      '',
+      '',
+      'Firma: ____________________',
+    ],
+    abrirCajon: false,
+    copias: 1,
+    _restaurante: nombreDelLocal(configuracion),
+  };
+}
