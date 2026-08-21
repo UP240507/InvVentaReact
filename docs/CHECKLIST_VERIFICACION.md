@@ -15,6 +15,11 @@ en Rust, la reimpresión en `Comanda.test.js`—, tres **no los mira ninguna sui
 y uno ni siquiera se corrió. Está anotado en cada sección. Donde diga «sin red
 debajo», el ojo es la única verificación que hay.
 
+**Y una corrección:** el paso 2 de la sección 2 estaba mal escrito —pedía pulsar
+un botón que en ese estado está apagado— y se descubrió al construir el botón de
+copia. Un checklist que manda hacer lo imposible se salta, y saltarse un paso es
+cómo se pierde el único que verificaba algo.
+
 ---
 
 ## 0 · Antes de salir de la máquina
@@ -67,14 +72,32 @@ conecta **no lo mira ninguna prueba**. Esto es la verificación, no una segunda
 opinión.
 
 - [ ] Mesa con productos → **Pedir Cuenta** → sale **un** papel.
-- [ ] **Pedir Cuenta otra vez**, sin tocar nada → sale **otro** papel, idéntico.
-      Antes no salía nada y tampoco avisaba.
+- [ ] **«Imprimir copia»**, en el aviso naranja, sin tocar nada → sale **otro**
+      papel, idéntico salvo la hora.
+
+  > **Corregido el 18-ago, y conviene saber por qué.** Aquí decía «Pedir Cuenta
+  > otra vez», y eso **no se puede hacer**: con `ticket_final`, en cuanto la
+  > cuenta se imprime la mesa pasa a `por_cobrar`, `cuentaCerrada` se pone en
+  > `true` y ese botón se apaga. El paso venía heredado del checklist viejo y
+  > nadie lo había intentado. Para eso está el botón nuevo.
+  >
+  > La hora sí cambia: es la de esta impresión. `orden_actual` no guarda la de
+  > la primera. El folio es lo que dice que son la misma cuenta.
+
 - [ ] **Reabrir**, agregar algo, **A Producción**, Pedir Cuenta → papel con el
-      **total nuevo** y **el mismo folio**.
+      **total nuevo** y **el mismo folio**. **Éste es el fallo 2 de verdad** —el
+      del 15-ago fue «tras reabrir, volver a pedir la cuenta no imprimía»—, así
+      que si algo falla en esta sección, lo que importa es este paso.
 - [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
       `public.ventas`.
 - [ ] Fallo 3: un ticket de **dos jugos de $40** dice `TOTAL $80.00`, con
       `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
+
+- [ ] **«Imprimir copia» NO abre el cajón** y **no desbloquea la cuenta**: el
+      aviso naranja sigue ahí y «A Producción» sigue apagado. Si la copia
+      reabriera algo, el bloqueo dejaría de proteger lo que protege.
+- [ ] En **Auditoría** hay un `CUENTA_IMPRESA` por cada papel, numerados. Es el
+      único rastro: los papeles son idénticos.
 
 ### El cajón
 

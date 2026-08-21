@@ -49,6 +49,7 @@ import {
   enviarTicket,
   enviarPreCuenta,
   abrirCajon,
+  salioPapel,
 } from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
 import {
@@ -228,6 +229,9 @@ export default function PosScreen() {
     mesaActual?.estado === 'por_cobrar' &&
     (configuracion?.flujo_cuenta || '') === 'ticket_final';
 
+  // Copia en vuelo, para apagar su botón. Una a la vez: dos pulsaciones
+  // seguidas son el error caro aquí — gastan número de copia y papel.
+  const [reimprimiendoCuenta, setReimprimiendoCuenta] = useState(false);
   const [pinReapertura, setPinReapertura] = useState('');
   const [pinReaperturaError, setPinReaperturaError] = useState('');
   const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
@@ -829,6 +833,36 @@ export default function PosScreen() {
     navigate('/mesas');
   };
 
+  /**
+   * Los datos del papel de la cuenta, en un solo sitio.
+   *
+   * Lo usan `handlePedirCuenta` y `reimprimirCuenta`, y por eso no está escrito
+   * dos veces: es una lista de campos, y las listas de campos escritas dos veces
+   * son las que se separan sin dar error. La lección es de `construirItemsComanda`
+   * —armaba el item campo a campo y se comía en silencio todo dato nuevo—, y
+   * aquí el síntoma sería una copia a la que le falta algo que el original sí
+   * llevaba, que es peor todavía porque parece un problema de impresora.
+   *
+   * Se leen los valores VIVOS del carrito y no `orden_actual`, y es correcto:
+   * mientras la cuenta está cerrada no se puede agregar ni quitar
+   * —`rechazarSiCuentaCerrada` lo impide en todas las acciones—, así que lo que
+   * hay en pantalla es exactamente lo que se imprimió. Y `orden_actual` no
+   * guarda el IVA, así que reconstruirlo desde ahí obligaría a recalcularlo,
+   * que es justo el segundo motor de dinero que este proyecto evita.
+   */
+  const datosDeLaCuenta = () => ({
+    items: carrito,
+    subtotal,
+    iva: totalIva,
+    descuento: 0,
+    total: granTotal,
+    mesa_id: mesaActual?.id,
+    mesa_nombre: mesaActual?.nombre,
+    comensales: safeNumber(mesaActual?.comensales_reales, 0),
+    usuario: user?.nombre ?? 'Mesero',
+    fecha: new Date().toISOString(),
+  });
+
   const handlePedirCuenta = () => {
     if (!isMesa || carrito.length === 0) return;
 
@@ -896,18 +930,7 @@ export default function PosScreen() {
     // impresión es que la impresora nunca detiene la operación: la mesa ya
     // quedó marcada como `por_cobrar` arriba, y eso —que es lo que sostiene el
     // cobro— no depende de que haya papel.
-    const datosCuenta = {
-      items: carrito,
-      subtotal,
-      iva: totalIva,
-      descuento: 0,
-      total: granTotal,
-      mesa_id: mesaActual.id,
-      mesa_nombre: mesaActual.nombre,
-      comensales: safeNumber(mesaActual.comensales_reales, 0),
-      usuario: user?.nombre ?? 'Mesero',
-      fecha: new Date().toISOString(),
-    };
+    const datosCuenta = datosDeLaCuenta();
 
     // Un papel o dos, según el local. Con `ticket_final` el que se lleva a la
     // mesa YA es el comprobante —lleva folio y no lleva método de pago, que es
@@ -972,6 +995,102 @@ export default function PosScreen() {
     setTimeout(() => {
       navigate('/mesas');
     }, 1500);
+  };
+
+  /**
+   * Otra copia de la cuenta que ya se entregó, sin reabrirla.
+   *
+   * ── EL HUECO QUE CIERRA ─────────────────────────────────────────────────
+   * Con `ticket_final`, en cuanto la cuenta se imprime la mesa pasa a
+   * `por_cobrar`, `cuentaCerrada` se pone en `true` y **«Pedir Cuenta» se
+   * apaga**. Correcto para lo que ese bloqueo protege —que nadie agregue a una
+   * cuenta ya entregada— pero dejaba sin salida el caso más común de todos: al
+   * cliente se le cayó el papel, o quiere revisarlo otra vez.
+   *
+   * La única salida era **reabrir**, que pide PIN de encargado y significa otra
+   * cosa —«el cliente pidió algo más»—. Usar una operación privilegiada para
+   * pedir una fotocopia es la clase de fricción que enseña a la gente a reabrir
+   * cuentas por costumbre, y entonces el bloqueo deja de proteger nada.
+   *
+   * Sin PIN a propósito: esto no mueve dinero ni cambia el estado de la mesa.
+   * Es el mismo papel otra vez, y queda en auditoría con `CUENTA_IMPRESA`, que
+   * es más rastro del que deja hoy reabrir y volver a imprimir.
+   *
+   * ── LO ÚNICO DELICADO ───────────────────────────────────────────────────
+   * El contador. `sufijoCopia` no pone sufijo a la copia 1 y `hub/cola.rs`
+   * descarta por id ya impreso SIN dar error, así que sin subir `impresiones`
+   * el segundo papel no saldría y nadie se enteraría. Es exactamente el fallo
+   * 2 del 15-ago, y este botón lo pisaría otra vez si no contara.
+   *
+   * La hora del papel SÍ cambia: es la de esta impresión, no la de la primera.
+   * Es lo honesto —este papel se imprimió ahora— y el folio es lo que dice que
+   * las dos son la misma cuenta.
+   */
+  const reimprimirCuenta = async () => {
+    const folioCuenta = mesaActual?.orden_actual?.folio;
+    if (!folioCuenta || reimprimiendoCuenta) return;
+
+    setReimprimiendoCuenta(true);
+    const impresionActual =
+      safeNumber(mesaActual?.orden_actual?.impresiones, 0) + 1;
+
+    try {
+      const r = await enviarTicket(
+        { ...datosDeLaCuenta(), folio: folioCuenta },
+        configuracion,
+        {
+          // Una copia no mueve dinero. Ver `handlePedirCuenta`: sin este
+          // `false` explícito el cajón se abriría por el método de pago.
+          abrirCajon: false,
+          copia: impresionActual,
+        },
+      );
+
+      // `salioPapel` y no `r.ok`: el hub contesta `ok: true` también cuando
+      // DESCARTA el documento por id repetido, y ése es justo el desenlace
+      // contra el que existe el contador.
+      if (!salioPapel(r)) {
+        showToast(
+          r?.estado === 'duplicado'
+            ? 'El hub descartó esta copia como repetida y no salió papel. Avisa a soporte.'
+            : 'No se pudo imprimir la copia. Revisa la impresora.',
+          'error',
+        );
+        return;
+      }
+
+      // El contador sube DESPUÉS del papel. Al revés, una impresora apagada
+      // gastaría números y el siguiente intento saltaría a `::c3` sin que
+      // hubiera existido nunca una `::c2`.
+      const mesaActualizada = {
+        ...mesaActual,
+        orden_actual: {
+          ...mesaActual.orden_actual,
+          impresiones: impresionActual,
+        },
+      };
+      enqueueAction('mesas', 'upsert', mesaActualizada);
+      useAppStore.setState((prev) => ({
+        mesas: prev.mesas.map((m) =>
+          m.id === mesaActual.id ? mesaActualizada : m,
+        ),
+      }));
+
+      registrarAuditoria?.({
+        fecha: new Date().toISOString(),
+        usuario: user?.nombre ?? 'Mesero',
+        accion: 'CUENTA_IMPRESA',
+        modulo: 'POS',
+        nivel: 'info',
+        detalles:
+          `Folio ${folioCuenta} impreso para ${mesaActual?.nombre ?? mesaActual?.id}. ` +
+          `Total: $${granTotal}. Impresión ${impresionActual}.`,
+      });
+
+      showToast(`Copia ${impresionActual} de la cuenta.`, 'success');
+    } finally {
+      setReimprimiendoCuenta(false);
+    }
   };
 
   const handleProcesarVenta = async (datosPago) => {
@@ -1750,11 +1869,30 @@ export default function PosScreen() {
                     </p>
                     <p className="text-[11px] font-bold text-ops-muted mb-3">
                       No se puede agregar hasta cobrarla. Si el cliente pidió
-                      algo más, reábrela.
+                      algo más, reábrela. Si sólo quiere el papel otra vez,
+                      imprímele una copia.
                     </p>
-                    <OpsButton tamano="sm" onClick={intentarReabrir}>
-                      Reabrir cuenta
-                    </OpsButton>
+                    {/* Las dos salidas, y en este orden. Reabrir es la que
+                        cambia algo —pide PIN y desbloquea la cuenta—; la copia
+                        no mueve nada. Sin ella, «se me cayó el papel» obligaba
+                        a reabrir, y una operación privilegiada usada por
+                        costumbre deja de proteger lo que protege. */}
+                    <div className="flex flex-wrap gap-2">
+                      <OpsButton tamano="sm" onClick={intentarReabrir}>
+                        Reabrir cuenta
+                      </OpsButton>
+                      <OpsButton
+                        tamano="sm"
+                        icono={ReceiptText}
+                        onClick={reimprimirCuenta}
+                        disabled={
+                          reimprimiendoCuenta ||
+                          !mesaActual?.orden_actual?.folio
+                        }
+                      >
+                        Imprimir copia
+                      </OpsButton>
+                    </div>
                   </div>
                 )}
 
