@@ -403,6 +403,79 @@ compila con devtools, o esos datos salen a una pantalla.
 
 ---
 
+## 0b · Lo que encontró Chris el 21-ago
+
+### 1 · La nota bloqueada en un platillo ya enviado — **HECHO**
+
+Sus palabras: «si ya mandé una pizza a producción, y de rato quiero mandar otra
+pero con alguna nota, no me deja».
+
+**El camino exacto:** la pizza sale a cocina. Más tarde se toca Pizza otra vez
+y —al no tener grupos— entra directa y **se funde con la línea existente**
+(«2x, Enviado 1»). Se toca el icono de nota y `abrirNotaDeLinea` lo frena,
+porque miraba `cantidad_enviada > 0` y con eso cerraba la línea **entera**. Sin
+salida: la única vía a la nota era esa línea, y esa línea estaba cerrada.
+
+**La guarda no estaba mal de fondo, estaba mal de alcance.** Reescribir la nota
+de unas unidades que ya están en la plancha no cambia el papel que el cocinero
+tiene en la mano — la pantalla diría una cosa y la cocina haría otra. Eso sigue
+prohibido.
+
+**Arreglo: no se edita, se PARTE.** `repartirPorNota()` en
+`lib/Modificadores.js`: lo enviado se queda donde estaba con su nota original,
+y lo que no ha salido se va a una línea nueva con la nota nueva. `firmaDeLinea`
+ya mete la nota dentro del id, así que las dos líneas conviven sin tocar el
+modelo. El cuadro avisa **antes** de escribir de cuántas unidades se está
+hablando; si no queda nada libre, el aviso dice qué hacer («agrega otra con el
+
+- y ponle la nota a ésa») en vez de sólo decir que no.
+
+Vive en `lib/` y no dentro del `setCarrito` porque es aritmética sobre el
+carrito, y un error ahí se cobra en la cuenta del cliente, no en la pantalla.
+8 pruebas, incluida la que importa: **ni se pierde ni se inventa una unidad**.
+
+### 2 · Comensales obligatorios antes de imprimir la cuenta — **HECHO**
+
+**Por qué:** es el único dato de la mesa que **no se puede reconstruir
+después**. Cerrada la cuenta, nadie sabe si aquellos 900 pesos fueron de dos
+personas o de seis, y sin eso el consumo por comensal —la cifra con la que se
+decide un menú y un precio— no existe.
+
+**Y había un fallo callado debajo, del patrón de siempre:** el contador de la
+cabecera enseñaba `1` por defecto mientras el dato guardado arrancaba en `0`, y
+`construirPreCuenta` sólo imprime la línea «Personas» si es mayor que cero. El
+papel salía sin ella y la pantalla decía que sí había una. Ahora un 0 se pinta
+como **hueco**, no como 1.
+
+**Decisiones de Chris (21-ago):** el número **lo teclea alguien** —no vale un
+defecto de 1, que en la práctica registraría casi todas las mesas como una
+persona— y el candado aplica **sólo al pedir la cuenta de mesa**.
+
+- **Ni al abrir la mesa:** llegan dos, se sientan seis, y nadie vuelve a
+  corregirlo. Un dato que se toma pronto y nadie corrige es peor que uno que se
+  toma tarde.
+- **Ni al mandar a cocina:** frenar el servicio por un dato de reporte es
+  cambiar un problema de reportes por uno de operación.
+
+Al pedir la cuenta el número ya no cambia y el mesero está mirando la mesa. Se
+abre un cuadro, y sin contestar no imprime ni marca la mesa por cobrar.
+
+### 3 · Las recetas que están en un Excel — **PENDIENTE, falta el archivo**
+
+Es la importación de `DISENO_CAPTURA_RECETAS.md`, con nombre y apellido.
+
+**Lo difícil no es leer el archivo, es casar los nombres con los insumos.** Una
+importación que crea «Queso fresco» junto al «queso fresco» que ya existe parte
+el inventario **sin dar un solo error** — ya está señalado como la trampa a
+evitar. Igual con las unidades: si la hoja dice «½ taza» y el inventario lleva
+gramos, el factor lo decide una persona, no un `parseFloat`.
+
+**Antes de diseñar nada hace falta el Excel de verdad.** Las hojas reales nunca
+son regulares: celdas combinadas, una pestaña por platillo, subtotales a media
+tabla, cantidades escritas como texto. Escribir el extractor contra el archivo
+y no contra uno imaginado es la diferencia entre que importe bien y que importe
+_casi_ bien, que aquí es peor.
+
 ## 1 · Reimpresión del ticket — **CERRADO el 18-ago**
 
 **Lo que pidió Chris:** un botón para cuando un cliente quiere una copia. **La

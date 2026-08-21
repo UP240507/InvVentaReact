@@ -93,7 +93,7 @@ opinión.
 - [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
       `public.ventas`.
 - [ ] Fallo 3: un ticket de **dos jugos de $40** dice `TOTAL $80.00`, con
-    `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
+  `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
 
 - [ ] **«Imprimir copia» NO abre el cajón** y **no desbloquea la cuenta**: el
       aviso naranja sigue ahí y «A Producción» sigue apagado. Si la copia
@@ -334,6 +334,35 @@ falta atarlo en Recetas.
 - [ ] Atar un grupo a un platillo en Recetas y volver: el chip **cambia solo**.
 - [ ] El grupo sin usar enseña además **dónde se ata**, no sólo que no está
       atado.
+
+---
+
+## 9b · Los dos arreglos del 21-ago — nuevo
+
+**Notas en una línea con parte ya enviada.** Sin red debajo en la pantalla; la
+aritmética sí está probada (`repartirPorNota`, 8 pruebas).
+
+- [ ] Mandar **una** pizza a cocina. Volver a tocar Pizza (la línea dice «2x,
+      Enviado 1») y pulsar el icono de nota: **ahora se abre**, y el cuadro
+      avisa de que la nota va sólo a la unidad que no ha salido.
+- [ ] Al aceptar quedan **dos líneas**: una de 1 con «Enviado 1» y sin nota, y
+      otra de 1 con la nota. **Las cantidades suman lo mismo que antes.**
+- [ ] Mandar la nueva a cocina: sale **su propia comanda**, con la nota.
+- [ ] Con **todo** ya enviado, el icono avisa de que hay que agregar otra
+      unidad primero — y no se queda mudo.
+- [ ] Abrir la nota y aceptar **sin cambiar nada** deja el carrito igual: ni
+      líneas de más ni cantidades movidas.
+
+**Comensales antes de la cuenta.**
+
+- [ ] Mesa nueva: el contador de la cabecera enseña **«—»**, no 1.
+- [ ] Pulsar **«Pedir Cuenta»** sin haberlo puesto → se abre el cuadro. **No
+      imprime y la mesa NO queda marcada por cobrar** si se cancela.
+- [ ] Teclear el número (o Enter) → imprime, y el papel lleva la línea
+      **«Personas: N»**.
+- [ ] Reimprimir la cuenta: sale el **mismo** número.
+- [ ] En **mostrador** no se pide nada. Y **mandar a cocina nunca lo pide**:
+      eso frenaría el servicio por un dato de reporte.
 
 ---
 
