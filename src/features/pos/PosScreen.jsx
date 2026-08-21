@@ -414,10 +414,23 @@ export default function PosScreen() {
    * La diferencia importa porque cada mensaje pide una acción distinta: uno
    * dice «espera», otro «ve a ver la impresora» y el correcto dice «acércate».
    */
-  const avisoDeImpresion = (queNoSalio) => {
+  const avisoDeImpresion = (
+    queNoSalio,
+    { resultado = null, yaQuedo = 'La venta sí quedó registrada.' } = {},
+  ) => {
+    // ── EL TERCER CASO, AÑADIDO EL 18-AGO ─────────────────────────────────
+    // El hub contestó bien y AUN ASÍ tiró el documento, por id ya impreso.
+    // `imprimir()` devuelve `ok: true` ahí —y hace bien, un reenvío por wifi
+    // no es un fallo— así que este aviso ni siquiera se estaba enseñando. Y
+    // cuando se enseñe, «quedó en la cola» sería mentira: no quedó en ninguna.
+    // Es un problema nuestro, no de la red ni del aparato, y por eso manda a
+    // soporte y no a mirar la impresora.
+    if (resultado?.ok && resultado?.estado === 'duplicado') {
+      return `${queNoSalio} no salió: el hub ya tenía ese documento y lo descartó. Avisa a soporte.`;
+    }
     const motivo = motivoSinImpresion({ local, comprobandoLocal });
     return motivo
-      ? `${motivo}: ${queNoSalio} no se imprimió. La venta sí quedó registrada.`
+      ? `${motivo}: ${queNoSalio} no se imprimió. ${yaQuedo}`
       : `${queNoSalio} quedó en la cola de impresión.`;
   };
 
@@ -954,9 +967,22 @@ export default function PosScreen() {
     enviar.then((r) => {
       // Sólo se avisa si falló, y sin tono de error: no imprimir la cuenta no
       // rompe nada, sólo obliga a dictarla.
-      if (!r?.ok) {
+      //
+      // `salioPapel` y no `r.ok`: el hub contesta `ok: true` también cuando
+      // descarta el documento por id repetido, que es EXACTAMENTE el fallo 2
+      // del 15-ago. Con `r.ok` a secas, ese caso no avisaba de nada — el
+      // mesero pulsaba, no salía papel, y la pantalla se quedaba callada.
+      //
+      // Y el texto sale de `avisoDeImpresion`, que ya distingue «el teléfono
+      // se salió de rango» de «la impresora». El que había aquí mandaba
+      // siempre a revisar la impresora, que es justo lo que ese helper existe
+      // para no hacer.
+      if (!salioPapel(r)) {
         showToast(
-          'No se pudo imprimir la cuenta. Revisa la impresora.',
+          avisoDeImpresion('La cuenta', {
+            resultado: r,
+            yaQuedo: 'La mesa sí quedó marcada para cobrar.',
+          }),
           'info',
         );
       }
@@ -1292,7 +1318,10 @@ export default function PosScreen() {
 
     if (!yaSeImprimioLaCuenta)
       void enviarTicket(ventaVisual, configuracion).then((r) => {
-        if (!r?.ok) showToast(avisoDeImpresion('El ticket'), 'info');
+        // `salioPapel` y no `r.ok`: ver `avisoDeImpresion`. Un descarte por id
+        // repetido vuelve con `ok: true` y sin papel.
+        if (!salioPapel(r))
+          showToast(avisoDeImpresion('El ticket', { resultado: r }), 'info');
       });
     // CRM: acumular visita/gasto/puntos DESPUÉS de encolar la venta (la cola
     // es FIFO: la fila de ventas ya existirá cuando la RPC corra en el server).
