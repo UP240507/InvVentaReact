@@ -228,3 +228,33 @@ export function textoDeReglas(grupo) {
   if (obligatorio) return 'Hay que elegir al menos una; puede elegir varias.';
   return 'Se pueden elegir varias, o ninguna.';
 }
+
+/**
+ * En cuántas recetas está atado este grupo.
+ *
+ * ── LA TRAMPA QUE CIERRA ────────────────────────────────────────────────────
+ * **Un grupo no hace absolutamente nada hasta que se ata a un platillo en
+ * Recetas**, y eso no se anunciaba en ninguna parte. El recorrido del que lo
+ * configura por primera vez es: crea el grupo, escribe sus opciones, lo guarda,
+ * se va al POS a probarlo, toca el platillo… y no pasa nada. Hizo todo bien y
+ * concluye que el sistema está roto. Es la parte del programa que Chris señaló
+ * como la que más cuesta configurar (13-ago), y esta es su causa gorda.
+ *
+ * No falla nada, que es lo peor: no hay error que buscar ni pantalla que
+ * culpar. Sólo silencio.
+ *
+ * Se cuenta aquí y no en la pantalla porque es una regla sobre los datos —qué
+ * significa que un grupo esté «en uso»— y porque así se puede probar. La
+ * comparación va por texto: los ids de receta y de grupo llegan de la base como
+ * números o como cadenas según el camino, y un `===` crudo daría cero justo
+ * cuando hay algo.
+ */
+export function recetasQueUsan(grupoId, recetas = []) {
+  const id = idTexto(grupoId);
+  if (!id) return 0;
+  return (Array.isArray(recetas) ? recetas : []).filter((r) =>
+    (Array.isArray(r?.grupos_modificadores) ? r.grupos_modificadores : []).some(
+      (g) => idTexto(g) === id,
+    ),
+  ).length;
+}

@@ -25,6 +25,7 @@ import {
   sublineasDe,
   firmaDeLinea,
   textoDeReglas,
+  recetasQueUsan,
 } from './Modificadores';
 
 // Datos calcados de lo que hay hoy en la base de AZUL, incluidas sus rarezas:
@@ -268,5 +269,45 @@ describe('textoDeReglas — la frase que desmiente la contradicción del catálo
       textoDeReglas({ tipo: 'multiple', obligatorio: false }),
     ];
     expect(new Set(todas).size).toBe(4);
+  });
+});
+
+describe('recetasQueUsan — la trampa gorda de los modificadores', () => {
+  // Un grupo configurado y NO atado a ningún platillo no hace nada en el POS, y
+  // eso no se anunciaba. El que lo configura por primera vez hace todo bien,
+  // va a probarlo, no pasa nada, y concluye que el sistema está roto. No falla
+  // nada: sólo silencio. Esta cuenta es lo que permite decirlo en pantalla.
+  const recetas = [
+    { id: 1, nombre: 'Latte', grupos_modificadores: ['g-leche'] },
+    { id: 2, nombre: 'Capuchino', grupos_modificadores: ['g-leche', 'g-tam'] },
+    { id: 3, nombre: 'Chilaquiles', grupos_modificadores: [] },
+    { id: 4, nombre: 'Agua' }, // sin la clave siquiera
+  ];
+
+  it('cuenta en cuántas recetas está atado', () => {
+    expect(recetasQueUsan('g-leche', recetas)).toBe(2);
+    expect(recetasQueUsan('g-tam', recetas)).toBe(1);
+  });
+
+  it('un grupo sin atar da CERO, que es todo el punto', () => {
+    expect(recetasQueUsan('g-huerfano', recetas)).toBe(0);
+  });
+
+  it('compara por texto: número y cadena son el mismo id', () => {
+    // Los ids llegan de la base como number o como string según el camino. Un
+    // `===` crudo daría cero justo cuando sí hay algo atado, y el aviso diría
+    // «sin usar» sobre un grupo que se está usando — peor que no avisar.
+    const conNumeros = [{ id: 9, grupos_modificadores: [77] }];
+    expect(recetasQueUsan('77', conNumeros)).toBe(1);
+    expect(recetasQueUsan(77, conNumeros)).toBe(1);
+  });
+
+  it('no revienta con entradas raras', () => {
+    expect(recetasQueUsan('g-leche', null)).toBe(0);
+    expect(recetasQueUsan('g-leche', undefined)).toBe(0);
+    expect(recetasQueUsan(null, recetas)).toBe(0);
+    expect(
+      recetasQueUsan('g-leche', [{ grupos_modificadores: 'no-es-lista' }]),
+    ).toBe(0);
   });
 });

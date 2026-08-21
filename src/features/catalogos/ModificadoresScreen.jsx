@@ -10,7 +10,7 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { textoDeReglas } from '../../lib/Modificadores';
+import { textoDeReglas, recetasQueUsan } from '../../lib/Modificadores';
 import {
   ListPlus,
   Plus,
@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function ModificadoresScreen() {
-  const { modificadores, productos, showToast } = useAppStore();
+  const { modificadores, productos, recetas, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [busqueda, setBusqueda] = useState('');
@@ -226,6 +226,14 @@ export default function ModificadoresScreen() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modificadoresFiltrados.map((grupo) => {
               const numOpciones = (grupo.opciones || []).length;
+              // ── LA TRAMPA GORDA, DICHA EN VOZ ALTA ─────────────────────
+              // Un grupo no hace NADA hasta que se ata a un platillo en
+              // Recetas, y hasta hoy eso no se anunciaba en ninguna parte. El
+              // recorrido del que lo configura por primera vez era: crear el
+              // grupo, escribir las opciones, guardarlo, ir al POS a probarlo…
+              // y que no pasara nada. Hizo todo bien y concluye que el sistema
+              // está roto. No falla nada — sólo silencio, que es lo peor.
+              const enRecetas = recetasQueUsan(grupo.id, recetas);
               return (
                 <Card
                   key={grupo.id}
@@ -271,7 +279,28 @@ export default function ModificadoresScreen() {
                           Obligatorio
                         </span>
                       )}
+                      {/* El estado que de verdad importa y que no se veía. Va
+                          en la misma fila que los otros dos porque es del mismo
+                          rango: no es un detalle, es si el grupo existe para el
+                          cajero o no. */}
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-ui flex items-center gap-1 ${
+                          enRecetas
+                            ? 'bg-adm-info/15 text-adm-info'
+                            : 'bg-adm-warn/15 text-adm-warn'
+                        }`}
+                      >
+                        {enRecetas
+                          ? `En ${enRecetas} platillo${enRecetas === 1 ? '' : 's'}`
+                          : 'Todavía sin usar'}
+                      </span>
                     </div>
+                    {enRecetas === 0 && (
+                      <p className="text-[11px] font-bold text-adm-warn mt-2 leading-snug">
+                        Este grupo aún no aparece en la caja. Para que el cajero
+                        lo vea, hay que activarlo en el platillo desde Recetas.
+                      </p>
+                    )}
                   </div>
 
                   {/* MUESTRA DE OPCIONES */}
