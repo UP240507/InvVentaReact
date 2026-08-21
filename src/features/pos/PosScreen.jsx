@@ -1,15 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAppStore } from '../../store/useAppStore';
-import { useSyncStore } from '../../store/useSyncStore';
-import { useSessionStore } from '../../store/useSessionStore';
-import { useAuthStore } from '../auth/useAuthStore';
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useAppStore } from "../../store/useAppStore";
+import { useSyncStore } from "../../store/useSyncStore";
+import { useSessionStore } from "../../store/useSessionStore";
+import { useAuthStore } from "../auth/useAuthStore";
 import {
   getRolEfectivo,
   getCapacidades,
   puedeVerRuta,
-} from '../../lib/Permisos';
-import { rutaDeEscape } from '../../lib/Escape';
+} from "../../lib/Permisos";
+import { rutaDeEscape } from "../../lib/Escape";
 import {
   ShoppingCart,
   ChefHat,
@@ -27,11 +27,11 @@ import {
   Percent,
   StickyNote,
   SlidersHorizontal,
-} from 'lucide-react';
-import ModalCobro from '../operacion/components/ModalCobro';
-import TicketImpresion from './components/TicketImpresion';
-import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
-import { calcularVenta, importeDeLinea } from '../../lib/Fiscal';
+} from "lucide-react";
+import ModalCobro from "../operacion/components/ModalCobro";
+import TicketImpresion from "./components/TicketImpresion";
+import PanelRondas, { hayRondasSinEntregar } from "../operacion/PanelRondas";
+import { calcularVenta, importeDeLinea } from "../../lib/Fiscal";
 import {
   verificarStock,
   esPaquete,
@@ -40,18 +40,18 @@ import {
   gruposDeEleccion,
   resolverComponentesPaquete,
   construirItemsComanda,
-} from '../../lib/Inventario';
-import ConfirmacionStockModal from './components/ConfirmacionStockModal';
-import DescuentoLineaModal from './components/DescuentoLineaModal';
-import { etiquetaDescuento } from '../../lib/Descuentos';
+} from "../../lib/Inventario";
+import ConfirmacionStockModal from "./components/ConfirmacionStockModal";
+import DescuentoLineaModal from "./components/DescuentoLineaModal";
+import { etiquetaDescuento } from "../../lib/Descuentos";
 import {
   enviarComanda,
   enviarTicket,
   enviarPreCuenta,
   abrirCajon,
   salioPapel,
-} from '../../lib/Hub';
-import { debeImprimirComanda } from '../../lib/Comanda';
+} from "../../lib/Hub";
+import { debeImprimirComanda } from "../../lib/Comanda";
 import {
   gruposDeProducto,
   necesitaEleccion,
@@ -61,30 +61,31 @@ import {
   opcionesElegidas,
   textoDeReglas,
   firmaDeLinea,
-} from '../../lib/Modificadores';
-import { buscarAutorizador, sesionAutoriza } from '../../lib/Autorizacion';
-import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
-import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
-import { useAtajos } from '../../hooks/useAtajos';
+  repartirPorNota,
+} from "../../lib/Modificadores";
+import { buscarAutorizador, sesionAutoriza } from "../../lib/Autorizacion";
+import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from "../../lib/Folio";
+import { siguienteIdVenta, siguienteIdComanda } from "../../lib/IdVenta";
+import { useAtajos } from "../../hooks/useAtajos";
 import {
   useConectividad,
   motivoSinImpresion,
-} from '../../hooks/useConectividad';
-import PanelAcoplable from '../../components/PanelAcoplable';
-import HintsAtajos from '../../components/HintsAtajos';
-import { OpsButton, OpsModal } from '../../components/ui';
+} from "../../hooks/useConectividad";
+import PanelAcoplable from "../../components/PanelAcoplable";
+import HintsAtajos from "../../components/HintsAtajos";
+import { OpsButton, OpsModal } from "../../components/ui";
 
 // ─── HELPERS DE SANITIZACIÓN Y MATEMÁTICA ──────────────────────────────────
 const safeNumber = (val, fallback = 0) => {
-  if (val === null || val === undefined || val === '') return fallback;
+  if (val === null || val === undefined || val === "") return fallback;
   const n = Number(val);
   return isNaN(n) ? fallback : n;
 };
 
 const safePriceString = (val) => {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'string') {
-    val = val.replace(',', '.');
+  if (val === null || val === undefined || val === "") return 0;
+  if (typeof val === "string") {
+    val = val.replace(",", ".");
   }
   const n = Number(val);
   return isNaN(n) ? 0 : n;
@@ -134,20 +135,20 @@ export default function PosScreen() {
    */
   const imprimirComandaSiHaceFalta = (comanda, idTarea) => {
     void (async () => {
-      const modo = configuracion?.imprimir_comandas || 'siempre';
+      const modo = configuracion?.imprimir_comandas || "siempre";
       // Con `siempre` no se espera a nadie: el papel sale ya, que es lo que
       // necesita una cocina sin pantalla.
       // `llegoALaNube?.()` — un store simulado puede no traerlo. Sin la guarda,
       // no imprimir una comanda se convertiría en un error no capturado.
       const llego =
-        modo === 'sin_nube' && typeof llegoALaNube === 'function'
+        modo === "sin_nube" && typeof llegoALaNube === "function"
           ? await llegoALaNube(idTarea)
           : false;
       if (!debeImprimirComanda(modo, llego)) return;
 
       const r = await enviarComanda(comanda, configuracion);
       if (!r?.ok && r?.total > 0) {
-        showToast(avisoDeImpresion('La comanda'), 'info');
+        showToast(avisoDeImpresion("La comanda"), "info");
       }
     })();
   };
@@ -155,7 +156,7 @@ export default function PosScreen() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const mesaId = searchParams.get('mesa');
+  const mesaId = searchParams.get("mesa");
   const mesaActual = useMemo(
     () => (mesas || []).find((m) => String(m.id) === String(mesaId)),
     [mesas, mesaId],
@@ -164,8 +165,8 @@ export default function PosScreen() {
 
   // Rol del usuario (gancho preparado; hoy admin lo ve todo). Cuando exista el
   // sistema de PIN, un mesero no verá el botón de cobrar en mesa.
-  const rolActivo = (user?.rol || user?.puesto || '').toLowerCase();
-  const esMesero = rolActivo.includes('mesero');
+  const rolActivo = (user?.rol || user?.puesto || "").toLowerCase();
+  const esMesero = rolActivo.includes("mesero");
 
   // Capacidades de QUIEN está usando la pantalla: el empleado del PIN si lo hay,
   // y si no la cuenta del aparato. Sólo se usan para calcular la salida.
@@ -191,15 +192,15 @@ export default function PosScreen() {
   const salirDelPos = () => {
     // El mapa de mesas es el origen natural del flujo, pero sólo vale como
     // salida si este rol puede abrirlo.
-    if (isMesa && puedeVerRuta(capDeLaSesion, '/mesas')) {
-      navigate('/mesas');
+    if (isMesa && puedeVerRuta(capDeLaSesion, "/mesas")) {
+      navigate("/mesas");
       return;
     }
-    navigate(rutaDeEscape({ cap: capDeLaSesion, rutaActual: '/pos' }));
+    navigate(rutaDeEscape({ cap: capDeLaSesion, rutaActual: "/pos" }));
   };
 
   const [carrito, setCarrito] = useState([]);
-  const [categoriaActiva, setCategoriaActiva] = useState('Todas');
+  const [categoriaActiva, setCategoriaActiva] = useState("Todas");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showModalCobro, setShowModalCobro] = useState(false);
 
@@ -209,7 +210,7 @@ export default function PosScreen() {
   const [mostrarGateStock, setMostrarGateStock] = useState(false);
   const [subsVenta, setSubsVenta] = useState({});
   // Gate de inventario: 'cobro' (venta directa) o 'produccion' (mesa → A Producción).
-  const [gateContext, setGateContext] = useState('cobro');
+  const [gateContext, setGateContext] = useState("cobro");
   const [gateItems, setGateItems] = useState([]); // delta a producir (modo producción)
 
   // Aviso de rondas sin entregar: modal PROPIO (window.confirm está vetado).
@@ -226,8 +227,8 @@ export default function PosScreen() {
   // sale al cobrar y recoge lo que haya.
   const cuentaCerrada =
     isMesa &&
-    mesaActual?.estado === 'por_cobrar' &&
-    (configuracion?.flujo_cuenta || '') === 'ticket_final';
+    mesaActual?.estado === "por_cobrar" &&
+    (configuracion?.flujo_cuenta || "") === "ticket_final";
 
   // Copia en vuelo, para apagar su botón. Una a la vez: dos pulsaciones
   // seguidas son el error caro aquí — gastan número de copia y papel.
@@ -236,8 +237,8 @@ export default function PosScreen() {
   // a la cola del hub y tarda, y dos clics seguidos gastarían un número de
   // copia que el hub descartaría sin decir nada.
   const [reimprimiendoTicket, setReimprimiendoTicket] = useState(false);
-  const [pinReapertura, setPinReapertura] = useState('');
-  const [pinReaperturaError, setPinReaperturaError] = useState('');
+  const [pinReapertura, setPinReapertura] = useState("");
+  const [pinReaperturaError, setPinReaperturaError] = useState("");
   const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
 
   /**
@@ -251,8 +252,8 @@ export default function PosScreen() {
   const bloqueadoPorCuenta = () => {
     if (!cuentaCerrada) return false;
     showToast(
-      'La cuenta ya se imprimió. Para agregar algo, reábrela con PIN.',
-      'info',
+      "La cuenta ya se imprimió. Para agregar algo, reábrela con PIN.",
+      "info",
     );
     return true;
   };
@@ -277,19 +278,19 @@ export default function PosScreen() {
   const puedeReabrirSinPin = sesionAutoriza({
     usuario: user,
     roles_permisos,
-    flag: 'autoriza_descuentos',
+    flag: "autoriza_descuentos",
   });
 
   const reabrirCuenta = (autorizador) => {
     const mesaReabierta = {
       ...mesaActual,
-      estado: 'ocupada',
+      estado: "ocupada",
       // El folio NO se toca. El cliente tiene ese número en la mano; una cuenta
       // reabierta sigue siendo la misma cuenta, y darle otro folio dejaría dos
       // papeles distintos para un solo consumo.
       orden_actual: { ...(mesaActual?.orden_actual || {}) },
     };
-    enqueueAction('mesas', 'upsert', mesaReabierta);
+    enqueueAction("mesas", "upsert", mesaReabierta);
     useAppStore.setState((prev) => ({
       mesas: prev.mesas.map((m) =>
         m.id === mesaActual.id ? mesaReabierta : m,
@@ -298,20 +299,20 @@ export default function PosScreen() {
 
     registrarAuditoria?.({
       fecha: new Date().toISOString(),
-      usuario: autorizador?.nombre || user?.nombre || 'Gestión',
-      accion: 'REAPERTURA_CUENTA',
-      modulo: 'POS',
-      nivel: 'warning',
+      usuario: autorizador?.nombre || user?.nombre || "Gestión",
+      accion: "REAPERTURA_CUENTA",
+      modulo: "POS",
+      nivel: "warning",
       detalles:
         `Mesa ${mesaActual?.nombre ?? mesaActual?.id} reabierta tras imprimir la cuenta` +
-        `${mesaActual?.orden_actual?.folio ? ` (folio ${mesaActual.orden_actual.folio})` : ''}. ` +
-        `Autorizó: ${autorizador?.nombre || user?.nombre || 'sesión con permiso'}.`,
+        `${mesaActual?.orden_actual?.folio ? ` (folio ${mesaActual.orden_actual.folio})` : ""}. ` +
+        `Autorizó: ${autorizador?.nombre || user?.nombre || "sesión con permiso"}.`,
     });
 
     setPidiendoReapertura(false);
-    setPinReapertura('');
-    setPinReaperturaError('');
-    showToast('Cuenta reabierta. Se puede volver a agregar.', 'success');
+    setPinReapertura("");
+    setPinReaperturaError("");
+    showToast("Cuenta reabierta. Se puede volver a agregar.", "success");
   };
 
   const intentarReabrir = () => {
@@ -319,8 +320,8 @@ export default function PosScreen() {
       reabrirCuenta(null);
       return;
     }
-    setPinReapertura('');
-    setPinReaperturaError('');
+    setPinReapertura("");
+    setPinReaperturaError("");
     setPidiendoReapertura(true);
   };
 
@@ -329,11 +330,11 @@ export default function PosScreen() {
       staff,
       roles_permisos,
       pin: pinReapertura,
-      flag: 'autoriza_descuentos',
+      flag: "autoriza_descuentos",
     });
     if (!quien) {
-      setPinReaperturaError('PIN inválido para reabrir la cuenta.');
-      setPinReapertura('');
+      setPinReaperturaError("PIN inválido para reabrir la cuenta.");
+      setPinReapertura("");
       return;
     }
     reabrirCuenta(quien);
@@ -349,7 +350,7 @@ export default function PosScreen() {
     }
     // VENTA DIRECTA: se vende y se corrobora inventario aquí (antes de cobrar).
     const problemas = verificarStock(carrito, productos, subsVenta);
-    setGateContext('cobro');
+    setGateContext("cobro");
     if (problemas.length > 0) setMostrarGateStock(true);
     else setShowModalCobro(true);
   };
@@ -371,7 +372,7 @@ export default function PosScreen() {
   const onConfirmarGateStock = (subs) => {
     setSubsVenta(subs);
     setMostrarGateStock(false);
-    if (gateContext === 'produccion') {
+    if (gateContext === "produccion") {
       ejecutarProduccion(gateItems, subs);
     } else {
       setShowModalCobro(true);
@@ -395,11 +396,11 @@ export default function PosScreen() {
 
   const menuList = recetas || [];
   const categoriasUnicas = [
-    'Todas',
-    ...new Set(menuList.map((p) => p.categoria || 'Sin Categoría')),
+    "Todas",
+    ...new Set(menuList.map((p) => p.categoria || "Sin Categoría")),
   ];
   const productosFiltrados = menuList.filter(
-    (p) => categoriaActiva === 'Todas' || p.categoria === categoriaActiva,
+    (p) => categoriaActiva === "Todas" || p.categoria === categoriaActiva,
   );
 
   // Las DOS conectividades. Aquí sólo interesa la local: sin hub no hay papel,
@@ -420,7 +421,7 @@ export default function PosScreen() {
    */
   const avisoDeImpresion = (
     queNoSalio,
-    { resultado = null, yaQuedo = 'La venta sí quedó registrada.' } = {},
+    { resultado = null, yaQuedo = "La venta sí quedó registrada." } = {},
   ) => {
     // ── EL TERCER CASO, AÑADIDO EL 18-AGO ─────────────────────────────────
     // El hub contestó bien y AUN ASÍ tiró el documento, por id ya impreso.
@@ -429,7 +430,7 @@ export default function PosScreen() {
     // cuando se enseñe, «quedó en la cola» sería mentira: no quedó en ninguna.
     // Es un problema nuestro, no de la red ni del aparato, y por eso manda a
     // soporte y no a mirar la impresora.
-    if (resultado?.ok && resultado?.estado === 'duplicado') {
+    if (resultado?.ok && resultado?.estado === "duplicado") {
       return `${queNoSalio} no salió: el hub ya tenía ese documento y lo descartó. Avisa a soporte.`;
     }
     const motivo = motivoSinImpresion({ local, comprobandoLocal });
@@ -466,7 +467,7 @@ export default function PosScreen() {
     if (nuevos === actuales) return;
 
     const mesaActualizada = { ...mesaActual, comensales_reales: nuevos };
-    enqueueAction('mesas', 'upsert', mesaActualizada);
+    enqueueAction("mesas", "upsert", mesaActualizada);
     useAppStore.setState((prev) => ({
       mesas: prev.mesas.map((m) =>
         m.id === mesaActual.id ? mesaActualizada : m,
@@ -506,7 +507,7 @@ export default function PosScreen() {
     }
     // Platillo con modificadores → «¿cómo lo quiere?» antes de entrar.
     if (necesitaEleccion(producto, modificadores)) {
-      setModalMods({ producto, seleccion: {}, nota: '', lineaId: null });
+      setModalMods({ producto, seleccion: {}, nota: "", lineaId: null });
       return;
     }
     const productoSanitizado = {
@@ -550,7 +551,7 @@ export default function PosScreen() {
     // son líneas distintas (id compuesto estable = paqueteId + elecciones).
     const firma = grupos
       .map((g) => `${g.grupo}=${seleccion[g.grupo]}`)
-      .join('|');
+      .join("|");
     const lineId = `${paquete.id}:${firma}`;
 
     const item = {
@@ -582,25 +583,46 @@ export default function PosScreen() {
    * para poner una nota a un producto sin grupos («sin hielo»), y para
    * corregirse.
    *
-   * Se bloquea si la línea ya salió a cocina: cambiar la nota entonces no
-   * cambia el papel que el cocinero tiene en la mano, así que la pantalla
-   * diría una cosa y la cocina estaría haciendo otra. Eso es peor que no poder
-   * editarlo.
+   * ── LO QUE SE BLOQUEA, Y LO QUE NO ────────────────────────────────────────
+   * Reescribir la nota de unas unidades que ya están en la plancha no cambia
+   * el papel que el cocinero tiene en la mano: la pantalla diría una cosa y la
+   * cocina estaría haciendo otra. Eso sigue prohibido.
+   *
+   * Lo que ANTES estaba mal era el alcance. La guarda miraba
+   * `cantidad_enviada > 0` y con eso frenaba la línea entera, aunque sólo una
+   * parte hubiera salido — y ése es el caso normal: mandas una pizza, más
+   * tarde tocas Pizza otra vez (se funde en la misma línea, «2x, Enviado 1») y
+   * quieres que la segunda lleve «sin cebolla». Quedabas atrapado: la única
+   * vía para la nota era esta línea, y esta línea estaba cerrada.
+   *
+   * Ahora se abre mientras quede algo sin enviar, y al confirmar la línea SE
+   * PARTE (ver `repartirPorNota`). Sólo cuando no queda nada libre se frena, y
+   * el aviso dice qué hacer en vez de sólo decir que no.
    */
   const abrirNotaDeLinea = (item) => {
     if (bloqueadoPorCuenta()) return;
-    if ((item.cantidad_enviada || 0) > 0) {
+    const enviadas = safeNumber(item.cantidad_enviada, 0);
+    const libres = safeNumber(item.cantidad, 0) - enviadas;
+    if (libres <= 0) {
       showToast(
-        'Ese platillo ya está en cocina. Avísale de viva voz: cambiar la nota aquí no cambia el papel que ya salió.',
-        'error',
+        enviadas > 0
+          ? "Todas esas unidades ya están en cocina. Agrega otra con el + y ponle la nota a ésa."
+          : "Esa línea no tiene unidades a las que ponerles nota.",
+        "error",
       );
       return;
     }
     setModalMods({
       producto: item,
       seleccion: item.seleccion_mods || {},
-      nota: item.nota || '',
+      // La nota arranca en blanco cuando la línea se va a partir: lo que se
+      // está anotando son las unidades NUEVAS, no las que ya salieron, y
+      // heredar el texto de las viejas invita a creer que se está corrigiendo
+      // aquéllas.
+      nota: enviadas > 0 ? "" : item.nota || "",
       lineaId: item.id,
+      // Cuántas unidades se van a mover. La lee el cuadro para avisar.
+      libres: enviadas > 0 ? libres : 0,
     });
   };
 
@@ -609,7 +631,7 @@ export default function PosScreen() {
     const { producto, seleccion, nota, lineaId } = modalMods;
     if (!seleccionCompleta(gruposDelModal, seleccion)) return;
 
-    const notaLimpia = String(nota || '').trim();
+    const notaLimpia = String(nota || "").trim();
     const elegidas = opcionesElegidas(gruposDelModal, seleccion);
     // El id de línea lleva DENTRO la selección y la nota. Sin eso, una
     // hamburguesa término medio y otra bien cocida se fundirían en «2x
@@ -634,31 +656,11 @@ export default function PosScreen() {
       modificadores: elegidas,
     };
 
-    setCarrito((prev) => {
-      // Al editar, la línea vieja desaparece y su cantidad viaja a la nueva:
-      // el mesero cambió la nota de ESAS unidades, no pidió más.
-      const anterior = lineaId ? prev.find((i) => i.id === lineaId) : null;
-      const sinAnterior = lineaId ? prev.filter((i) => i.id !== lineaId) : prev;
-      const traslado = anterior ? safeNumber(anterior.cantidad, 1) : 1;
-
-      const existe = sinAnterior.find((i) => i.id === lineId);
-      if (existe) {
-        return sinAnterior.map((i) =>
-          i.id === lineId
-            ? { ...i, cantidad: safeNumber(i.cantidad, 0) + traslado }
-            : i,
-        );
-      }
-      return [
-        ...sinAnterior,
-        {
-          ...base,
-          cantidad: traslado,
-          cantidad_enviada: anterior?.cantidad_enviada || 0,
-          descuento: anterior?.descuento ?? producto.descuento ?? null,
-        },
-      ];
-    });
+    // El reparto vive en `lib/Modificadores.js` y tiene sus propias pruebas:
+    // es aritmética sobre el carrito —cuántas unidades se mueven a la nota
+    // nueva y cuántas se quedan en cocina— y un error aquí se cobra en la
+    // cuenta del cliente, no en la pantalla.
+    setCarrito((prev) => repartirPorNota(prev, { lineaId, lineId, base }));
     setModalMods(null);
   };
 
@@ -671,7 +673,7 @@ export default function PosScreen() {
           if (nuevaCantidad < (item.cantidad_enviada || 0)) {
             showToast(
               `Ya hay ${item.cantidad_enviada} en preparación. Cancélalo con perfil de Gerente.`,
-              'error',
+              "error",
             );
             return item;
           }
@@ -697,10 +699,10 @@ export default function PosScreen() {
     // Auditoría: un descuento sin rastro de quién y sobre qué es justo lo que
     // convierte una promoción en una fuga.
     registrarAuditoria?.({
-      accion: 'DESCUENTO_PRODUCTO',
-      modulo: 'POS',
-      nivel: 'warning',
-      detalles: `${linea?.nombre ?? id}: ${etiquetaDescuento(descuento)} · autorizó ${descuento?.autorizadoPor ?? '—'}`,
+      accion: "DESCUENTO_PRODUCTO",
+      modulo: "POS",
+      nivel: "warning",
+      detalles: `${linea?.nombre ?? id}: ${etiquetaDescuento(descuento)} · autorizó ${descuento?.autorizadoPor ?? "—"}`,
     });
   };
 
@@ -714,8 +716,8 @@ export default function PosScreen() {
     const itemEnCarrito = carrito.find((i) => i.id === id);
     if (itemEnCarrito && (itemEnCarrito.cantidad_enviada || 0) > 0) {
       showToast(
-        'No puedes eliminar un platillo que ya está en la cocina.',
-        'error',
+        "No puedes eliminar un platillo que ya está en la cocina.",
+        "error",
       );
       return;
     }
@@ -739,7 +741,7 @@ export default function PosScreen() {
       }));
 
     if (deltaCarrito.length === 0) {
-      showToast('No hay productos nuevos para enviar', 'info');
+      showToast("No hay productos nuevos para enviar", "info");
       return;
     }
 
@@ -747,7 +749,7 @@ export default function PosScreen() {
     const problemas = verificarStock(deltaCarrito, productos, subsVenta);
     if (problemas.length > 0) {
       setGateItems(deltaCarrito);
-      setGateContext('produccion');
+      setGateContext("produccion");
       setMostrarGateStock(true);
       return;
     }
@@ -778,10 +780,10 @@ export default function PosScreen() {
       }),
       mesa: mesaActual.nombre,
       mesa_id: mesaActual.id,
-      mesero: user?.nombre ?? 'Sistema',
+      mesero: user?.nombre ?? "Sistema",
       fecha_hora: new Date().toISOString(),
       items: itemsParaCocina,
-      estado: 'preparando',
+      estado: "preparando",
     };
     registrarComandaKDS(nuevaComanda);
 
@@ -800,7 +802,7 @@ export default function PosScreen() {
     // delante el cobro entero. La impresión de una comanda no puede tumbar una
     // venta; es la misma regla que hace que la impresora nunca bloquee.
     void Promise.resolve(
-      enqueueAction('comandas', 'insert', nuevaComanda),
+      enqueueAction("comandas", "insert", nuevaComanda),
     ).then((idTarea) => imprimirComandaSiHaceFalta(nuevaComanda, idTarea));
 
     // Inventario: se descuenta AL PRODUCIR (no al cobrar). Solo el delta.
@@ -828,7 +830,7 @@ export default function PosScreen() {
     // hueco en una serie de ventas es la primera señal que busca un auditor.
     const mesaActualizada = {
       ...mesaActual,
-      estado: 'ocupada',
+      estado: "ocupada",
       orden_actual: {
         ...(mesaActual?.orden_actual || {}),
         items: carritoMarcado,
@@ -836,7 +838,7 @@ export default function PosScreen() {
         total: granTotal,
       },
     };
-    enqueueAction('mesas', 'upsert', mesaActualizada);
+    enqueueAction("mesas", "upsert", mesaActualizada);
     useAppStore.setState((prev) => ({
       mesas: prev.mesas.map((m) =>
         m.id === mesaActual.id ? mesaActualizada : m,
@@ -845,9 +847,9 @@ export default function PosScreen() {
 
     setSubsVenta({});
     setGateItems([]);
-    setGateContext('cobro');
-    showToast('Comanda enviada a producción', 'success');
-    navigate('/mesas');
+    setGateContext("cobro");
+    showToast("Comanda enviada a producción", "success");
+    navigate("/mesas");
   };
 
   /**
@@ -876,7 +878,7 @@ export default function PosScreen() {
     mesa_id: mesaActual?.id,
     mesa_nombre: mesaActual?.nombre,
     comensales: safeNumber(mesaActual?.comensales_reales, 0),
-    usuario: user?.nombre ?? 'Mesero',
+    usuario: user?.nombre ?? "Mesero",
     fecha: new Date().toISOString(),
   });
 
@@ -888,8 +890,8 @@ export default function PosScreen() {
     // el folio tiene que existir antes de imprimirlo. Se guarda en la mesa para
     // que el cobro use EL MISMO: reimprimir o reabrir no puede cambiar el número
     // de una cuenta que el cliente ya tiene en la mano.
-    const flujo = configuracion?.flujo_cuenta || 'precuenta_y_ticket';
-    const esTicketFinal = flujo === 'ticket_final';
+    const flujo = configuracion?.flujo_cuenta || "precuenta_y_ticket";
+    const esTicketFinal = flujo === "ticket_final";
 
     const folioCuenta = esTicketFinal
       ? mesaActual?.orden_actual?.folio ||
@@ -922,7 +924,7 @@ export default function PosScreen() {
 
     const mesaActualizada = {
       ...mesaActual,
-      estado: 'por_cobrar',
+      estado: "por_cobrar",
       orden_actual: {
         items: carrito,
         subtotal,
@@ -931,7 +933,7 @@ export default function PosScreen() {
         ...(folioCuenta ? { folio: folioCuenta } : {}),
       },
     };
-    enqueueAction('mesas', 'upsert', mesaActualizada);
+    enqueueAction("mesas", "upsert", mesaActualizada);
     useAppStore.setState((prev) => ({
       mesas: prev.mesas.map((m) =>
         m.id === mesaActual.id ? mesaActualizada : m,
@@ -983,11 +985,11 @@ export default function PosScreen() {
       // para no hacer.
       if (!salioPapel(r)) {
         showToast(
-          avisoDeImpresion('La cuenta', {
+          avisoDeImpresion("La cuenta", {
             resultado: r,
-            yaQuedo: 'La mesa sí quedó marcada para cobrar.',
+            yaQuedo: "La mesa sí quedó marcada para cobrar.",
           }),
-          'info',
+          "info",
         );
       }
     });
@@ -1011,19 +1013,19 @@ export default function PosScreen() {
     if (folioCuenta) {
       registrarAuditoria?.({
         fecha: new Date().toISOString(),
-        usuario: user?.nombre ?? 'Mesero',
-        accion: 'CUENTA_IMPRESA',
-        modulo: 'POS',
-        nivel: 'info',
+        usuario: user?.nombre ?? "Mesero",
+        accion: "CUENTA_IMPRESA",
+        modulo: "POS",
+        nivel: "info",
         detalles:
           `Folio ${folioCuenta} impreso para ${mesaActual?.nombre ?? mesaActual?.id}. ` +
           `Total: $${granTotal}. Impresión ${impresionActual}.`,
       });
     }
 
-    showToast('Cuenta solicitada. Notificando a caja...', 'info');
+    showToast("Cuenta solicitada. Notificando a caja...", "info");
     setTimeout(() => {
-      navigate('/mesas');
+      navigate("/mesas");
     }, 1500);
   };
 
@@ -1081,10 +1083,10 @@ export default function PosScreen() {
       // contra el que existe el contador.
       if (!salioPapel(r)) {
         showToast(
-          r?.estado === 'duplicado'
-            ? 'El hub descartó esta copia como repetida y no salió papel. Avisa a soporte.'
-            : 'No se pudo imprimir la copia. Revisa la impresora.',
-          'error',
+          r?.estado === "duplicado"
+            ? "El hub descartó esta copia como repetida y no salió papel. Avisa a soporte."
+            : "No se pudo imprimir la copia. Revisa la impresora.",
+          "error",
         );
         return;
       }
@@ -1099,7 +1101,7 @@ export default function PosScreen() {
           impresiones: impresionActual,
         },
       };
-      enqueueAction('mesas', 'upsert', mesaActualizada);
+      enqueueAction("mesas", "upsert", mesaActualizada);
       useAppStore.setState((prev) => ({
         mesas: prev.mesas.map((m) =>
           m.id === mesaActual.id ? mesaActualizada : m,
@@ -1108,16 +1110,16 @@ export default function PosScreen() {
 
       registrarAuditoria?.({
         fecha: new Date().toISOString(),
-        usuario: user?.nombre ?? 'Mesero',
-        accion: 'CUENTA_IMPRESA',
-        modulo: 'POS',
-        nivel: 'info',
+        usuario: user?.nombre ?? "Mesero",
+        accion: "CUENTA_IMPRESA",
+        modulo: "POS",
+        nivel: "info",
         detalles:
           `Folio ${folioCuenta} impreso para ${mesaActual?.nombre ?? mesaActual?.id}. ` +
           `Total: $${granTotal}. Impresión ${impresionActual}.`,
       });
 
-      showToast(`Copia ${impresionActual} de la cuenta.`, 'success');
+      showToast(`Copia ${impresionActual} de la cuenta.`, "success");
     } finally {
       setReimprimiendoCuenta(false);
     }
@@ -1173,22 +1175,22 @@ export default function PosScreen() {
     const pagosDetalle = datosPago?.pagosDetalle || [];
     const montoEfectivo = round2(
       pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'efectivo')
+        .filter((p) => p.metodo.toLowerCase() === "efectivo")
         .reduce((acc, p) => acc + safeNumber(p.monto), 0),
     );
     const montoTarjeta = round2(
       pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'tarjeta')
+        .filter((p) => p.metodo.toLowerCase() === "tarjeta")
         .reduce((acc, p) => acc + safeNumber(p.monto), 0),
     );
     const montoTransferencia = round2(
       pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'transferencia')
+        .filter((p) => p.metodo.toLowerCase() === "transferencia")
         .reduce((acc, p) => acc + safeNumber(p.monto), 0),
     );
 
     const turnoActivo =
-      (turnos || []).find((t) => t.estado === 'abierto') || null;
+      (turnos || []).find((t) => t.estado === "abierto") || null;
 
     const nuevaVentaBD = {
       // Clave primaria con carril de dispositivo, no el reloj pelado. Ver
@@ -1219,12 +1221,12 @@ export default function PosScreen() {
       total: granTotalTicket,
       metodo_pago:
         pagosDetalle.length > 1
-          ? 'mixto'
-          : pagosDetalle[0]?.metodo?.toLowerCase() || 'efectivo',
+          ? "mixto"
+          : pagosDetalle[0]?.metodo?.toLowerCase() || "efectivo",
       efectivo: montoEfectivo,
       tarjeta: montoTarjeta,
       transferencia: montoTransferencia,
-      usuario: user?.nombre ?? 'Sistema',
+      usuario: user?.nombre ?? "Sistema",
       fecha: new Date().toISOString(),
       propina: fiscalTicket.propina,
       // ── CUÁNTAS VECES HA SALIDO ESTE TICKET EN PAPEL ────────────────────
@@ -1239,7 +1241,7 @@ export default function PosScreen() {
       // una venta cuyo ticket sí salió haría que su primera reimpresión
       // pidiera el id del original y el hub la tirara en silencio.
       copias_impresas:
-        isMesa && (configuracion?.flujo_cuenta || '') === 'ticket_final'
+        isMesa && (configuracion?.flujo_cuenta || "") === "ticket_final"
           ? 0
           : 1,
       mesa: isMesa ? mesaActual.id : null,
@@ -1251,11 +1253,11 @@ export default function PosScreen() {
       ...nuevaVentaBD,
       iva: ivaTicket,
       cambio_entregado: safeNumber(datosPago?.cambio, 0),
-      mesa_nombre: isMesa ? mesaActual.nombre : 'Directa',
+      mesa_nombre: isMesa ? mesaActual.nombre : "Directa",
       _quedaGente: isParcial && carritoRestante.length > 0,
     };
 
-    enqueueAction('ventas', 'insert', nuevaVentaBD);
+    enqueueAction("ventas", "insert", nuevaVentaBD);
     useAppStore.setState((prev) => ({
       ventas: [...(prev.ventas || []), nuevaVentaBD],
     }));
@@ -1268,20 +1270,20 @@ export default function PosScreen() {
         id: siguienteIdComanda({ nombreLocal: configuracion?.nombre_empresa }),
         restaurante_id: useAuthStore.getState().restauranteId, // RLS
         folio: nuevaVentaBD.folio,
-        mesa: 'Mostrador',
+        mesa: "Mostrador",
         mesa_id: null,
-        mesero: user?.nombre ?? 'Sistema',
+        mesero: user?.nombre ?? "Sistema",
         fecha_hora: new Date().toISOString(),
         items: construirItemsComanda(
           itemsTicket,
           recetas,
           configuracion?.enrutamiento,
         ),
-        estado: 'preparando',
+        estado: "preparando",
       };
       registrarComandaKDS(comandaDirecta);
       void Promise.resolve(
-        enqueueAction('comandas', 'insert', comandaDirecta),
+        enqueueAction("comandas", "insert", comandaDirecta),
       ).then((idTarea) => imprimirComandaSiHaceFalta(comandaDirecta, idTarea));
     }
 
@@ -1297,7 +1299,7 @@ export default function PosScreen() {
     // a quitar. En mostrador NO aplica —ahí no hay «pedir cuenta», así que el
     // ticket del cobro es el único papel que existe.
     const yaSeImprimioLaCuenta =
-      isMesa && (configuracion?.flujo_cuenta || '') === 'ticket_final';
+      isMesa && (configuracion?.flujo_cuenta || "") === "ticket_final";
 
     // ── EL CAJÓN, CUANDO NO HAY TICKET QUE LO LLEVE ─────────────────────────
     // El pulso viaja DENTRO del ticket (`construirTicket` lo decide por el
@@ -1314,8 +1316,8 @@ export default function PosScreen() {
     // el cajero tiene una llave. Ver `abrirCajon` en lib/Hub.js.
     if (
       yaSeImprimioLaCuenta &&
-      (nuevaVentaBD.metodo_pago === 'efectivo' ||
-        nuevaVentaBD.metodo_pago === 'mixto')
+      (nuevaVentaBD.metodo_pago === "efectivo" ||
+        nuevaVentaBD.metodo_pago === "mixto")
     ) {
       void abrirCajon();
     }
@@ -1325,7 +1327,7 @@ export default function PosScreen() {
         // `salioPapel` y no `r.ok`: ver `avisoDeImpresion`. Un descarte por id
         // repetido vuelve con `ok: true` y sin papel.
         if (!salioPapel(r))
-          showToast(avisoDeImpresion('El ticket', { resultado: r }), 'info');
+          showToast(avisoDeImpresion("El ticket", { resultado: r }), "info");
       });
     // CRM: acumular visita/gasto/puntos DESPUÉS de encolar la venta (la cola
     // es FIFO: la fila de ventas ya existirá cuando la RPC corra en el server).
@@ -1346,14 +1348,14 @@ export default function PosScreen() {
         );
         registrarAuditoria({
           fecha: new Date().toISOString(),
-          usuario: user?.nombre || 'Sistema',
-          accion: 'CANJE_RECOMPENSA',
-          modulo: 'POS',
-          nivel: 'info',
+          usuario: user?.nombre || "Sistema",
+          accion: "CANJE_RECOMPENSA",
+          modulo: "POS",
+          nivel: "info",
           detalles: `Folio ${nuevaVentaBD.folio}: canje "${datosPago.canje.nombre}" (−${datosPago.canje.puntos} pts${
             Number(datosPago.canje.monto) > 0
               ? `, descuento $${datosPago.canje.monto}`
-              : ''
+              : ""
           }) del cliente ${datosPago?.clienteNombre || nuevaVentaBD.cliente_id}.`,
         });
       }
@@ -1367,14 +1369,14 @@ export default function PosScreen() {
 
     registrarAuditoria({
       fecha: new Date().toISOString(),
-      usuario: user?.nombre || 'Sistema',
-      accion: 'COBRO_TICKET',
-      modulo: 'POS',
-      nivel: fiscalTicket.descuento > 0 ? 'warning' : 'info',
+      usuario: user?.nombre || "Sistema",
+      accion: "COBRO_TICKET",
+      modulo: "POS",
+      nivel: fiscalTicket.descuento > 0 ? "warning" : "info",
       detalles: `Folio ${nuevaVentaBD.folio} cobrado. Total: $${granTotalTicket}${
         fiscalTicket.descuento > 0
-          ? ` | Descuento: $${fiscalTicket.descuento} autorizado por ${datosPago?.descuentoAutorizadoPor || 'sesión de gestión'}`
-          : ''
+          ? ` | Descuento: $${fiscalTicket.descuento} autorizado por ${datosPago?.descuentoAutorizadoPor || "sesión de gestión"}`
+          : ""
       }`,
     });
 
@@ -1382,7 +1384,7 @@ export default function PosScreen() {
       if (ventaVisual._quedaGente) {
         const mesaActualizada = {
           ...mesaActual,
-          estado: 'ocupada',
+          estado: "ocupada",
           orden_actual: {
             items: carritoRestante,
             total: calcularVenta({
@@ -1395,7 +1397,7 @@ export default function PosScreen() {
             }).total,
           },
         };
-        enqueueAction('mesas', 'upsert', mesaActualizada);
+        enqueueAction("mesas", "upsert", mesaActualizada);
         useAppStore.setState((prev) => ({
           mesas: prev.mesas.map((m) =>
             m.id === mesaActual.id ? mesaActualizada : m,
@@ -1405,11 +1407,11 @@ export default function PosScreen() {
       } else {
         const mesaLiberada = {
           ...mesaActual,
-          estado: 'libre',
+          estado: "libre",
           comensales_reales: 0,
           orden_actual: null,
         };
-        enqueueAction('mesas', 'upsert', mesaLiberada);
+        enqueueAction("mesas", "upsert", mesaLiberada);
 
         // Cerrar las comandas activas de esta mesa al cobrar: salen de la fila
         // del KDS y del panel de rondas (estado 'completada').
@@ -1418,10 +1420,10 @@ export default function PosScreen() {
         ).filter(
           (c) =>
             String(c.mesa_id) === String(mesaActual.id) &&
-            !['completada', 'cancelada'].includes(c.estado),
+            !["completada", "cancelada"].includes(c.estado),
         );
         comandasMesa.forEach((c) => {
-          enqueueAction('comandas', 'upsert', { ...c, estado: 'completada' });
+          enqueueAction("comandas", "upsert", { ...c, estado: "completada" });
         });
 
         // Si era una mesa principal de un grupo, liberar también las satélites.
@@ -1431,12 +1433,12 @@ export default function PosScreen() {
         satelites.forEach((s) => {
           const liberada = {
             ...s,
-            estado: 'libre',
+            estado: "libre",
             mesa_principal_id: null,
             orden_actual: null,
             comensales_reales: 0,
           };
-          enqueueAction('mesas', 'upsert', liberada);
+          enqueueAction("mesas", "upsert", liberada);
         });
 
         useAppStore.setState((prev) => ({
@@ -1445,7 +1447,7 @@ export default function PosScreen() {
             if (String(m.mesa_principal_id) === String(mesaActual.id))
               return {
                 ...m,
-                estado: 'libre',
+                estado: "libre",
                 mesa_principal_id: null,
                 orden_actual: null,
                 comensales_reales: 0,
@@ -1500,10 +1502,10 @@ export default function PosScreen() {
 
       if (!salioPapel(r)) {
         showToast(
-          r?.estado === 'duplicado'
-            ? 'El hub descartó esta copia como repetida y no salió papel. Avisa a soporte.'
-            : 'No se pudo imprimir la copia. Revisa la impresora.',
-          'error',
+          r?.estado === "duplicado"
+            ? "El hub descartó esta copia como repetida y no salió papel. Avisa a soporte."
+            : "No se pudo imprimir la copia. Revisa la impresora.",
+          "error",
         );
         return;
       }
@@ -1514,7 +1516,7 @@ export default function PosScreen() {
       // otra vez la copia 2 y el hub la descartara en silencio.
       const actualizada = { ...venta, copias_impresas: copia };
       setTicketGenerado(actualizada);
-      enqueueAction('ventas', 'update', {
+      enqueueAction("ventas", "update", {
         ...actualizada,
         _quedaGente: undefined,
       });
@@ -1528,16 +1530,16 @@ export default function PosScreen() {
 
       registrarAuditoria?.({
         fecha: new Date().toISOString(),
-        usuario: user?.nombre ?? 'Sistema',
-        accion: 'REIMPRESION_TICKET',
-        modulo: 'POS',
-        nivel: 'info',
+        usuario: user?.nombre ?? "Sistema",
+        accion: "REIMPRESION_TICKET",
+        modulo: "POS",
+        nivel: "info",
         detalles:
           `Folio ${venta.folio} reimpreso desde el ticket de cobro. ` +
           `Impresión ${copia}.`,
       });
 
-      showToast(`Copia ${copia} del folio ${venta.folio}.`, 'success');
+      showToast(`Copia ${copia} del folio ${venta.folio}.`, "success");
     } finally {
       setReimprimiendoTicket(false);
     }
@@ -1551,11 +1553,11 @@ export default function PosScreen() {
     setCarritoAbierto(false);
     if (quedaGente)
       showToast(
-        'Ticket individual cobrado. La mesa sigue abierta para el resto.',
-        'success',
+        "Ticket individual cobrado. La mesa sigue abierta para el resto.",
+        "success",
       );
-    else if (isMesa) navigate('/mesas');
-    else showToast('¡Venta de mostrador cerrada!', 'success');
+    else if (isMesa) navigate("/mesas");
+    else showToast("¡Venta de mostrador cerrada!", "success");
   };
 
   // ─── ATAJOS DEL POS (Proyecto D · tanda 3) ───────────────────────────────
@@ -1583,51 +1585,51 @@ export default function PosScreen() {
   const ultimaLinea = carrito[carrito.length - 1];
 
   useAtajos(
-    'pos',
+    "pos",
     {
       f9: {
-        descripcion: 'Cobrar',
+        descripcion: "Cobrar",
         accion: () => {
           if (!hayCarrito || isProcessing || !puedeCobrarAqui) return;
           intentarCobrar();
         },
       },
       f2: {
-        descripcion: 'Mandar a producción',
+        descripcion: "Mandar a producción",
         accion: () => {
           if (!isMesa || !hayCarrito) return;
           handleGuardarEnMesa();
         },
       },
       f4: {
-        descripcion: 'Pedir la cuenta',
+        descripcion: "Pedir la cuenta",
         accion: () => {
           if (!isMesa || !hayCarrito) return;
           handlePedirCuenta();
         },
       },
-      '+': {
-        descripcion: 'Sumar 1 al último platillo',
+      "+": {
+        descripcion: "Sumar 1 al último platillo",
         accion: () => ultimaLinea && modificarCantidad(ultimaLinea.id, 1),
       },
-      '-': {
-        descripcion: 'Restar 1 al último platillo',
+      "-": {
+        descripcion: "Restar 1 al último platillo",
         accion: () => ultimaLinea && modificarCantidad(ultimaLinea.id, -1),
       },
-      escape: { descripcion: 'Salir del punto de venta', accion: salirDelPos },
+      escape: { descripcion: "Salir del punto de venta", accion: salirDelPos },
     },
     // Con un modal encima, las teclas de acción se apagan: pulsar F9 sobre el
     // cuadro de cobro no puede volver a lanzar el cobro.
-    { titulo: 'Punto de venta', activo: !hayModalAbierto },
+    { titulo: "Punto de venta", activo: !hayModalAbierto },
   );
 
   // Scope de mayor precedencia mientras hay modal: Escape cierra lo que esté
   // abierto en vez de sacarte del POS.
   useAtajos(
-    'pos-modal',
+    "pos-modal",
     {
       escape: {
-        descripcion: 'Cerrar este cuadro',
+        descripcion: "Cerrar este cuadro",
         accion: () => {
           if (ticketGenerado) return handleCerrarTicket();
           if (modalMods) return setModalMods(null);
@@ -1638,7 +1640,7 @@ export default function PosScreen() {
         },
       },
     },
-    { titulo: 'Cuadro abierto', activo: hayModalAbierto },
+    { titulo: "Cuadro abierto", activo: hayModalAbierto },
   );
 
   return (
@@ -1680,8 +1682,8 @@ export default function PosScreen() {
               onClick={() => setCategoriaActiva(cat)}
               className={`px-5 py-2.5 rounded-ui font-black text-sm whitespace-nowrap transition-all border ${
                 categoriaActiva === cat
-                  ? 'bg-ops-danger text-ops-danger-fg shadow-lg shadow-ops-danger/30 border-ops-danger'
-                  : 'bg-ops-panel-2 text-ops-muted border-transparent hover:border-ops-border dark:hover:border-ops-border hover:text-ops-ink dark:hover:text-ops-ink'
+                  ? "bg-ops-danger text-ops-danger-fg shadow-lg shadow-ops-danger/30 border-ops-danger"
+                  : "bg-ops-panel-2 text-ops-muted border-transparent hover:border-ops-border dark:hover:border-ops-border hover:text-ops-ink dark:hover:text-ops-ink"
               }`}
             >
               {cat}
@@ -1709,7 +1711,7 @@ export default function PosScreen() {
                   </p>
                   <p className="text-ops-ok font-black mt-2 text-lg">
                     $
-                    {getPrecio(prod).toLocaleString('es-MX', {
+                    {getPrecio(prod).toLocaleString("es-MX", {
                       minimumFractionDigits: 2,
                     })}
                   </p>
@@ -1730,30 +1732,30 @@ export default function PosScreen() {
         onCerrar={() => setCarritoAbierto(false)}
         // Sin `titulo`: el carrito ya trae su propia cabecera con el nombre de
         // la mesa y el contador de comensales.
-        etiquetaAbrir={isMesa ? 'Ver comanda' : 'Ver carrito'}
-        resumen={`$${granTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+        etiquetaAbrir={isMesa ? "Ver comanda" : "Ver carrito"}
+        resumen={`$${granTotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`}
         insignia={carrito.reduce((n, i) => n + (Number(i.cantidad) || 0), 0)}
         // Con el carrito vacío no hay nada que ver: la barra sólo taparía
         // productos. Aparece en cuanto entra la primera línea.
         disparador={carrito.length > 0}
       >
         <div
-          className={`p-6 flex items-center justify-between border-b border-ops-border transition-colors duration-lenta ${isMesa ? 'bg-ops-danger/5' : 'bg-ops-panel-2'}`}
+          className={`p-6 flex items-center justify-between border-b border-ops-border transition-colors duration-lenta ${isMesa ? "bg-ops-danger/5" : "bg-ops-panel-2"}`}
         >
           <div className="flex items-center gap-3 text-ops-ink">
             {isMesa ? (
               <ChefHat
-                className={`w-7 h-7 ${isMesa ? 'text-ops-danger' : 'text-ops-accent'}`}
+                className={`w-7 h-7 ${isMesa ? "text-ops-danger" : "text-ops-accent"}`}
               />
             ) : (
               <ShoppingCart className="w-7 h-7 text-ops-accent" />
             )}
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-0.5">
-                {isMesa ? 'Comanda para' : 'Venta Rápida'}
+                {isMesa ? "Comanda para" : "Venta Rápida"}
               </p>
               <h2 className="text-xl font-black font-syne tracking-tight leading-none">
-                {isMesa ? mesaActual.nombre : 'Mostrador'}
+                {isMesa ? mesaActual.nombre : "Mostrador"}
               </h2>
             </div>
           </div>
@@ -1814,7 +1816,7 @@ export default function PosScreen() {
                       <div className="mt-1 flex items-baseline gap-2 flex-wrap">
                         <p className="text-ops-ok font-black text-sm">
                           $
-                          {linea.neto.toLocaleString('es-MX', {
+                          {linea.neto.toLocaleString("es-MX", {
                             minimumFractionDigits: 2,
                           })}
                         </p>
@@ -1822,7 +1824,7 @@ export default function PosScreen() {
                           <>
                             <span className="text-[11px] text-ops-muted line-through">
                               $
-                              {linea.bruto.toLocaleString('es-MX', {
+                              {linea.bruto.toLocaleString("es-MX", {
                                 minimumFractionDigits: 2,
                               })}
                             </span>
@@ -1893,8 +1895,8 @@ export default function PosScreen() {
                   title="Cómo lo quiere / nota para cocina"
                   className={`w-10 h-10 flex items-center justify-center rounded-ui transition-colors ${
                     item.nota || (item.modificadores || []).length > 0
-                      ? 'text-ops-accent bg-ops-accent/10'
-                      : 'text-ops-muted hover:bg-ops-panel-2'
+                      ? "text-ops-accent bg-ops-accent/10"
+                      : "text-ops-muted hover:bg-ops-panel-2"
                   }`}
                 >
                   <StickyNote className="w-5 h-5" />
@@ -1905,8 +1907,8 @@ export default function PosScreen() {
                   title="Descuento a este producto"
                   className={`w-10 h-10 flex items-center justify-center rounded-ui transition-colors ${
                     item.descuento
-                      ? 'text-ops-warn bg-ops-warn/10'
-                      : 'text-ops-muted hover:bg-ops-panel-2'
+                      ? "text-ops-warn bg-ops-warn/10"
+                      : "text-ops-muted hover:bg-ops-panel-2"
                   }`}
                 >
                   <Percent className="w-5 h-5" />
@@ -1936,7 +1938,7 @@ export default function PosScreen() {
               <span>Subtotal</span>
               <span>
                 $
-                {subtotal.toLocaleString('es-MX', {
+                {subtotal.toLocaleString("es-MX", {
                   minimumFractionDigits: 2,
                 })}
               </span>
@@ -1945,7 +1947,7 @@ export default function PosScreen() {
               <span>IVA ({ivaRaw * 100}%)</span>
               <span>
                 $
-                {totalIva.toLocaleString('es-MX', {
+                {totalIva.toLocaleString("es-MX", {
                   minimumFractionDigits: 2,
                 })}
               </span>
@@ -1954,7 +1956,7 @@ export default function PosScreen() {
               <span>Total</span>
               <span className="text-ops-ok">
                 $
-                {granTotal.toLocaleString('es-MX', {
+                {granTotal.toLocaleString("es-MX", {
                   minimumFractionDigits: 2,
                 })}
               </span>
@@ -1973,7 +1975,7 @@ export default function PosScreen() {
                       Cuenta impresa y entregada
                       {mesaActual?.orden_actual?.folio
                         ? ` · ${mesaActual.orden_actual.folio}`
-                        : ''}
+                        : ""}
                     </p>
                     <p className="text-[11px] font-bold text-ops-muted mb-3">
                       No se puede agregar hasta cobrarla. Si el cliente pidió
@@ -2035,7 +2037,7 @@ export default function PosScreen() {
                 // El botón más importante de la app: alto, con la tecla que
                 // dispara lo MISMO (F9) impresa encima.
                 tamano="lg"
-                variante={isMesa ? 'cobro' : 'exito'}
+                variante={isMesa ? "cobro" : "exito"}
                 icono={CreditCard}
                 tecla="F9"
                 onClick={intentarCobrar}
@@ -2043,10 +2045,10 @@ export default function PosScreen() {
                 className="w-full py-5 text-lg"
               >
                 {isProcessing
-                  ? 'Procesando…'
+                  ? "Procesando…"
                   : isMesa
-                    ? 'Cerrar Mesa y Cobrar'
-                    : 'Cobrar Ticket'}
+                    ? "Cerrar Mesa y Cobrar"
+                    : "Cobrar Ticket"}
               </OpsButton>
             )}
           </div>
@@ -2131,7 +2133,7 @@ export default function PosScreen() {
             El cliente ya tiene la cuenta
             {mesaActual?.orden_actual?.folio
               ? ` ${mesaActual.orden_actual.folio}`
-              : ''}
+              : ""}
             . Reabrirla queda registrado.
           </p>
           <p className="text-ops-muted font-bold text-xs mb-4">
@@ -2144,11 +2146,11 @@ export default function PosScreen() {
             maxLength={6}
             value={pinReapertura}
             onChange={(e) => {
-              setPinReapertura(e.target.value.replace(/\D/g, ''));
-              setPinReaperturaError('');
+              setPinReapertura(e.target.value.replace(/\D/g, ""));
+              setPinReaperturaError("");
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && pinReapertura.length >= 4)
+              if (e.key === "Enter" && pinReapertura.length >= 4)
                 confirmarReapertura();
             }}
             className="w-full text-center text-3xl tracking-[0.4em] font-black bg-ops-panel-2 dark:bg-ops-bg border-2 border-ops-border rounded-ui py-3 text-ops-ink"
@@ -2207,7 +2209,7 @@ export default function PosScreen() {
                   <div className="grid grid-cols-2 gap-2">
                     {g.opciones.map((op) => {
                       const activa =
-                        String(modalElecciones.seleccion[g.grupo] ?? '') ===
+                        String(modalElecciones.seleccion[g.grupo] ?? "") ===
                         String(op.recetaId);
                       return (
                         <button
@@ -2223,8 +2225,8 @@ export default function PosScreen() {
                           }
                           className={`px-4 py-3 rounded-ui font-black text-sm border-2 text-left transition-all active:scale-95 ${
                             activa
-                              ? 'border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm'
-                              : 'border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border'
+                              ? "border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm"
+                              : "border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border"
                           }`}
                         >
                           {op.nombre}
@@ -2281,6 +2283,24 @@ export default function PosScreen() {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
+              {/* ── EL AVISO DE QUE LA LÍNEA SE VA A PARTIR ──────────────────
+                  Sin esto, el mesero teclea la nota creyendo que se la pone a
+                  las tres pizzas y sólo se la lleva la que no ha salido. El
+                  reparto es el correcto —lo que está en la plancha no se
+                  reescribe—, pero tiene que verlo ANTES de escribir, no
+                  descubrirlo en el carrito después. */}
+              {safeNumber(modalMods.libres, 0) > 0 && (
+                <div className="rounded-ui border-2 border-ops-warn/40 bg-ops-warn/10 px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-ops-warn">
+                    Esta nota va sólo a lo que no ha salido
+                  </p>
+                  <p className="text-xs font-bold text-ops-ink mt-1 leading-snug">
+                    {safeNumber(modalMods.libres, 0)} sin enviar se separan con
+                    esta nota. Lo que ya está en cocina se queda como está: el
+                    papel del cocinero no cambia.
+                  </p>
+                </div>
+              )}
               {gruposDelModal.map((g) => {
                 const marcadas = (modalMods.seleccion[String(g.id)] || []).map(
                   String,
@@ -2289,7 +2309,7 @@ export default function PosScreen() {
                   <div key={g.id}>
                     <p className="text-[10px] font-black uppercase tracking-widest text-ops-accent">
                       {g.nombre}
-                      {g.obligatorio && ' *'}
+                      {g.obligatorio && " *"}
                     </p>
                     {/* La regla se escribe con la MISMA función que usa el
                         catálogo, para que lo prometido al configurar sea
@@ -2315,8 +2335,8 @@ export default function PosScreen() {
                             }
                             className={`px-4 py-3 rounded-ui font-black text-sm border-2 text-left transition-all active:scale-95 ${
                               activa
-                                ? 'border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm'
-                                : 'border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border'
+                                ? "border-ops-accent bg-ops-accent/10 text-ops-accent shadow-sm"
+                                : "border-ops-border bg-ops-panel-2 text-ops-muted hover:border-ops-border"
                             }`}
                           >
                             {op.nombre}
@@ -2358,8 +2378,8 @@ export default function PosScreen() {
                   puede usar: se nombra el grupo que falta. */}
               {faltantes(gruposDelModal, modalMods.seleccion).length > 0 && (
                 <p className="text-[11px] font-bold text-ops-warn mb-3 text-center">
-                  Falta elegir:{' '}
-                  {faltantes(gruposDelModal, modalMods.seleccion).join(', ')}
+                  Falta elegir:{" "}
+                  {faltantes(gruposDelModal, modalMods.seleccion).join(", ")}
                 </p>
               )}
               <button
@@ -2369,7 +2389,7 @@ export default function PosScreen() {
                 }
                 className="w-full bg-ops-accent text-ops-accent-fg py-4 rounded-ui font-black uppercase tracking-widest shadow-lg disabled:bg-ops-panel-2 disabled:dark:bg-ops-border disabled:text-ops-muted disabled:shadow-none active:scale-95 transition-all"
               >
-                {modalMods.lineaId ? 'Guardar cambios' : 'Agregar al pedido'}
+                {modalMods.lineaId ? "Guardar cambios" : "Agregar al pedido"}
               </button>
             </div>
           </div>
@@ -2378,7 +2398,7 @@ export default function PosScreen() {
 
       {mostrarGateStock && (
         <ConfirmacionStockModal
-          carrito={gateContext === 'produccion' ? gateItems : carrito}
+          carrito={gateContext === "produccion" ? gateItems : carrito}
           productos={productos}
           onConfirmar={onConfirmarGateStock}
           onCancel={() => setMostrarGateStock(false)}

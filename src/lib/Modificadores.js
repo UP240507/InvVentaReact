@@ -258,3 +258,87 @@ export function recetasQueUsan(grupoId, recetas = []) {
     ),
   ).length;
 }
+
+/**
+ * Reparte una línea del carrito cuando se le pone (o se le cambia) una nota.
+ *
+ * ── EL FALLO QUE ARREGLA (Chris, 21-ago) ───────────────────────────────────
+ * «Si ya mandé una pizza a producción y de rato quiero mandar otra pero con
+ * nota, no me deja.» El camino era éste: la pizza sale a cocina; más tarde se
+ * toca Pizza otra vez y —al no tener grupos— entra directa y SE FUNDE con la
+ * línea que ya existe («2x, Enviado 1»); se toca el icono de nota y la
+ * pantalla lo frena, porque miraba `cantidad_enviada > 0` y con eso cerraba la
+ * línea entera. Quedabas atrapado: la única vía a la nota era esa línea, y esa
+ * línea estaba cerrada.
+ *
+ * ── LA REGLA, Y POR QUÉ NO ES «DEJARLO EDITAR» ─────────────────────────────
+ * Reescribir la nota de unas unidades que ya están en la plancha no cambiaría
+ * el papel que el cocinero tiene en la mano: la pantalla diría una cosa y la
+ * cocina estaría haciendo otra. Eso sigue prohibido, y con razón.
+ *
+ * Lo que estaba mal era el ALCANCE. Así que no se edita: **se parte**. Lo
+ * enviado se queda donde estaba con su nota original, y lo que aún no ha
+ * salido se va a una línea nueva con la nota nueva. `firmaDeLinea` ya mete la
+ * nota dentro del id, así que las dos líneas conviven sin tocar el modelo.
+ *
+ * ── POR QUÉ VIVE AQUÍ Y NO DENTRO DEL COMPONENTE ───────────────────────────
+ * Porque es aritmética sobre el carrito —cuántas se mueven, cuántas se
+ * quedan— y eso se puede probar. Dentro del `setCarrito` no lo miraría nadie
+ * hasta que un mesero cobrara de menos.
+ *
+ * @param {Array}  carrito   Líneas actuales.
+ * @param {object} opciones
+ * @param {string} opciones.lineaId  Línea que se está anotando. `null` = alta.
+ * @param {string} opciones.lineId   Id nuevo, ya calculado con `firmaDeLinea`.
+ * @param {object} opciones.base     La línea nueva sin cantidad.
+ * @returns {Array} El carrito resultante. El mismo objeto si no hay nada que
+ *   mover, para que React no repinte de balde.
+ */
+export function repartirPorNota(carrito = [], { lineaId, lineId, base } = {}) {
+  const prev = Array.isArray(carrito) ? carrito : [];
+  const numero = (v, x = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : x;
+  };
+
+  const anterior = lineaId ? prev.find((i) => i.id === lineaId) : null;
+  const enviadas = numero(anterior?.cantidad_enviada, 0);
+  const total = anterior ? numero(anterior.cantidad, 1) : 1;
+
+  // Sólo viaja lo que no ha salido. Ésta es la regla entera.
+  const traslado = anterior ? Math.max(total - enviadas, 0) : 1;
+  if (anterior && traslado === 0) return prev;
+
+  // Con unidades enviadas la línea vieja SOBREVIVE con ellas; sin ninguna
+  // desaparece, que es el caso de siempre: una corrección.
+  const resto =
+    anterior && enviadas > 0
+      ? prev.map((i) => (i.id === lineaId ? { ...i, cantidad: enviadas } : i))
+      : lineaId
+        ? prev.filter((i) => i.id !== lineaId)
+        : prev;
+
+  // Confirmar sin cambiar nada da `lineId === lineaId`: partir y volver a
+  // juntar, y el carrito queda igual que estaba.
+  if (resto.some((i) => i.id === lineId)) {
+    return resto.map((i) =>
+      i.id === lineId
+        ? { ...i, cantidad: numero(i.cantidad, 0) + traslado }
+        : i,
+    );
+  }
+
+  return [
+    ...resto,
+    {
+      ...base,
+      cantidad: traslado,
+      // Cero, y no lo que llevara la anterior: aquí sólo se han movido
+      // unidades que NO han salido. Heredar el contador dejaría unidades
+      // marcadas como enviadas sin comanda que las respalde, y el POS se
+      // negaría a quitarlas para siempre.
+      cantidad_enviada: 0,
+      descuento: anterior?.descuento ?? base?.descuento ?? null,
+    },
+  ];
+}

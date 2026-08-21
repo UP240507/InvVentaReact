@@ -24,6 +24,7 @@ import {
   opcionesElegidas,
   sublineasDe,
   firmaDeLinea,
+  repartirPorNota,
   textoDeReglas,
   recetasQueUsan,
 } from './Modificadores';
@@ -309,5 +310,134 @@ describe('recetasQueUsan — la trampa gorda de los modificadores', () => {
     expect(
       recetasQueUsan('g-leche', [{ grupos_modificadores: 'no-es-lista' }]),
     ).toBe(0);
+  });
+});
+
+// ─── El reparto por nota ─────────────────────────────────────────────────────
+// El fallo de Chris del 21-ago: una pizza ya en cocina cerraba la línea entera
+// y no se podía anotar la segunda. Lo que se prueba aquí no es la pantalla, es
+// la aritmética: cuántas unidades se mueven y cuántas se quedan.
+
+describe('repartirPorNota — lo que está en la plancha no se reescribe', () => {
+  const linea = (extra = {}) => ({
+    id: '10',
+    nombre: 'Pizza',
+    cantidad: 2,
+    cantidad_enviada: 1,
+    ...extra,
+  });
+  const base = { id: '10|sin cebolla', nombre: 'Pizza', nota: 'sin cebolla' };
+
+  it('EL CASO DE CHRIS: 2 en la línea, 1 enviada, la nota se lleva sólo la libre', () => {
+    const r = repartirPorNota([linea()], {
+      lineaId: '10',
+      lineId: '10|sin cebolla',
+      base,
+    });
+
+    expect(r).toHaveLength(2);
+    const vieja = r.find((i) => i.id === '10');
+    const nueva = r.find((i) => i.id === '10|sin cebolla');
+
+    // La vieja se queda EXACTAMENTE con lo que ya salió a cocina.
+    expect(vieja.cantidad).toBe(1);
+    expect(vieja.cantidad_enviada).toBe(1);
+    expect(vieja.nota).toBeUndefined();
+
+    // Y la nueva con lo que no había salido, y sin heredar el contador.
+    expect(nueva.cantidad).toBe(1);
+    expect(nueva.cantidad_enviada).toBe(0);
+    expect(nueva.nota).toBe('sin cebolla');
+  });
+
+  it('no se pierde ni se inventa ninguna unidad', () => {
+    // La invariante que de verdad importa: si al partir se perdiera una
+    // unidad, el cliente pagaría de menos y nadie vería un error.
+    const antes = [linea({ cantidad: 5, cantidad_enviada: 2 })];
+    const r = repartirPorNota(antes, {
+      lineaId: '10',
+      lineId: '10|sin cebolla',
+      base,
+    });
+    const suma = (xs) => xs.reduce((a, i) => a + i.cantidad, 0);
+    const enviadas = (xs) => xs.reduce((a, i) => a + i.cantidad_enviada, 0);
+
+    expect(suma(r)).toBe(5);
+    expect(enviadas(r)).toBe(2);
+  });
+
+  it('en ninguna línea las enviadas superan a la cantidad', () => {
+    // Si esto se rompiera, `modificarCantidad` se negaría para siempre a
+    // quitar unas unidades que no existen en ninguna comanda.
+    const r = repartirPorNota([linea({ cantidad: 3, cantidad_enviada: 3 })], {
+      lineaId: '10',
+      lineId: '10|otra',
+      base: { id: '10|otra', nota: 'otra' },
+    });
+    r.forEach((i) =>
+      expect(i.cantidad_enviada).toBeLessThanOrEqual(i.cantidad),
+    );
+  });
+
+  it('si todo ya salió, no se toca nada y se devuelve el mismo carrito', () => {
+    // La pantalla ni siquiera deja abrir el cuadro en este caso, pero la regla
+    // se fija aquí para que siga siendo verdad si alguien cambia la pantalla.
+    const antes = [linea({ cantidad: 2, cantidad_enviada: 2 })];
+    expect(
+      repartirPorNota(antes, {
+        lineaId: '10',
+        lineId: '10|sin cebolla',
+        base,
+      }),
+    ).toBe(antes);
+  });
+
+  it('sin nada enviado, la línea se corrige en sitio y no se parte', () => {
+    // El comportamiento de siempre, intacto: esto es una corrección, no un
+    // plato nuevo.
+    const r = repartirPorNota([linea({ cantidad: 2, cantidad_enviada: 0 })], {
+      lineaId: '10',
+      lineId: '10|sin cebolla',
+      base,
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('10|sin cebolla');
+    expect(r[0].cantidad).toBe(2);
+  });
+
+  it('confirmar sin cambiar nada deja el carrito como estaba', () => {
+    // Partir y volver a juntar. Sin esta rama, abrir el cuadro y darle a
+    // aceptar duplicaria la línea.
+    const r = repartirPorNota([linea()], {
+      lineaId: '10',
+      lineId: '10',
+      base: { id: '10', nombre: 'Pizza' },
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].cantidad).toBe(2);
+    expect(r[0].cantidad_enviada).toBe(1);
+  });
+
+  it('si ya existe otra línea con esa misma nota, se suman', () => {
+    // Dos pizzas «sin cebolla» son la misma cosa: dejarlas en dos líneas haría
+    // que la cocina sacara dos comandas por lo que es un solo plato repetido.
+    const antes = [
+      linea(),
+      { id: '10|sin cebolla', cantidad: 1, cantidad_enviada: 0 },
+    ];
+    const r = repartirPorNota(antes, {
+      lineaId: '10',
+      lineId: '10|sin cebolla',
+      base,
+    });
+    expect(r).toHaveLength(2);
+    expect(r.find((i) => i.id === '10|sin cebolla').cantidad).toBe(2);
+  });
+
+  it('un alta normal (sin línea previa) entra con cantidad 1', () => {
+    const r = repartirPorNota([], { lineaId: null, lineId: '10', base });
+    expect(r).toHaveLength(1);
+    expect(r[0].cantidad).toBe(1);
+    expect(r[0].cantidad_enviada).toBe(0);
   });
 });
