@@ -276,6 +276,19 @@ describe('baseHub', () => {
 });
 
 describe('imprimir — degradación', () => {
+  // ── POR QUÉ SE GUARDA Y SE REPONE `window.location` ──────────────────────
+  // `vi.unstubAllGlobals()` NO deshace un `Object.defineProperty`: sólo revierte
+  // lo que puso `vi.stubGlobal`. Sin esto, al terminar este archivo la ventana
+  // se queda creyendo que el origen es `http://caja:3000` para todo el proceso.
+  //
+  // Con aislamiento no se nota, y por eso llevaba tiempo ahí. Con
+  // `npm run test:rapido` —que corre `src/lib src/store src/test src/hooks`
+  // SIN aislar— el siguiente archivo hereda ese origen, y `baseHub()` es
+  // justo lo que leen los que hablan con el hub. Es ensuciar el estado global
+  // entre ficheros: la misma clase de fantasma que costó dos días el 10 y el
+  // 11-ago.
+  const location = window.location;
+
   beforeEach(() => {
     delete window.__TAURI_INTERNALS__;
     delete window.__TAURI__;
@@ -287,6 +300,10 @@ describe('imprimir — degradación', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    Object.defineProperty(window, 'location', {
+      value: location,
+      writable: true,
+    });
   });
 
   it('un hub caído NO lanza excepción: el cobro no puede depender del papel', async () => {
@@ -354,6 +371,10 @@ describe('imprimir — degradación', () => {
 });
 
 describe('imprimirVarios', () => {
+  // Mismo cuidado que arriba: lo que se pisa con `defineProperty` se repone a
+  // mano, o el archivo siguiente lo hereda.
+  const location = window.location;
+
   beforeEach(() => {
     delete window.__TAURI_INTERNALS__;
     Object.defineProperty(window, 'location', {
@@ -362,7 +383,13 @@ describe('imprimirVarios', () => {
     });
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'location', {
+      value: location,
+      writable: true,
+    });
+  });
 
   it('que la barra falle no deja a cocina sin su comanda', async () => {
     let n = 0;

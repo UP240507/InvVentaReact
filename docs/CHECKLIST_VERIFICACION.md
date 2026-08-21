@@ -276,18 +276,56 @@ El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
 
 ## Deuda conocida que sigue ahí
 
-- `ModalCobro` aún no usa `lib/Autorizacion.js` — tercera copia evitada, segunda
-  pendiente de migrar.
+- ~~`ModalCobro` aún no usa `lib/Autorizacion.js`.~~ **Migrado el 18-ago.** Con
+  tres copias, la que divergía siempre era la de «empleado activo», porque su
+  fallo no se nota probando: todo funciona, sólo que autoriza descuentos alguien
+  que ya no trabaja aquí.
 - CSP nulo en `tauri.conf.json` y `CorsLayer::permissive()` en el hub.
 - `mesas.mesero_id` sigue muerto: bloquea tres de las cinco propuestas de sala.
-- Queda por localizar el archivo que ensucia `matchMedia` entre ficheros. No
-  rompe nada con aislamiento; sólo estorba al correr sin él.
-- `total_divergente` lo calcula un trigger y **nada en el front lo lee**. Desde
-  el arreglo del fallo 3 el front y Postgres coinciden exacto, así que el
-  detector ya no vive al borde de gritar por todo: leerlo pasa a ser útil.
-- `prettier` **no está en `devDependencies`**, así que `npm run format` usa el
-  que cada máquina tenga instalado global. Tres ficheros siguen sin pasar por
-  él: `Modificadores.js`, su prueba y `scripts/version.mjs`.
+- ~~Queda por localizar el archivo que ensucia `matchMedia` entre ficheros.~~
+  **Localizado el 18-ago, y no era `matchMedia`.** Los tres sitios que parchean
+  `matchMedia` —`PanelAcoplable`, `MesasScreen.figuras`, `ModalCobro.figuras`—
+  **restauran los tres**, y además ninguno entra en `test:rapido`, que sólo
+  corre `src/lib src/store src/test src/hooks`. Esa nota llevaba tiempo siendo
+  falsa.
+
+  Lo que sí pasa, y es lo que produce **los 6 fallos de `useConectividad`**:
+
+  ```
+  npx vitest run --isolate=false src/hooks/useConectividad.test.jsx   → 11/11
+  npx vitest run --isolate=false src/lib/QR.test.js  src/hooks/useConectividad.test.jsx → 6 fallos
+  npx vitest run --isolate=false src/hooks/useConectividad.test.jsx  src/lib/QR.test.js → 11/11
+  ```
+
+  **Es `src/lib/QR.test.js`, y sólo si va DELANTE.** Con `Hub`, `Recuperacion`,
+  `Respaldo`, `Metricas`, `Alertas` o `Escape` delante, pasa. Y QR no rompe
+  otras pruebas de DOM —con `BarraPestanas` o `PanelAcoplable` detrás, todo en
+  verde—: es específico de ese par.
+
+  **O sea que la atribución que había era falsa:** no es «`waitFor` agotándose
+  en máquina lenta». Aislado pasa siempre; el archivo tarda 98 ms. Es
+  contaminación, y depende del orden.
+
+  El síntoma exacto: el contenedor que renderiza `Sonda` **no queda colgado de
+  `document.body`** —testing-library imprime un `<body />` vacío y aparte el
+  árbol con los `data-testid` dentro—, así que `screen` no encuentra nada.
+  Huele a dos instancias del registro de módulos de testing-library, no a
+  tiempo. **Falta el porqué; la receta para reproducirlo está arriba.**
+
+- `Hub.test.js` dejaba `window.location` pisado entre ficheros —
+  `vi.unstubAllGlobals()` no deshace un `Object.defineProperty`—. **Arreglado el
+  18-ago:** los dos `describe` que lo redefinían ahora lo reponen. No cambia los
+  6 de arriba, pero era una trampa de verdad en el mismo camino.
+- ~~`total_divergente` lo calcula un trigger y **nada en el front lo lee**.~~
+  **Arreglado el 18-ago:** un chip «Cuadra mal» en la lista de tickets del
+  turno. No costó ni una consulta —el `select('*')` del store ya lo traía a la
+  memoria del navegador para morir ahí— y sólo tiene sentido desde el arreglo
+  del fallo 3: antes el front y Postgres discrepaban por construcción y sólo la
+  tolerancia de dos centavos evitaba que saltara en cada venta.
+- ~~`prettier` **no está en `devDependencies`**.~~ **Arreglado el 18-ago:**
+  fijado a `3.9.6` **sin acento circunflejo**, a propósito — un rango `^` deja
+  que dos máquinas formateen distinto, que es el problema que se venía a
+  cerrar. Los tres ficheros pendientes ya pasaron por él.
 - **En release no hay consola.** `src-tauri/Cargo.toml` declara `tauri` sin la
   feature `devtools`, así que cualquier diagnóstico que dependa de la consola
   es, en producción, un diagnóstico que no existe. O se compila con devtools, o
