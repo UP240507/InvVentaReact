@@ -41,12 +41,13 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Syne:wght@700;800&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Aquí había un enlace a Google Fonts con Inter y Syne. Se fue el 18-ago:
+      Inter no se usa en ninguna parte del CSS ni del código, y Syne pasó a
+      servirse desde el propio bundle (`src/main.jsx`). Una caja sin internet no
+      puede descargar una hoja de estilos de un CDN, y ese `<link>` está en el
+      camino crítico del arranque: el navegador no pinta hasta resolverlo o
+      rendirse. Un POS offline-first no puede empezar pidiéndole permiso a la
+      red. -->
 
     <style>
       /* Optimizaciones base sin romper el scroll ni los inputs */
