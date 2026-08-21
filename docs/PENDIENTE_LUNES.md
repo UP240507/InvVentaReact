@@ -108,7 +108,7 @@ produjo un falso fallo que costó dos pruebas descartar.
 8. **El updater no avisa solo.** **NO ES FALLO**: decisión escrita, revisada y
    mantenida (`143cd15`). Ver §11.
 
-### 7 · El KDS, sólo lectura fuera de tu estación (Chris, 17-ago)
+### 7 · El KDS, sólo lectura fuera de tu estación — **HECHO el 18-ago**
 
 **Lo que pidió Chris:** que un barista no pueda marcar listo un platillo de
 cocina por error, ni al revés. Y que los demás roles —dueño, gerente, admin—
@@ -153,6 +153,33 @@ qué**. Lo que no vale es dejarlo con su aspecto de siempre y que no responda.
    error cuesta un toque deshacerlo; una confirmación por platillo, con las manos
    ocupadas y veinte comandas, es fricción constante contra un error barato. Las
    confirmaciones se ganan cuando el error es caro o irreversible.
+
+#### Cómo quedó, y la trampa que dictó el diseño
+
+`permisoDeMarcadoKds(cap, {estacionUsuario, estacionItem})` en `lib/Permisos.js`
+devuelve `{puede, motivo}`, y `KdsScreen` la consulta una sola vez por item.
+Dos flags nuevos: `kds_solo_lectura` y `kds_estacion_fija`.
+
+**Los dos son RESTRICCIONES, no permisos, y eso no es una preferencia de
+estilo.** `getCapacidades(rol, filas)` **REEMPLAZA** la base cuando el rol tiene
+fila propia — no mezcla. Un flag nuevo redactado en positivo (`kds_puede_marcar`)
+llegaría `undefined` a todo tenant que ya esté en producción, y **la cocina de
+todos los locales se quedaría mirando una pantalla que no responde** el día que
+se publique la versión. Redactado como restricción, ausente = como ayer.
+`Permisos.test.js` fija las dos mitades de esto, incluida la de que
+`getCapacidades` no mezcla: si algún día alguien lo cambia por una fusión, esa
+prueba falla y le obliga a mirar qué permisos heredaría de vuelta una fila
+incompleta.
+
+**El caso incómodo:** restricción activada y empleado sin estación asignada. No
+hay con qué comparar. Se deja pasar y se devuelve `motivo: 'sin_estacion'`, y la
+pantalla avisa de que el ajuste no está haciendo nada — un ajuste que promete y
+no cumple es peor que uno apagado.
+
+**Y lo visible:** los items ajenos se pintan atenuados con `cursor-not-allowed`,
+hay una banda arriba diciendo en qué modo estás, y el toque bloqueado **abre el
+modal de PIN** en vez de no hacer nada. Desbloquear queda en auditoría como
+`KDS_DESBLOQUEADO`.
 
 ### 10 · Revocar todos los dispositivos al cerrar turno (Chris, 17-ago) — **HECHO el 18-ago**
 
@@ -402,7 +429,7 @@ copia es un duplicado EXACTO del original — sin texto extra de ningún tipo.**
 >   auditoría si algún día hace falta.
 >
 > - **En `ticket_final` la copia NO es exacta, y se acepta** (decisión de Chris,
->   18-ago). El papel que se llevó el cliente es la *cuenta* —`ticket::<folio>`,
+>   18-ago). El papel que se llevó el cliente es la _cuenta_ —`ticket::<folio>`,
 >   sin bloque de pago— y la reimpresión se construye desde la fila de `ventas`
 >   —`ticket::<venta.id>`, con «Pago: EFECTIVO»—. Sale el ticket completo, que
 >   es más informativo. **Queda dicho aquí porque contradice el requisito
@@ -576,7 +603,7 @@ Comprobado de punta a punta: `construirTicket` mete `{ etiqueta: 'Folio' }` en
 folio.** Sólo hay que actualizar la expresión de la prueba, y de paso los tres
 comentarios del archivo que siguen hablando de `POS-xxxxx`.
 
-### 3.2 · El render en tablet — **esto sí es un fallo de verdad**
+### 3.2 · El render en tablet — **NO SE REPRODUCE (18-ago). Ojo antes de tocar nada.**
 
 El snapshot de `render.spec.js` da 27 % de píxeles distintos. Al mirar la imagen
 **actual** (no el diff, que superpone y engaña) se ve el problema:
@@ -602,6 +629,30 @@ corrían**. Ésa es la lección, más que el bug.
 
 **Al regenerar el snapshot: sólo DESPUÉS de arreglar el layout.** Regenerarlo
 antes convierte el fallo en la nueva referencia y lo entierra para siempre.
+
+#### Lo que pasó al ir a arreglarlo (18-ago)
+
+**La hipótesis de arriba está sin confirmar, y el intento de medirla salió
+limpio.** Se montó un banco en Chromium contra el CSS ya compilado, con
+`OpsHeader` real, y se midió el bloque del subtítulo a 1024, 1100 y 1280 px,
+con y sin el arreglo propuesto:
+
+```
+subtituloAncho: 333, subtituloLineas: 1     ← idéntico en los seis casos
+```
+
+Una línea, mismo ancho, con `shrink-0` y sin él. **Por debajo de 1024 px el
+bloque entero es `hidden`**, así que ahí tampoco hay nada que partir.
+
+**Decisión: no se toca el header.** Es un componente compartido por todas las
+pantallas de operación, y cambiarlo por una hipótesis que no se reproduce es
+cómo se rompen tres pantallas para arreglar cero. Lo que hay que hacer antes es
+**volver a correr la E2E y mirar la captura actual**: o el fallo se arregló de
+paso en alguna de las tandas de estas dos semanas, o el snapshot es de un
+viewport o un estado que el banco no reprodujo —una fila de Mesas con cinco
+botones y contadores, que es lo que el texto original describe y el banco no
+montó—. Hasta entonces el 27 % de píxeles sigue sin explicación, y eso es
+distinto de estar arreglado.
 
 ### NO hace falta una tablet para arreglar esto
 
@@ -684,11 +735,10 @@ dueño cambie de proveedor de pan.
 
 ---
 
-## 5 · Impresión de reportes — el Corte Z y el vale de propina no imprimen
+## 5 · Impresión de reportes — Corte Z y vale de propina — **HECHO el 18-ago**
 
-**No es código muerto: es código vivo que no puede funcionar dentro de la caja.**
-
-`ReportesScreen.jsx` imprime así (líneas ~322 y ~362):
+**No era código muerto: era código vivo que no podía funcionar dentro de la
+caja.** `ReportesScreen.jsx` imprimía los dos documentos así:
 
 ```js
 const win = window.open('', '_blank', 'width=340,height=700');
@@ -701,22 +751,56 @@ setTimeout(() => {
 
 Eso es un patrón de navegador. En la caja —Tauri sobre WebView2— `window.open`
 no devuelve una ventana manipulable, así que `win.document` revienta y el botón
-**no hace absolutamente nada visible**. Ni imprime, ni avisa, ni deja rastro
-salvo un error en una consola que nadie mira. La quinta vez este mes que el
-fallo es un silencio.
+**no hacía absolutamente nada visible**. Ni imprimía, ni avisaba, ni dejaba
+rastro salvo un error en una consola que en release no existe. Y aunque hubiera
+funcionado, habría salido por el diálogo de Windows a una hoja A4, no por la
+térmica que es donde se quiere.
 
-Y aunque funcionara, imprimiría **por el diálogo de Windows a una hoja A4**, no
-por la térmica. El Corte Z es justamente lo que el dueño quiere pegado en la
-libreta al cerrar: tiene que salir por la misma impresora que los tickets.
+### Lo que se hizo
 
-**Lo que hay que hacer:** los dos documentos pasan a la cola del hub como
-ESC/POS, igual que el ticket y la comanda. Ya existe todo el camino
-(`lib/Comanda.js` → `hub/cola.rs`); falta el constructor del documento «corte»
-y el del «vale». El HTML de arriba sirve de especificación del contenido: se
-tira, pero se copian los campos.
+Los dos documentos pasan ya por la cola del hub como ESC/POS, por el MISMO
+camino que el ticket y la comanda:
 
-**Ojo con `TicketImpresion.jsx:28`** — `window.print()` a secas, que imprime la
-ventana ENTERA de la aplicación. Mismo origen, misma revisión.
+- **`construirCorteZ(corte, {configuracion})`** y
+  **`construirValePropina(vale, {configuracion})`** en `lib/Comanda.js`.
+- **`enviarCorteZ` / `enviarValePropina`** en `lib/Hub.js`, hermanos de
+  `enviarTicket` y `enviarPreCuenta`.
+- Los dos botones de `ReportesScreen` comprueban con **`salioPapel(r)`**, no
+  con `r.ok`, y se apagan mientras el papel está en la cola.
+- El vale queda en auditoría como **`VALE_PROPINA_IMPRESO`**. El corte no: es
+  un resumen de datos que ya están en la base y se puede volver a sacar igual.
+  El vale es dinero que sale del cajón contra una firma, y el papel es el único
+  sitio donde consta.
+
+### Las dos decisiones de forma que no son obvias
+
+- **`cuerpo: []` en los dos.** `escpos.rs` pinta la cabecera
+  «CANT DESCRIPCION IMPORTE» encima de cualquier `cuerpo` no vacío, y un corte
+  no tiene artículos: tiene conceptos y cifras, que es exactamente la forma de
+  `totales`. Usar el sitio equivocado imprimiría «1x Efectivo» bajo un título
+  de columna que no significa nada.
+- **El id lleva reloj y contador**, como la pre-cuenta y por lo mismo: este
+  papel DEBE salir siempre que se pida —uno para la libreta, otro para el
+  dueño— y `hub/cola.rs` descarta por id repetido **sin dar error**. La comanda
+  hace lo contrario, y también por buenas razones.
+
+`TOTAL EN CAJA` sigue siendo `fondo + efectivo`, la misma cuenta que hacía el
+HTML viejo. Cambiarla de paso habría descuadrado el arqueo sin que nadie lo
+pidiera.
+
+### `TicketImpresion.jsx` — el `window.print()` a secas
+
+Mismo origen, y arreglado en la misma tanda. El botón «Imprimir» del ticket que
+se enseña recién cobrada la venta recibe ahora `onImprimir` desde `PosScreen`,
+que manda una copia por la térmica **contando `copias_impresas`** — porque el
+original ya salió al cobrar, así que ése es por definición el `::c2` y sin
+contador `cola.rs` lo descartaría en silencio. Sin `onImprimir` (pruebas, y una
+eventual vista fuera del POS) cae a `window.print()`, que es el único sitio
+donde imprimir la pantalla es lo que se pretende.
+
+**Pruebas:** 13 nuevas en `Comanda.test.js` (forma del documento, «En curso» en
+un turno sin cerrar, ids distintos entre dos impresiones, el cajón que no se
+abre). Suite en 814.
 
 ## 6 · El logo del restaurante — el campo existe, el ticket no lo usa
 
@@ -802,11 +886,14 @@ causas que salieron al mirarla, **dos ya están arregladas**:
 
 **Sigue pendiente:**
 
-- **El grupo no hace nada hasta que se ata en Recetas**, y eso no se anuncia en
-  ninguna parte. Es la trampa gorda: haces todo bien y concluyes que está roto.
-  Un aviso en la pantalla de modificadores («este grupo todavía no está en
-  ningún platillo — átalo en Recetas») lo resolvería, y además es dato que ya
-  está en memoria.
+- ✅ **HECHO el 18-ago — la trampa gorda.** El grupo no hacía nada hasta
+  atarse en Recetas y eso no se anunciaba en ninguna parte: hacías todo bien y
+  concluías que el sistema estaba roto. `recetasQueUsan(grupoId, recetas)` en
+  `lib/Modificadores.js` cuenta los platillos que lo usan —comparando ids como
+  texto, porque vienen de dos sitios y uno los guarda numéricos— y
+  `ModificadoresScreen` pinta un chip: «En N platillos» o **«Todavía sin
+  usar»**, con una línea que dice dónde se ata. Dato que ya estaba en memoria;
+  lo único que faltaba era enseñarlo.
 - **Vista previa de cómo se verá en el POS**, para el concepto grupo vs opción.
   Enseñar en vez de explicar.
 - **El panel de ayuda** que pidió Chris, para el recorrido de tres pantallas.

@@ -93,7 +93,7 @@ opinión.
 - [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
       `public.ventas`.
 - [ ] Fallo 3: un ticket de **dos jugos de $40** dice `TOTAL $80.00`, con
-      `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
+    `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
 
 - [ ] **«Imprimir copia» NO abre el cajón** y **no desbloquea la cuenta**: el
       aviso naranja sigue ahí y «A Producción» sigue apagado. Si la copia
@@ -219,7 +219,7 @@ está en duda. Lo que se prueba aquí es lo que **no** tiene freno.
 
 `Reportes → Corte de Caja (Z) → Tickets del turno`, un icono de impresora por
 fila. **Sin red debajo:** `ReportesScreen.jsx` no tiene suite. Lo que sí está
-probado es la capa de abajo (`Comanda.test.js`, 88 en verde).
+probado es la capa de abajo (`Comanda.test.js`, 102 en verde).
 
 - [ ] Cobrar una venta, ir a Reportes y **pulsar el botón**: sale un papel.
 - [ ] **Pulsarlo otra vez** → sale **otro** papel. Éste es el paso que importa:
@@ -264,7 +264,80 @@ probado es la capa de abajo (`Comanda.test.js`, 88 en verde).
 
 ---
 
-## 7 · El updater — la ronda completa, que por fin se puede
+## 7 · El Corte Z y el vale de propina, en papel térmico — nuevo el 18-ago
+
+Hasta hoy estos dos botones **no hacían nada** dentro de la caja: usaban
+`window.open`, que en WebView2 no devuelve una ventana usable. Ahora van por la
+misma cola del hub que los tickets. **Sin red debajo en la pantalla**
+(`ReportesScreen.jsx` no tiene suite); lo probado es el documento
+(`Comanda.test.js`, 102 en verde).
+
+- [ ] `Reportes → Corte de Caja (Z)`, elegir un turno y pulsar **«Imprimir Z»**:
+      sale un papel **por la térmica**, no un diálogo de Windows.
+- [ ] Las cifras del papel **cuadran con las de la pantalla**: tickets,
+      efectivo, tarjeta, propinas, fondo, total.
+- [ ] **`TOTAL EN CAJA` = fondo inicial + efectivo.** Sin tarjeta y sin
+      propinas: es lo que tiene que haber físicamente en el cajón. Contarlo una
+      vez contra el dinero real.
+- [ ] **Pulsarlo dos veces seguidas → salen DOS papeles.** Es el paso que
+      importa: el corte se reimprime a propósito (uno para la libreta, otro para
+      el dueño) y `cola.rs` descarta por id repetido sin dar error.
+- [ ] **El cajón NO se abre** al imprimir el corte.
+- [ ] Con un turno **sin cerrar**, el papel dice **«En curso»** en la línea de
+      Cierre, no un hueco.
+- [ ] Con la impresora apagada: sale el aviso rojo, **no** un «listo» falso.
+- [ ] `Reportes → Propinas por mesero`, botón de impresora de un mesero con
+      propinas: sale el **vale**, con el importe en grande, **el importe con
+      letra** y la línea de firma con espacio suficiente para firmarla en la
+      tira de 58 mm.
+- [ ] En **Auditoría** aparece `VALE_PROPINA_IMPRESO` con el mesero, el importe
+      y el periodo. (El corte **no** se audita, y es a propósito: es un resumen
+      de datos que ya están en la base. El vale es dinero contra una firma.)
+- [ ] **POS:** cobrar una venta y, en el ticket que aparece, pulsar
+      **«Imprimir»** → sale **papel térmico**, no la ventana entera de la app.
+      Pulsarlo dos veces saca dos papeles y sube `copias_impresas`.
+
+---
+
+## 8 · El KDS en sólo lectura y por estación — nuevo el 18-ago
+
+Los dos ajustes viven en `Roles y Permisos`. **Antes de nada, la comprobación
+que protege a todos los locales:**
+
+- [ ] **Sin tocar ningún ajuste, el KDS se marca exactamente como ayer.** Éste
+      es el paso crítico: los flags son restricciones justamente porque
+      `getCapacidades` reemplaza en vez de mezclar, y un error aquí deja sin
+      marcar a todas las cocinas al publicar. Si esto falla, **no publicar**.
+- [ ] Activar **«sólo lectura»** en un rol de supervisión y entrar al KDS con
+      él: banda visible arriba, items **atenuados**, y al tocar uno **se abre el
+      modal de PIN** — no se queda sin responder.
+- [ ] Con el PIN de encargado se desbloquea y **ya se puede marcar**. En
+      Auditoría queda `KDS_DESBLOQUEADO` con quién autorizó.
+- [ ] Activar **«estación fija»** en el rol de cocina, con un empleado que
+      tenga estación: sus platillos sí, los de barra no.
+- [ ] **Deshacer también está bloqueado**, no sólo marcar. Es el mismo botón a
+      propósito: «no tocas esta estación» se explica; «puedes desmarcar pero no
+      marcar», no.
+- [ ] Con «estación fija» activada y un empleado **sin estación asignada**: se
+      le deja marcar y **la pantalla avisa** de que el ajuste no está haciendo
+      nada. Un ajuste que promete y no cumple es peor que uno apagado.
+
+---
+
+## 9 · El aviso de modificadores sin atar — nuevo el 18-ago
+
+La trampa gorda de la configuración: haces el grupo bien y no pasa nada, porque
+falta atarlo en Recetas.
+
+- [ ] `Catálogos → Modificadores`: cada grupo enseña **«En N platillos»** o
+      **«Todavía sin usar»**, y el número coincide con la realidad.
+- [ ] Atar un grupo a un platillo en Recetas y volver: el chip **cambia solo**.
+- [ ] El grupo sin usar enseña además **dónde se ata**, no sólo que no está
+      atado.
+
+---
+
+## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6
 **es** esa versión. Guía en `docs/CHECKLIST_ACTUALIZACIONES.md`.
@@ -286,7 +359,7 @@ Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6
 
 ---
 
-## 8 · Al cerrar la sesión de pruebas — NO OLVIDAR
+## 11 · Al cerrar la sesión de pruebas — NO OLVIDAR
 
 El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
 **Simulador**. Comprobar las dos **antes de que abra el local**:
@@ -307,9 +380,16 @@ El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
   del §3.3 del lunes: unas E2E que nadie corre no son una red de seguridad, son
   una foto vieja que da sensación de cobertura. O entran en el ritual o se dice
   en voz alta que no cuentan.
-- **El fallo 3.2**, el layout de `OpsHeader` en tablet. Diagnosticado y sin
-  tocar. Al arreglarlo, regenerar el snapshot **sólo después**: antes convierte
-  el fallo en la nueva referencia y lo entierra.
+- **El fallo 3.2**, el layout de `OpsHeader` en tablet. **Se intentó arreglar
+  el 18-ago y NO SE REPRODUCE.** Banco en Chromium contra el CSS compilado, con
+  el componente real: `subtituloAncho: 333, subtituloLineas: 1`, idéntico a
+  1024, 1100 y 1280 px, con y sin el arreglo propuesto; y por debajo de 1024 el
+  bloque es `hidden`. No se tocó el header: es compartido por todas las
+  pantallas de operación y cambiarlo por una hipótesis que no se reproduce es
+  cómo se rompen tres pantallas para arreglar cero. **Lo siguiente es correr la
+  E2E y mirar la captura actual**, no editar CSS. Y al regenerar el snapshot,
+  sólo después de entender qué se ve: antes convierte el fallo en la nueva
+  referencia y lo entierra.
 - **`scripts/pruebas-rust.sh`** corre en Linux e incluye `respaldo` —51 pruebas
   el 18-ago—. Lo que no compila fuera de Windows es el resto de `src-tauri`.
 
