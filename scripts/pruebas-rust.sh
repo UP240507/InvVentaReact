@@ -55,7 +55,13 @@ fi
 # no sabe qué es una venta, así que no toca Windows ni Supabase. Es además el
 # módulo donde más importa poder probar sin la caja delante — es el camino del
 # dinero y sus fallos son silenciosos.
-MODULOS=(documento escpos respaldo)
+#
+# `dispositivos` entra el 18-ago, y por un motivo parecido: es serde y un mapa
+# en un archivo, sin nada del sistema. Desde que existe «revocar todos», ahí
+# vive una garantía que conviene poder comprobar en cada cambio y no sólo en
+# Windows: **la caja no está en ese registro**, así que vaciarlo no puede
+# dejarla sin administrar su propio hub.
+MODULOS=(documento escpos respaldo dispositivos)
 
 for m in "${MODULOS[@]}"; do
   if [[ ! -f "$ORIGEN/$m.rs" ]]; then

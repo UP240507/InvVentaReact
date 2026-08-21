@@ -21,6 +21,7 @@
 //! el dueño lo rota y las fotos viejas dejan de servir.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -215,6 +216,38 @@ impl Registro {
         }
     }
 
+    /// Revoca TODOS los emparejados de golpe. Devuelve cuántos cayeron.
+    ///
+    /// ── PARA QUÉ, Y POR QUÉ NO ES AUTOMÁTICO ────────────────────────────────
+    /// Los dispositivos se acumulan: cada teléfono que alguna vez escaneó el QR
+    /// sigue emparejado para siempre, incluido el del mesero que se fue en
+    /// marzo. Al cerrar turno es cuando tiene sentido barrer.
+    ///
+    /// **La caja no puede caer aquí, y no es por cuidado sino por
+    /// construcción:** `autorizado_admin` compara contra `estado.token`, que es
+    /// el de emparejamiento y **no vive en este registro**. Vaciar el mapa no
+    /// la toca. Hay una prueba que lo fija, porque es la clase de garantía que
+    /// alguien podría romper sin querer el día que decida meter la caja en la
+    /// lista para que se vea en pantalla.
+    pub fn revocar_todos(&self) -> usize {
+        let mut mapa = self.interior.lock().unwrap();
+        let cuantos = mapa.len();
+        mapa.clear();
+        self.guardar(&mapa);
+        cuantos
+    }
+
+    /// Cuántos emparejados tienen su token en este conjunto.
+    ///
+    /// Existe para poder decir «3 de los 5 tienen ventas sin confirmar» **sin
+    /// que un token salga de Rust**. La alternativa —devolver los tokens a la
+    /// pantalla para que ella cruce— es justo lo que `Publico` evita: el
+    /// listado se sirve a cualquier dispositivo emparejado.
+    pub fn cuantos_con_token_en(&self, tokens: &HashSet<String>) -> usize {
+        let mapa = self.interior.lock().unwrap();
+        mapa.keys().filter(|t| tokens.contains(*t)).count()
+    }
+
     /// Persiste el "visto por última vez" acumulado. Se llama de vez en cuando,
     /// no en cada petición: escribir el archivo en cada impresión sería un
     /// acceso a disco por comanda sin ninguna ganancia.
@@ -227,6 +260,55 @@ impl Registro {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// La garantía que sostiene todo el botón de «revocar todos».
+    ///
+    /// El token de la CAJA es el de emparejamiento (`EstadoHub::token`) y no
+    /// está en este registro: `autorizado_admin` lo compara aparte. Por eso
+    /// vaciar el mapa no puede dejar a la caja fuera de su propio hub — que es
+    /// lo primero que da miedo al leer «revocar todos».
+    ///
+    /// Se fija aquí porque el día que alguien meta la caja en el registro «para
+    /// que se vea en la lista», el botón pasaría de barrer teléfonos a dejar la
+    /// caja sin administrar el hub, en hora de cierre. Y no daría ningún error.
+    #[test]
+    fn revocar_todos_barre_los_telefonos_y_no_puede_tocar_la_caja() {
+        let r = Registro::nuevo(temp("revocar-todos"));
+        let a = r.emparejar("Tel Ana", "mesero");
+        let b = r.emparejar("Tel Beto", "mesero");
+        let kds = r.emparejar("KDS Cocina", "kds");
+
+        assert_eq!(r.listar().len(), 3);
+        assert_eq!(r.revocar_todos(), 3);
+        assert!(r.listar().is_empty());
+
+        // Ninguno de los tokens vale ya, y sin reiniciar el hub.
+        for t in [&a.token, &b.token, &kds.token] {
+            assert!(!r.validar(t), "un token revocado no puede seguir valiendo");
+        }
+
+        // Y el token de emparejamiento —el de la caja— nunca estuvo aquí, así
+        // que no había nada que revocarle.
+        assert!(!r.validar("token-de-emparejamiento-de-la-caja"));
+    }
+
+    #[test]
+    fn cuantos_con_token_en_cuenta_sin_sacar_tokens() {
+        // Es lo que permite decir «2 de los 3 tienen ventas sin confirmar» sin
+        // que la pantalla vea un token.
+        let r = Registro::nuevo(temp("cruce"));
+        let a = r.emparejar("Tel Ana", "mesero");
+        let b = r.emparejar("Tel Beto", "mesero");
+        let _c = r.emparejar("Tel Caro", "mesero");
+
+        let con_trabajo: std::collections::HashSet<String> =
+            [a.token.clone(), b.token.clone(), "de-otro-hub".to_string()]
+                .into_iter()
+                .collect();
+
+        // El token ajeno no suma: sólo cuentan los emparejados aquí.
+        assert_eq!(r.cuantos_con_token_en(&con_trabajo), 2);
+    }
 
     fn temp(nombre: &str) -> PathBuf {
         std::env::temp_dir().join(format!("invventa-dev-{nombre}-{}.json", ahora_ms()))

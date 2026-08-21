@@ -16,6 +16,7 @@
 //! red del local no pueda mandar a imprimir. Sin internet no hay forma de
 //! validar un JWT, y la caja no puede quedarse sin imprimir por eso.
 
+use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
@@ -536,6 +537,57 @@ async fn respaldo_pendiente(
     )
 }
 
+/// Lo que hay que decir ANTES de revocar en bloque.
+///
+/// ── POR QUÉ EL AVISO NO ES CEREMONIA ────────────────────────────────────────
+/// Revocar a ciegas es barato de deshacer —se vuelve a escanear el QR— pero a
+/// media comida cuesta un servicio: al mesero se le corta el hub sin decirle
+/// por qué y deja de imprimir. Así que antes de pulsar hay que saber **a
+/// cuántos** afecta y **cuántos llevan ventas sin subir**.
+///
+/// Y hay una sinergia que conviene entender, porque es la razón de que este
+/// botón exista en el cierre de turno: revocar saca al aparato de la ventana de
+/// «vivo», así que sus ventas sin confirmar pasan a «Por adoptar» **de
+/// inmediato**, sin esperar los 15 minutos. Por eso el orden es
+/// **revocar → drenar → cerrar**: si se revoca y no se drena, esas ventas se
+/// quedan en el disco de la caja esperando a un aparato que ya no va a volver.
+/// No se pierden —el respaldo las tiene— pero nadie va a ir a buscarlas.
+///
+/// La caja no aparece en ninguna de estas cuentas y tampoco puede caer: su
+/// token es el de emparejamiento y no vive en el registro. Ver
+/// `Registro::revocar_todos`.
+pub fn resumen_de_revocacion(estado: &EstadoHub) -> serde_json::Value {
+    let con_trabajo: HashSet<String> = estado.respaldo.tokens_pendientes();
+    json!({
+        "dispositivos": estado.dispositivos.listar().len(),
+        "con_pendientes": estado.dispositivos.cuantos_con_token_en(&con_trabajo),
+        "ventas_pendientes": estado.respaldo.ventas_pendientes_ajenas(),
+    })
+}
+
+/// Revoca TODOS los emparejados. Sólo con el token de la caja.
+async fn revocar_todos(
+    State(estado): State<Arc<EstadoHub>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !autorizado_admin(&estado, &headers) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "requiere el token de la caja" })),
+        );
+    }
+    // El resumen se toma ANTES: después de vaciar el registro ya no se puede
+    // decir cuántos tenían trabajo, y ése es justo el dato que hay que devolver
+    // para que la pantalla sepa si insistir con «Recuperar ahora».
+    let antes = resumen_de_revocacion(&estado);
+    let revocados = estado.dispositivos.revocar_todos();
+
+    (
+        StatusCode::OK,
+        Json(json!({ "ok": true, "revocados": revocados, "antes": antes })),
+    )
+}
+
 async fn revocar(
     State(estado): State<Arc<EstadoHub>>,
     headers: HeaderMap,
@@ -558,6 +610,7 @@ pub fn rutas(estado: Arc<EstadoHub>, dir_web: Option<std::path::PathBuf>) -> Rou
         .route("/emparejar", post(emparejar))
         .route("/dispositivos", get(listar_dispositivos))
         .route("/dispositivos/revocar", post(revocar))
+        .route("/dispositivos/revocar-todos", post(revocar_todos))
         .route("/imprimir", post(imprimir))
         .route("/previsualizar", post(previsualizar))
         .route("/cola", get(estado_cola))

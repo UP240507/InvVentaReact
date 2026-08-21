@@ -34,7 +34,7 @@
 //!   hasta que alguien la confirma. Caducar una venta sin subir sería tirar
 //!   dinero por no llevar la cuenta.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -255,6 +255,41 @@ impl Respaldo {
             .collect();
         lista.sort_by_key(|a| a.creado_ms);
         lista
+    }
+
+    /// Tokens de dispositivo con trabajo sin confirmar, **sin contar la caja**.
+    ///
+    /// Es lo que hace falta para poder avisar antes de revocar en bloque: «tres
+    /// de los cinco tienen ventas sin confirmar». La caja se excluye por lo
+    /// mismo de siempre —lo suyo lo sube su propia cola, ver `CAJA`— y porque
+    /// revocar no la toca: no está en el registro de emparejados.
+    ///
+    /// Devuelve tokens y no ids porque aquí no hay registro que consultar; el
+    /// cruce lo hace `dispositivos::Registro::cuantos_con_token_en`, y así el
+    /// token no sale de Rust.
+    pub fn tokens_pendientes(&self) -> HashSet<String> {
+        let interior = self.interior.lock().unwrap();
+        interior
+            .pendientes
+            .values()
+            .map(|a| a.dispositivo.clone())
+            .filter(|d| d != CAJA)
+            .collect()
+    }
+
+    /// Cuántas VENTAS sin confirmar quedan en aparatos que no son la caja.
+    ///
+    /// Sólo ventas, y no comandas ni movimientos ni auditoría, porque este
+    /// número se le enseña a una persona antes de pulsar un botón que puede
+    /// costar un servicio. «Se van a revocar 5 aparatos, 2 con ventas sin
+    /// confirmar» se entiende; un total que mezcla cuatro tablas, no.
+    pub fn ventas_pendientes_ajenas(&self) -> usize {
+        let interior = self.interior.lock().unwrap();
+        interior
+            .pendientes
+            .values()
+            .filter(|a| a.dispositivo != CAJA && a.clave.starts_with("ventas::"))
+            .count()
     }
 
     /// Todas las vivas, esté o no vivo su dispositivo. Para diagnóstico.
@@ -628,6 +663,49 @@ mod tests {
             r2.pendientes(|_| false).is_empty(),
             "la caja volvió a ofrecerse a adoptar lo suyo: el fallo 5 otra vez"
         );
+
+        let _ = std::fs::remove_file(&archivo);
+    }
+
+    #[test]
+    fn lo_que_se_dice_antes_de_revocar_en_bloque() {
+        // El aviso tiene que contar aparatos y ventas ajenas, y NO contar lo de
+        // la caja: revocar no la toca, así que meterla en el número asustaría
+        // por algo que no va a pasar.
+        let archivo = archivo_temp("aviso-revocar");
+        let r = Respaldo::nuevo(archivo.clone());
+
+        r.anotar(anotacion("ventas::a1", "tel-ana"));
+        r.anotar(anotacion("ventas::a2", "tel-ana"));
+        r.anotar(anotacion("ventas::b1", "tel-beto"));
+        r.anotar(anotacion("comandas::b2", "tel-beto"));
+        r.anotar(anotacion("ventas::propia", CAJA));
+
+        // Dos aparatos distintos con trabajo. La caja no entra.
+        let tokens = r.tokens_pendientes();
+        assert_eq!(tokens.len(), 2);
+        assert!(!tokens.contains(CAJA));
+
+        // Tres ventas ajenas: la comanda no cuenta y la de la caja tampoco.
+        assert_eq!(r.ventas_pendientes_ajenas(), 3);
+
+        let _ = std::fs::remove_file(&archivo);
+    }
+
+    #[test]
+    fn confirmar_una_venta_la_saca_del_aviso() {
+        // El número tiene que bajar según se suben, o el aviso mentiría hacia
+        // arriba justo cuando ya no hay nada que perder.
+        let archivo = archivo_temp("aviso-baja");
+        let r = Respaldo::nuevo(archivo.clone());
+
+        r.anotar(anotacion("ventas::a1", "tel-ana"));
+        r.anotar(anotacion("ventas::a2", "tel-ana"));
+        assert_eq!(r.ventas_pendientes_ajenas(), 2);
+
+        r.confirmar(&["ventas::a1".to_string()]);
+        assert_eq!(r.ventas_pendientes_ajenas(), 1);
+        assert_eq!(r.tokens_pendientes().len(), 1);
 
         let _ = std::fs::remove_file(&archivo);
     }

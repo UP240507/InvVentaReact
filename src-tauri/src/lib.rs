@@ -197,6 +197,31 @@ fn hub_revocar(estado: tauri::State<'_, EstadoApp>, id: String) -> Result<bool, 
     Ok(hub.estado.dispositivos.revocar(&id))
 }
 
+/// Lo que se le enseña a quien va a revocar en bloque, antes de hacerlo.
+/// Ver `hub::servidor::resumen_de_revocacion`.
+#[tauri::command]
+fn hub_resumen_revocacion(
+    estado: tauri::State<'_, EstadoApp>,
+) -> Result<serde_json::Value, String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    Ok(hub::servidor::resumen_de_revocacion(&hub.estado))
+}
+
+/// Revoca todos los dispositivos emparejados. No toca la caja: su token es el
+/// de emparejamiento y no vive en el registro.
+///
+/// **No es automático al cerrar turno, y es deliberado.** Un turno se cierra
+/// mientras alguien puede seguir cobrando una última mesa, y a un mesero al que
+/// le revocan el teléfono a media cuenta la app deja de imprimirle sin decirle
+/// por qué.
+#[tauri::command]
+fn hub_revocar_todos(estado: tauri::State<'_, EstadoApp>) -> Result<serde_json::Value, String> {
+    let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
+    let antes = hub::servidor::resumen_de_revocacion(&hub.estado);
+    let revocados = hub.estado.dispositivos.revocar_todos();
+    Ok(serde_json::json!({ "revocados": revocados, "antes": antes }))
+}
+
 #[tauri::command]
 fn hub_reintentar(estado: tauri::State<'_, EstadoApp>) -> Result<usize, String> {
     let hub = estado.hub.as_ref().ok_or("el hub no está activo")?;
@@ -315,6 +340,8 @@ pub fn run() {
             hub_cola,
             hub_dispositivos,
             hub_revocar,
+            hub_resumen_revocacion,
+            hub_revocar_todos,
             hub_reintentar,
             hub_descartar,
             hub_configurar_impresora,

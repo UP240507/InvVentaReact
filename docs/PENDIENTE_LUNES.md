@@ -154,7 +154,30 @@ qué**. Lo que no vale es dejarlo con su aspecto de siempre y que no responda.
    ocupadas y veinte comandas, es fricción constante contra un error barato. Las
    confirmaciones se ganan cuando el error es caro o irreversible.
 
-### 10 · Revocar todos los dispositivos al cerrar turno (Chris, 17-ago)
+### 10 · Revocar todos los dispositivos al cerrar turno (Chris, 17-ago) — **HECHO el 18-ago**
+
+> **Entró en cuanto se cerró el fallo 5**, que era lo que lo bloqueaba. Botón
+> «Revocar todos» en la tarjeta de dispositivos de la pantalla del hub, con
+> confirmación que dice **números y no “¿seguro?”**: a cuántos afecta y cuántas
+> ventas sin subir hay colgando de ellos.
+>
+> **El drenaje se hace solo, justo después.** El documento decía «que ofrezca
+> drenar después» y al construirlo se vio que ofrecerlo era peor: quien
+> confirmó ya leyó cuántas ventas había, y pedirle una segunda pulsación para
+> la mitad de la operación es exactamente cómo se queda a medias. El orden
+> —revocar → drenar → cerrar— se respeta entero sin depender de que nadie se
+> acuerde.
+>
+> **Los números salen sin que un token salga de Rust.** `respaldo` sabe qué
+> tokens tienen trabajo pendiente y `dispositivos` cuenta cuántos de los suyos
+> están en esa lista; la pantalla recibe cifras. Es la misma razón por la que
+> `Publico` no lleva tokens.
+>
+> **Probado donde se puede:** `dispositivos.rs` entra al cajón de pruebas de
+> Linux (`scripts/pruebas-rust.sh`), 63 en verde, con una que fija la garantía
+> que sostiene todo el botón — **la caja no está en el registro, así que
+> vaciarlo no puede dejarla sin administrar su propio hub**. Lo que no tiene
+> suite es la pantalla.
 
 **Lo que pidió Chris:** una opción para revocar todos los dispositivos del hub al
 terminar el turno. Hoy se acumulan: cada teléfono que alguna vez escaneó el QR

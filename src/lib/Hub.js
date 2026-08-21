@@ -524,6 +524,52 @@ export async function revocarDispositivo(id) {
 }
 
 /**
+ * Lo que hay que enseñar ANTES de revocar en bloque: a cuántos afecta y
+ * cuántos llevan ventas sin subir.
+ *
+ * Se pide aparte y antes del botón para que la confirmación diga números de
+ * verdad. Revocar a ciegas es barato de deshacer —se vuelve a escanear el QR—
+ * pero a media comida cuesta un servicio.
+ */
+export async function resumenDeRevocacion() {
+  if (!enTauri()) {
+    return { ok: false, error: 'los dispositivos se revocan desde la caja' };
+  }
+  try {
+    return { ok: true, ...(await invocar('hub_resumen_revocacion')) };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Revoca TODOS los emparejados. Sólo desde la caja.
+ *
+ * ── EL ORDEN IMPORTA, Y AL REVÉS DESTRUYE TRABAJO ───────────────────────────
+ * Revocar → drenar → cerrar turno. Revocar saca al aparato de la ventana de
+ * «vivo», así que sus ventas sin confirmar pasan a «Por adoptar» **de
+ * inmediato**, sin esperar los 15 minutos: cerrar turno es justo el momento en
+ * que la caja debería recoger lo que quedó suelto en los teléfonos.
+ *
+ * Si se revoca y NO se drena, esas ventas se quedan en el disco de la caja
+ * esperando a un aparato que ya no va a volver. No se pierden —el respaldo las
+ * tiene— pero nadie va a ir a buscarlas.
+ *
+ * La caja no puede caer aquí: su token es el de emparejamiento y no vive en el
+ * registro de dispositivos. Hay una prueba en Rust que lo fija.
+ */
+export async function revocarTodos() {
+  if (!enTauri()) {
+    return { ok: false, error: 'los dispositivos se revocan desde la caja' };
+  }
+  try {
+    return { ok: true, ...(await invocar('hub_revocar_todos')) };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
  * Cambia la impresora. Solo desde la caja: un teléfono no debe poder
  * reconfigurar el hardware del local.
  */
