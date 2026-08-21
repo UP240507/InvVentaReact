@@ -863,6 +863,34 @@ export default function ReportesScreen() {
                                       minute: '2-digit',
                                     })}
                                   </span>
+                                  {/* ── EL DETECTOR QUE NADIE MIRABA ──────
+                                      `total_divergente` lo calcula un trigger
+                                      en cada venta desde el 11-ago y **ningún
+                                      sitio del front lo leía**: viajaba en el
+                                      `select('*')` del store, hasta la memoria
+                                      del navegador, para morir ahí.
+                                      Enseñarlo no cuesta ni una consulta.
+
+                                      Y hasta el 17-ago no habría servido de
+                                      nada: `verificar_total_venta` calculaba
+                                      sin redondear en medio, así que el front
+                                      y Postgres discrepaban POR CONSTRUCCIÓN y
+                                      sólo la tolerancia de dos centavos evitaba
+                                      que saltara en cada venta. Desde el
+                                      arreglo del fallo 3 coinciden exacto, o
+                                      sea que ahora un aviso aquí significa algo.
+
+                                      Sin jerga: quien lee esta pantalla es el
+                                      dueño o el gerente, no nosotros. */}
+                                  {v.total_divergente && (
+                                    <span
+                                      title={`El total de este ticket no cuadra con la suma de sus renglones. Avisa a soporte con el folio ${v.folio}.`}
+                                      className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-adm-danger bg-adm-danger/10 border border-adm-danger/30 px-2 py-0.5 rounded-ui whitespace-nowrap"
+                                    >
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Cuadra mal
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className="font-black text-sm text-adm-ok">
