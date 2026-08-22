@@ -93,7 +93,7 @@ opinión.
 - [ ] **Cobrar** → la venta lleva **ese** folio, no uno nuevo. Se confirma en
       `public.ventas`.
 - [ ] Fallo 3: un ticket de **dos jugos de $40** dice `TOTAL $80.00`, con
-  `SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
+`SUBTOTAL:$68.97 IVA:$11.03`. Antes decía `$80.01`.
 
 - [ ] **«Imprimir copia» NO abre el cajón** y **no desbloquea la cuenta**: el
       aviso naranja sigue ahí y «A Producción» sigue apagado. Si la copia
@@ -363,6 +363,33 @@ aritmética sí está probada (`repartirPorNota`, 8 pruebas).
 - [ ] Reimprimir la cuenta: sale el **mismo** número.
 - [ ] En **mostrador** no se pide nada. Y **mandar a cocina nunca lo pide**:
       eso frenaría el servicio por un dato de reporte.
+
+---
+
+## 9c · El CSP, encendido — nuevo el 22-ago
+
+**Va en la 0.2.7 y sólo se nota en el build instalado**: en `tauri dev` la
+política es otra. Lo que rompe el aspecto de la app ya se verificó en banco
+—0 violaciones sobre el build real, y 16 en el control negativo—, así que aquí
+sólo queda lo que un navegador no puede tener: IPC, Supabase y realtime.
+
+- [ ] La app **abre y se ve maquetada**, con sus tipografías (→ `style-src`,
+      `font-src`). Si esto falla, el banco mintió y hay que mirarlo.
+- [ ] **Iniciar sesión** contra Supabase (→ `connect-src https:`).
+- [ ] **Imprimir** un ticket de prueba desde la pantalla del hub (→ `ipc:`).
+      **Es el que más fácil se olvida:** sin `ipc:` no funciona ni un comando
+      del hub — ni imprimir, ni el cajón, ni el respaldo.
+- [ ] La pantalla del hub enseña **la cola y el ancho de papel**
+      (→ `localhost:*`).
+- [ ] Abrir el KDS y mandar una comanda desde otro aparato: **tiene que
+      aparecer sola** (→ `wss:`, el realtime). Éste se nota tarde si falla.
+- [ ] El **logo** del restaurante, si está configurado (→ `img-src https:`).
+- [ ] **Y al terminar, mirar `Ajustes › Hub`.** Si la tarjeta roja «Bloqueos de
+      seguridad» no aparece, no hubo ninguno. Si aparece, dicta lo que dice: ahí
+      está la directiva y la URL exactas.
+
+> **Cómo salir si algo falla:** volver `"csp": null`, recompilar y publicar. No
+> hay estado que migrar ni datos que arreglar — es una línea de configuración.
 
 ---
 
