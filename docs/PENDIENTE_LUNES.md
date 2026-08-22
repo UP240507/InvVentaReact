@@ -656,6 +656,50 @@ equivocada y el error sale semanas después en un ticket. Y **no encadena
 sufijos**: duplicar una copia da «(copia 2)», no «(copia) (copia)», que a la
 cuarta variante ya no cabe en el botón del POS.
 
+### El selector que sí busca, y Enter que encadena — **HECHO**
+
+Van juntos porque son una sola cosa: **teclear una receta sin soltar el
+teclado.** Por separado, el filtro ahorra leer una lista y poco más.
+
+**El selector.** Era un `<select>` cuyo primer `<option>` decía «Buscar insumo
+en almacén…» **y no buscaba nada** — un control que promete lo que no hace, o
+sea el patrón de este proyecto llevado a la interfaz. Lo señaló Chris el
+13-ago.
+
+Ahora es un buscador de verdad, con la regla en `lib/Recetas.js`:
+
+- **Sin acentos.** «limon» encuentra «Limón», «platano» encuentra «Plátano».
+  Es español y se teclea con prisa: sin esto el buscador sólo funciona si
+  escribes el acento, y quien carga cien ingredientes no lo escribe. Vería «no
+  hay coincidencias» sobre un insumo que existe y **lo daría de alta dos
+  veces**, que es exactamente cómo se parte un inventario.
+- **Lo que empieza por lo tecleado va antes** que lo que lo contiene: «que»
+  ofrece «Queso fresco» antes que «Bisquet». A igualdad, alfabético, para que
+  la lista no baile entre pulsaciones.
+- **Los inactivos nunca salen.** Meter un insumo archivado en una receta nueva
+  es resucitar por accidente algo que alguien retiró a propósito.
+- **Sin coincidencias dice que no hay**, en vez de enseñar la lista entera.
+  Devolver todo al no encontrar nada es cómo alguien mete el ingrediente
+  equivocado sin darse cuenta.
+
+**Enter.** `onKeyDown` **no aparecía ni una vez** en esta pantalla: cargar una
+receta era teclear, soltar el teclado, apuntar con el ratón, volver al teclado.
+Por ingrediente. Ahora la cadena es **buscar → Enter → cantidad → Enter →
+siguiente**, y el foco vuelve solo al buscador.
+
+Enter elige el resaltado; si no hay ninguno y **queda una sola coincidencia**,
+toma ésa. Con dos o más no adivina: adivinar aquí mete el ingrediente
+equivocado en una receta y no da error.
+
+**La medición que pedía el diseño:** AZUL tiene **9 insumos activos**, así que
+por volumen esto no urgía —la regla escrita era «con 30 no urge»—. Se hizo
+igual por dos motivos: el control mentía, y los 9 son el síntoma de que cargar
+el catálogo duele, no un estado estable.
+
+**Sin probar a mano todavía:** la lógica tiene 22 pruebas, pero el cableado de
+la pantalla —foco, lista, clic— no lo cubre ninguna suite y no se puede
+ejercitar sin entrar a la app. Va al checklist.
+
 ### Y una decisión que sale de aquí, para Chris
 
 **`recetas.codigo_pos` no es único en la base.** Hoy no hay duplicados —se

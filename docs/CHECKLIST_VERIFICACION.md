@@ -458,6 +458,31 @@ Necesita la migración `20260822130000_gastos_escala.sql`.
 
 ---
 
+## 9g · El buscador de insumos y Enter — nuevo el 22-ago
+
+**Sin red debajo en la pantalla**: la lógica tiene 22 pruebas, pero el foco, la
+lista y el clic no los cubre ninguna suite.
+
+- [ ] `Recetas → editar una → Ingredientes`. Donde estaba el desplegable hay un
+      campo de texto: **escribir «que» deja «Queso fresco» arriba**.
+- [ ] **Escribir «limon» SIN acento encuentra «Limón».** Éste es el que
+      importa: sin él, quien carga el catálogo cree que el insumo no existe y
+      lo da de alta otra vez, partiendo el inventario.
+- [ ] **↓ y ↑ mueven** la selección; **Enter la toma** y el foco salta solo a
+      la cantidad.
+- [ ] Con **una sola** coincidencia, Enter la toma sin tener que bajar.
+- [ ] Con **dos o más** y ninguna resaltada, Enter **no elige nada**. No debe
+      adivinar.
+- [ ] **Enter en la cantidad agrega** el ingrediente y el foco **vuelve al
+      buscador**. Cargar tres ingredientes seguidos sin tocar el ratón.
+- [ ] Un insumo **archivado no aparece** en la lista.
+- [ ] Buscar algo que no existe dice que **no hay coincidencias** — no enseña
+      la lista entera.
+- [ ] Cerrar el formulario y abrir otra receta: **el buscador está vacío**, no
+      con el texto de la anterior.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6

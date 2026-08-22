@@ -112,3 +112,90 @@ export function copiaDeReceta(receta, recetas = []) {
     grupos_modificadores: [...(receta.grupos_modificadores || [])],
   };
 }
+
+// ─── EL SELECTOR DE INSUMOS QUE SÍ BUSCA ────────────────────────────────────
+
+/**
+ * Texto comparable para buscar: sin acentos, sin mayúsculas, sin espacios de
+ * sobra.
+ *
+ * ── POR QUÉ QUITAR ACENTOS NO ES UN LUJO ───────────────────────────────────
+ * Es español y se teclea con prisa. «limon» tiene que encontrar «Limón»,
+ * «platano» a «Plátano», «jitomate» a «Jitomate». Sin esto, el buscador
+ * funciona sólo si escribes el acento — y quien carga un catálogo de cien
+ * ingredientes no lo escribe. El resultado sería «no hay coincidencias» sobre
+ * un insumo que existe, que es peor que no tener buscador: hace creer que el
+ * ingrediente falta y lleva a darlo de alta dos veces.
+ */
+export function normalizaBusqueda(v) {
+  return (
+    String(v ?? '')
+      .normalize('NFD')
+      // Los diacríticos combinantes, por punto de código y no como caracteres
+      // literales: escritos a pelo son invisibles en el editor y un reencodeo
+      // del archivo los rompería sin que nadie lo viera — y el síntoma sería que
+      // «limon» deja de encontrar «Limón», que es justo lo que esto arregla.
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase()
+  );
+}
+
+/**
+ * Los insumos que casan con lo tecleado, ordenados por utilidad.
+ *
+ * ── QUÉ SUSTITUYE ──────────────────────────────────────────────────────────
+ * Un `<select>` cuyo primer `<option>` decía «Buscar insumo en almacén…» **y no
+ * buscaba nada**. Es el patrón de este proyecto en la interfaz: un control que
+ * promete algo que no hace, señalado por Chris el 13-ago y sin arreglar hasta
+ * hoy. Con nueve insumos —los que hay ahora— se nota poco; con los cien de un
+ * catálogo cargado de verdad, es la diferencia entre teclear tres letras y
+ * recorrer una lista desplegable con el ratón.
+ *
+ * ── EL ORDEN ───────────────────────────────────────────────────────────────
+ * Primero lo que EMPIEZA por lo tecleado, después lo que lo contiene. Escribir
+ * «que» debe ofrecer «Queso fresco» antes que «Bisquet», aunque los dos casen.
+ * A igualdad, alfabético, para que la lista no baile entre pulsaciones.
+ *
+ * Los inactivos se quedan fuera: son insumos archivados y meterlos en una
+ * receta nueva es resucitar por accidente algo que alguien retiró a propósito.
+ */
+export function filtrarInsumos(productos = [], texto = '') {
+  const activos = (Array.isArray(productos) ? productos : []).filter(
+    (p) => p?.activo !== false,
+  );
+  const q = normalizaBusqueda(texto);
+
+  const ordenAlfabetico = (a, b) =>
+    normalizaBusqueda(a?.nombre).localeCompare(normalizaBusqueda(b?.nombre));
+
+  if (!q) return [...activos].sort(ordenAlfabetico);
+
+  const conPuntaje = activos
+    .map((p) => {
+      const n = normalizaBusqueda(p?.nombre);
+      if (n.startsWith(q)) return { p, puntaje: 0 };
+      if (n.includes(q)) return { p, puntaje: 1 };
+      return null;
+    })
+    .filter(Boolean);
+
+  return conPuntaje
+    .sort((a, b) => a.puntaje - b.puntaje || ordenAlfabetico(a.p, b.p))
+    .map((x) => x.p);
+}
+
+/**
+ * Mueve la selección dentro de la lista sin salirse por los extremos.
+ *
+ * Se corta en vez de dar la vuelta a propósito: en una lista larga, pulsar
+ * ↓ una vez de más y aparecer arriba del todo desorienta más de lo que ayuda.
+ * Y se devuelve `-1` cuando no hay nada que elegir, para que quien llama no
+ * tenga que distinguir «ninguno» de «el primero».
+ */
+export function moverSeleccion(indice, paso, total) {
+  if (!Number.isFinite(total) || total <= 0) return -1;
+  const actual = Number.isFinite(indice) ? indice : -1;
+  const siguiente = actual + (paso > 0 ? 1 : -1);
+  return Math.max(0, Math.min(total - 1, siguiente < 0 ? 0 : siguiente));
+}

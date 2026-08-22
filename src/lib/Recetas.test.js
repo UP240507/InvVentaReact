@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { nombreDeCopia, copiaDeReceta } from './Recetas';
+import {
+  nombreDeCopia,
+  copiaDeReceta,
+  filtrarInsumos,
+  normalizaBusqueda,
+  moverSeleccion,
+} from './Recetas';
 
 const base = {
   id: 7,
@@ -124,5 +130,101 @@ describe('copiaDeReceta — lo que NO se copia es lo importante', () => {
     expect(copiaDeReceta(null)).toBeNull();
     expect(copiaDeReceta(undefined)).toBeNull();
     expect(copiaDeReceta('Tacos')).toBeNull();
+  });
+});
+
+// ─── El selector de insumos que sí busca ─────────────────────────────────────
+// Sustituye a un <select> cuyo primer <option> decía «Buscar insumo en
+// almacén…» y no buscaba nada. Un control que promete lo que no hace es el
+// patrón de este proyecto llevado a la interfaz.
+
+const ALMACEN = [
+  { id: 1, nombre: 'Limón', activo: true },
+  { id: 2, nombre: 'Queso fresco', activo: true },
+  { id: 3, nombre: 'Bisquet', activo: true },
+  { id: 4, nombre: 'Plátano macho', activo: true },
+  { id: 5, nombre: 'Aceite', activo: false },
+  { id: 6, nombre: 'Aguacate' },
+];
+
+describe('filtrarInsumos', () => {
+  it('LA QUE MÁS IMPORTA: sin acentos encuentra igual', () => {
+    // Es español y se teclea con prisa. Sin esto el buscador sólo funciona si
+    // escribes el acento, y quien carga cien ingredientes no lo escribe: vería
+    // «no hay coincidencias» sobre un insumo que existe y lo daría de alta dos
+    // veces, partiendo el inventario.
+    expect(filtrarInsumos(ALMACEN, 'limon').map((p) => p.id)).toEqual([1]);
+    expect(filtrarInsumos(ALMACEN, 'platano').map((p) => p.id)).toEqual([4]);
+    // Y al revés: con acento encuentra lo escrito sin él.
+    expect(
+      filtrarInsumos([{ id: 9, nombre: 'Platano' }], 'plátano'),
+    ).toHaveLength(1);
+  });
+
+  it('lo que EMPIEZA por lo tecleado va antes que lo que lo contiene', () => {
+    // «que» debe ofrecer «Queso fresco» antes que «Bisquet», aunque casen los
+    // dos: se teclea el principio de la palabra, no un trozo de en medio.
+    expect(filtrarInsumos(ALMACEN, 'que').map((p) => p.nombre)).toEqual([
+      'Queso fresco',
+      'Bisquet',
+    ]);
+  });
+
+  it('a igualdad, alfabético: la lista no baila entre pulsaciones', () => {
+    expect(filtrarInsumos(ALMACEN, 'a').map((p) => p.nombre)).toEqual([
+      'Aguacate',
+      'Plátano macho',
+    ]);
+  });
+
+  it('sin texto devuelve todo lo activo, ordenado', () => {
+    expect(filtrarInsumos(ALMACEN, '').map((p) => p.nombre)).toEqual([
+      'Aguacate',
+      'Bisquet',
+      'Limón',
+      'Plátano macho',
+      'Queso fresco',
+    ]);
+  });
+
+  it('los inactivos NUNCA salen', () => {
+    // Son insumos archivados. Meterlos en una receta nueva es resucitar por
+    // accidente algo que alguien retiró a propósito.
+    expect(filtrarInsumos(ALMACEN, 'aceite')).toEqual([]);
+    expect(filtrarInsumos(ALMACEN, '').some((p) => p.id === 5)).toBe(false);
+    // Pero `activo` ausente cuenta como activo: las filas viejas no lo traen.
+    expect(filtrarInsumos(ALMACEN, 'aguacate')).toHaveLength(1);
+  });
+
+  it('sin coincidencias devuelve vacío, no todo', () => {
+    // Devolver la lista entera al no encontrar nada es cómo alguien acaba
+    // metiendo el ingrediente equivocado sin darse cuenta.
+    expect(filtrarInsumos(ALMACEN, 'zanahoria')).toEqual([]);
+  });
+
+  it('aguanta basura', () => {
+    expect(filtrarInsumos(null, 'x')).toEqual([]);
+    expect(filtrarInsumos(undefined)).toEqual([]);
+    expect(normalizaBusqueda(null)).toBe('');
+  });
+});
+
+describe('moverSeleccion', () => {
+  it('baja y sube dentro de la lista', () => {
+    expect(moverSeleccion(-1, 1, 3)).toBe(0);
+    expect(moverSeleccion(0, 1, 3)).toBe(1);
+    expect(moverSeleccion(1, -1, 3)).toBe(0);
+  });
+
+  it('se corta en los extremos, no da la vuelta', () => {
+    // En una lista larga, pulsar ↓ una vez de más y aparecer arriba del todo
+    // desorienta más de lo que ayuda.
+    expect(moverSeleccion(2, 1, 3)).toBe(2);
+    expect(moverSeleccion(0, -1, 3)).toBe(0);
+  });
+
+  it('sin opciones devuelve -1, para no tener que distinguir casos fuera', () => {
+    expect(moverSeleccion(0, 1, 0)).toBe(-1);
+    expect(moverSeleccion(0, 1, null)).toBe(-1);
   });
 });

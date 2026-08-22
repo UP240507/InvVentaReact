@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import {
   PageShell,
@@ -12,7 +12,11 @@ import {
   DataTable,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
-import { copiaDeReceta } from '../../lib/Recetas';
+import {
+  copiaDeReceta,
+  filtrarInsumos,
+  moverSeleccion,
+} from '../../lib/Recetas';
 import {
   ChefHat,
   Plus,
@@ -59,6 +63,13 @@ export default function RecetasScreen() {
 
   const [inputNuevaCat, setInputNuevaCat] = useState('');
   const [insumoSeleccionado, setInsumoSeleccionado] = useState('');
+  // ── EL BUSCADOR DE INSUMOS ────────────────────────────────────────────────
+  // Sustituye a un <select> cuyo primer <option> decía «Buscar insumo en
+  // almacén…» y no buscaba. `busquedaInsumo` es lo tecleado; `resaltado` es la
+  // fila marcada con el teclado, que es lo que Enter acaba eligiendo.
+  const [busquedaInsumo, setBusquedaInsumo] = useState('');
+  const [listaAbierta, setListaAbierta] = useState(false);
+  const [resaltado, setResaltado] = useState(-1);
   const [cantidadInsumo, setCantidadInsumo] = useState('');
   const [mermaInsumo, setMermaInsumo] = useState(0);
   // PAQUETES: selector de recetas componentes (combo fijo a precio de paquete).
@@ -184,6 +195,14 @@ export default function RecetasScreen() {
     });
     setEditId(item.id);
     setModalTab('general');
+    // El buscador arranca limpio cada vez que se abre el formulario. Sin esto
+    // conserva el texto de la receta anterior, y quien lo ve escrito da por
+    // hecho que ese insumo está elegido — cuando `insumoSeleccionado` está
+    // vacío y «Agregar» no hará nada.
+    setBusquedaInsumo('');
+    setInsumoSeleccionado('');
+    setListaAbierta(false);
+    setResaltado(-1);
     setShowModal(true);
   };
 
@@ -392,6 +411,66 @@ export default function RecetasScreen() {
     setRecetaAEliminar(null);
   };
 
+  const refBusqueda = useRef(null);
+  const refCantidad = useRef(null);
+
+  // Lo que se ofrece ahora mismo. La regla —qué casa, en qué orden y que los
+  // inactivos no salen— vive en `lib/Recetas.js` y tiene pruebas.
+  const insumosSugeridos = useMemo(
+    () => filtrarInsumos(productos || [], busquedaInsumo),
+    [productos, busquedaInsumo],
+  );
+
+  const elegirInsumo = (p) => {
+    if (!p) return;
+    setInsumoSeleccionado(String(p.id));
+    setBusquedaInsumo(p.nombre);
+    setListaAbierta(false);
+    setResaltado(-1);
+    // El foco salta a la cantidad, que es el único dato que falta. Sin esto
+    // hay que ir al ratón entre cada ingrediente, y son cien.
+    refCantidad.current?.focus();
+  };
+
+  /**
+   * El teclado del buscador.
+   *
+   * ── POR QUÉ ENTER IMPORTA MÁS QUE EL FILTRO ───────────────────────────────
+   * `onKeyDown` no aparecía **ni una vez** en esta pantalla: cargar una receta
+   * era teclear, soltar el teclado, apuntar con el ratón, volver al teclado.
+   * Por ingrediente. El filtro ahorra leer una lista; encadenar con Enter
+   * ahorra el viaje al ratón, y ése es el que se paga cien veces.
+   */
+  const teclasDelBuscador = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setListaAbierta(true);
+      setResaltado((i) =>
+        moverSeleccion(
+          i,
+          e.key === 'ArrowDown' ? 1 : -1,
+          insumosSugeridos.length,
+        ),
+      );
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Si hay uno resaltado se toma ése; si no, y sólo queda UNA coincidencia,
+      // se toma esa. Con dos o más no se adivina: adivinar aquí mete el
+      // ingrediente equivocado en una receta y no da error.
+      const elegido =
+        insumosSugeridos[resaltado] ??
+        (insumosSugeridos.length === 1 ? insumosSugeridos[0] : null);
+      if (elegido) elegirInsumo(elegido);
+      return;
+    }
+    if (e.key === 'Escape') {
+      setListaAbierta(false);
+      setResaltado(-1);
+    }
+  };
+
   const agregarIngrediente = () => {
     if (!insumoSeleccionado || !cantidadInsumo || Number(cantidadInsumo) <= 0)
       return showToast('Datos inválidos.', 'error');
@@ -418,6 +497,12 @@ export default function RecetasScreen() {
     setInsumoSeleccionado('');
     setCantidadInsumo('');
     setMermaInsumo(0);
+    setBusquedaInsumo('');
+    setResaltado(-1);
+    // Y el foco vuelve al buscador: el siguiente ingrediente se empieza a
+    // teclear sin tocar el ratón. Es lo que convierte «añadir uno» en «cargar
+    // una receta».
+    refBusqueda.current?.focus();
   };
 
   // ── Nueva receta: mismo estado inicial para el botón y para el atajo N ──
@@ -434,6 +519,14 @@ export default function RecetasScreen() {
     });
     setEditId(null);
     setModalTab('general');
+    // El buscador arranca limpio cada vez que se abre el formulario. Sin esto
+    // conserva el texto de la receta anterior, y quien lo ve escrito da por
+    // hecho que ese insumo está elegido — cuando `insumoSeleccionado` está
+    // vacío y «Agregar» no hará nada.
+    setBusquedaInsumo('');
+    setInsumoSeleccionado('');
+    setListaAbierta(false);
+    setResaltado(-1);
     setShowModal(true);
   };
 
@@ -1088,29 +1181,91 @@ export default function RecetasScreen() {
                         a la Receta
                       </label>
                       <div className="flex flex-col lg:flex-row gap-4">
-                        <select
-                          value={insumoSeleccionado}
-                          onChange={(e) =>
-                            setInsumoSeleccionado(e.target.value)
-                          }
-                          className="flex-1 bg-adm-ink dark:bg-adm-panel border border-adm-field text-adm-bg font-black px-6 py-4 rounded-ui outline-none focus:border-adm-warn transition-colors"
-                        >
-                          <option value="">Buscar insumo en almacén...</option>
-                          {(productos || [])
-                            .filter((p) => p.activo !== false)
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.nombre} (${Number(p.precio)}/{p.unidad})
-                              </option>
-                            ))}
-                        </select>
+                        {/* ── EL BUSCADOR QUE SÍ BUSCA ──────────────────
+                            Antes era un <select> cuyo primer <option> decía
+                            «Buscar insumo en almacén…» y no buscaba nada: un
+                            control que promete lo que no hace, señalado el
+                            13-ago. Con nueve insumos se nota poco; con los cien
+                            de un catálogo cargado de verdad, es la diferencia
+                            entre teclear tres letras y recorrer un desplegable
+                            con el ratón. */}
+                        <div className="flex-1 relative">
+                          <input
+                            ref={refBusqueda}
+                            type="text"
+                            value={busquedaInsumo}
+                            placeholder="Escribe para buscar en el almacén…"
+                            onChange={(e) => {
+                              setBusquedaInsumo(e.target.value);
+                              setListaAbierta(true);
+                              setResaltado(-1);
+                              // Al reescribir se suelta lo elegido: si no, el
+                              // texto diría una cosa y el insumo guardado sería
+                              // otro, y eso acaba en la receta sin dar error.
+                              setInsumoSeleccionado('');
+                            }}
+                            onFocus={() => setListaAbierta(true)}
+                            // Con un respiro, para que el clic en una fila de
+                            // la lista llegue antes de que la lista se cierre.
+                            onBlur={() =>
+                              setTimeout(() => setListaAbierta(false), 120)
+                            }
+                            onKeyDown={teclasDelBuscador}
+                            className="w-full bg-adm-ink dark:bg-adm-panel border border-adm-field text-adm-bg font-black px-6 py-4 rounded-ui outline-none focus:border-adm-warn transition-colors"
+                          />
+                          {listaAbierta && (
+                            <div className="absolute z-30 left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-white dark:bg-adm-panel border-2 border-adm-border rounded-ui shadow-xl">
+                              {insumosSugeridos.length === 0 ? (
+                                /* Se dice que no hay, en vez de enseñar la
+                                   lista entera: devolver todo al no encontrar
+                                   nada es cómo alguien mete el ingrediente
+                                   equivocado sin darse cuenta. */
+                                <p className="px-4 py-3 text-sm font-bold text-adm-muted">
+                                  Ningún insumo activo casa con «
+                                  {busquedaInsumo.trim()}». Revisa el nombre o
+                                  date de alta el insumo en Almacén.
+                                </p>
+                              ) : (
+                                insumosSugeridos.map((p, i) => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => elegirInsumo(p)}
+                                    onMouseEnter={() => setResaltado(i)}
+                                    className={`w-full text-left px-4 py-2.5 text-sm font-bold transition-colors ${
+                                      i === resaltado
+                                        ? 'bg-adm-warn/20 text-adm-ink'
+                                        : 'text-adm-ink hover:bg-adm-chip/50'
+                                    }`}
+                                  >
+                                    {p.nombre}
+                                    <span className="text-adm-muted font-normal ml-2">
+                                      ${Number(p.precio)}/{p.unidad}
+                                    </span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex gap-4">
                           <input
+                            ref={refCantidad}
                             type="number"
                             step="0.001"
                             placeholder="Cant."
                             value={cantidadInsumo}
                             onChange={(e) => setCantidadInsumo(e.target.value)}
+                            // Enter aquí AGREGA y devuelve el foco al buscador.
+                            // Es el segundo eslabón de la cadena: buscar →
+                            // Enter → cantidad → Enter → siguiente, sin soltar
+                            // el teclado en ningún momento.
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter') return;
+                              e.preventDefault();
+                              agregarIngrediente();
+                            }}
                             className="w-24 bg-adm-ink dark:bg-adm-panel border border-adm-field font-black text-adm-bg rounded-ui text-center outline-none focus:border-adm-warn"
                           />
                           <div className="bg-adm-ink dark:bg-adm-panel border border-adm-border rounded-ui flex items-center px-4 focus-within:border-adm-warn transition-colors">
