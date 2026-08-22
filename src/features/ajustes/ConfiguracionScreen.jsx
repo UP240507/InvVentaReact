@@ -21,7 +21,6 @@ import {
   CreditCard,
   ArrowRight,
   Copy,
-  Clock,
   Users,
   HeartHandshake,
 } from 'lucide-react';
@@ -84,7 +83,25 @@ const TABS = [
   // el hub y que la cola elija por `documento.zona` (que ya viene puesto desde
   // `lib/Comanda.js`). Mientras tanto la impresora real se configura en
   // Ajustes → Hub e impresora, que sí manda.
-  { id: 'turnos', label: 'Turnos', icon: Clock },
+  // ── «Turnos» está QUITADO A PROPÓSITO (Chris, 22-ago) ─────────────────────
+  // Mismo caso que Impresoras, y comprobado igual: grep de los consumidores.
+  // El tab existe más abajo (`tab === 'turnos'`) y guarda cuatro ajustes en
+  // `cfdi_config` — `hora_apertura_default`, `hora_cierre_default`,
+  // `requiere_fondo_caja` y `fondo_caja_default`—. **Ninguno lo lee nadie**:
+  // cero referencias fuera de esta pantalla.
+  //
+  // Y uno de ellos miente en voz alta: el interruptor «Requerir fondo de caja
+  // al abrir turno» promete un candado que no existe. Quien lo activa da por
+  // hecho que ya nadie puede abrir caja sin declarar el fondo, y no es verdad.
+  // Es el fallo de esta casa: no da error, da silencio.
+  //
+  // Se quita en vez de cablearlo porque los turnos matutino/vespertino van a
+  // rehacer esta pantalla entera (ver `docs/DISENO_TURNOS.md`), y consolidar
+  // ahora cuatro ajustes que van a cambiar de sitio es trabajo que se tira.
+  //
+  // Para devolverlo: que `EsperaScreen` lea `fondo_caja_default` al prerellenar
+  // y que la apertura se niegue si `requiere_fondo_caja` está puesto y el monto
+  // viene vacío. Las dos mitades, o ninguna.
 ];
 
 // ── Componentes de campo reutilizables (NIVEL DE MÓDULO) ──────────────────────

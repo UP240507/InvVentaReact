@@ -721,6 +721,57 @@ comprobó—, pero nada los impide. Un índice único parcial por
 `(restaurante_id, codigo_pos)` los rechazaría en el momento en vez de dejar que
 aparezcan. **Toca el esquema, así que va a la lista de decisiones.**
 
+## 0e · La pestaña «Turnos» de Configuración, fuera (22-ago)
+
+**Paso cero del diseño, hecho: grep de los consumidores.** Y salió lo que se
+sospechaba desde el 14-ago.
+
+Los cuatro ajustes que guarda —`hora_apertura_default`, `hora_cierre_default`,
+`requiere_fondo_caja` y `fondo_caja_default`— **no los lee nadie**: cero
+referencias fuera de la propia pantalla que los escribe.
+
+Y uno miente en voz alta: el interruptor **«Requerir fondo de caja al abrir
+turno» promete un candado que no existe**. Quien lo activa da por hecho que ya
+nadie puede abrir caja sin declarar el fondo. No es verdad, y no da error: da
+silencio.
+
+**Decisión de Chris (22-ago): ocultarla**, con el precedente de Impresoras del
+13-ago. Se quita en vez de cablearla porque los turnos matutino/vespertino van
+a rehacer esta pantalla entera, y consolidar ahora cuatro ajustes que van a
+cambiar de sitio es trabajo que se tira.
+
+Cómo devolverla está escrito en el código, y son **las dos mitades o ninguna**:
+que `EsperaScreen` lea `fondo_caja_default` al prerellenar, y que la apertura se
+niegue si `requiere_fondo_caja` está puesto y el monto viene vacío.
+
+### Las decisiones de turnos, tomadas el 22-ago
+
+- **El turno se DERIVA DEL RELOJ**, con corte horario configurable. Cada venta
+  ya lleva hora, así que nadie tiene que acordarse de nada — y los datos
+  históricos se pueden reclasificar hacia atrás, porque la hora ya está ahí.
+- **Inventario: dimensión, nunca partición.** `turno_id` en los movimientos y
+  un solo stock. El refrigerador es uno: un «inventario de la mañana» es
+  ficción contable que diverge del físico en silencio. Se diseña el caso
+  general de cualquier restaurante, no la práctica de AZUL — lo que AZUL
+  conteste cambiará qué reportes hacen falta, no cómo se guardan los datos.
+- **La venta a caballo va al turno del COBRO, y no es configurable.** Chris
+  preguntó si convenía dejarlo ajustable; la respuesta es que ahí hay dos
+  preguntas y sólo una es opinable:
+  - **El dinero no se opina.** El corte Z cuadra contra el efectivo del cajón.
+    Si una venta cuenta para la mañana pero el billete entró en el cajón de la
+    tarde, **los arqueos de los dos turnos salen mal a la vez**.
+  - **El trabajo sí.** Cuántas mesas sacó cada turno, las propinas, la
+    productividad del mesero. Eso se contesta **en el reporte**, filtrando por
+    hora de apertura, sin tocar el esquema ni añadir un interruptor.
+
+  Y un motivo más para no meter el ajuste: **cambiarlo reescribiría el
+  pasado**. El mismo día daría cifras distintas antes y después de tocarlo, y
+  un reporte que cambia de opinión sobre un mes cerrado es cómo se pierde la
+  confianza en los números.
+
+**Siguiente paso:** `docs/DISENO_TURNOS.md` con esquema, migración, qué
+pantallas cambian y en qué orden — para revisarlo antes de tocar una tabla.
+
 ## 1 · Reimpresión del ticket — **CERRADO el 18-ago**
 
 **Lo que pidió Chris:** un botón para cuando un cliente quiere una copia. **La
