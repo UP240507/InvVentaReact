@@ -12,11 +12,13 @@ import {
   DataTable,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
+import { copiaDeReceta } from '../../lib/Recetas';
 import {
   ChefHat,
   Plus,
   Search,
   Edit3,
+  Copy,
   Trash2,
   X,
   UtensilsCrossed,
@@ -183,6 +185,35 @@ export default function RecetasScreen() {
     setEditId(item.id);
     setModalTab('general');
     setShowModal(true);
+  };
+
+  /**
+   * Duplicar una receta: abre el formulario con TODO relleno, sin guardar.
+   *
+   * ── POR QUÉ ES LO PRIMERO DE LA CAPTURA RÁPIDA ────────────────────────────
+   * Porque el catálogo de un restaurante son variantes: la misma base con otra
+   * proteína, otro tamaño, otra guarnición. Sin duplicar, cada variante se
+   * teclea entera —insumos, cantidades, mermas, modificadores— y eso es lo que
+   * hace que cargar el menú se abandone a la mitad.
+   *
+   * Reusa `abrirEditar` para no repetir la normalización de insumos y
+   * componentes, que es la parte con formas legadas dentro, y después suelta el
+   * `editId`: eso es lo que convierte «editar esto» en «crear otra cosa». Si se
+   * quedara puesto, guardar pisaría el original.
+   *
+   * Qué se copia y qué no —y por qué `codigo_pos` se queda fuera— está en
+   * `lib/Recetas.js`, con sus pruebas.
+   */
+  const duplicarReceta = (item) => {
+    abrirEditar(item);
+    const copia = copiaDeReceta(item, recetas || []);
+    if (!copia) return;
+    setForm((prev) => ({ ...prev, ...copia }));
+    setEditId(null);
+    showToast?.(
+      'Copia lista. Revisa el nombre y el código POS antes de guardar.',
+      'info',
+    );
   };
 
   // ── PAQUETES: manejo de componentes ────────────────────────────────────────
@@ -532,6 +563,14 @@ export default function RecetasScreen() {
                 onClick={(e) => {
                   e.stopPropagation();
                   desactivarReceta(r);
+                }}
+              />
+              <IconButton
+                icono={Copy}
+                titulo="Duplicar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  duplicarReceta(r);
                 }}
               />
               <IconButton

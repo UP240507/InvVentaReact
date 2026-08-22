@@ -623,6 +623,46 @@ tabla, cantidades escritas como texto. Escribir el extractor contra el archivo
 y no contra uno imaginado es la diferencia entre que importe bien y que importe
 _casi_ bien, que aquí es peor.
 
+## 0d · Captura rápida de recetas (22-ago, en marcha)
+
+De los cinco cuellos de `DISENO_CAPTURA_RECETAS.md`, el primero ya está.
+
+### Duplicar receta — **HECHO**
+
+El catálogo de un restaurante son variantes: la misma base con otra proteína,
+otro tamaño, otra guarnición. Sin duplicar, cada variante se teclea entera
+—insumos, cantidades, mermas, modificadores— y eso es lo que hace que cargar el
+menú se abandone a la mitad.
+
+`copiaDeReceta()` en `lib/Recetas.js`, con 12 pruebas. **Lo que no copia es lo
+importante:**
+
+- **`codigo_pos`.** Se comprobó contra la base antes de decidirlo, que era la
+  pregunta abierta del diseño: **la columna NO tiene índice único ni
+  constraint**. Dos platillos con el mismo código entran sin dar un solo error,
+  y a partir de ahí quien busque por código se lleva uno de los dos, siempre el
+  mismo y no necesariamente el que quería.
+- **`id`** — copiarlo haría que guardar pisara el original.
+- **`activo`** — la copia nace visible. Heredar «oculto del menú» daría una
+  receta nueva que no aparece en el POS sin que nadie sepa por qué.
+
+**No guarda.** Abre el formulario relleno y ya: autoguardar dejaría filas
+«(copia)» cada vez que alguien pulsa por error, y en una pantalla que ya cuesta
+configurar la basura silenciosa es lo último que hace falta.
+
+El nombre se numera —«(copia)», «(copia 2)»— porque duplicar se usa en ráfaga, y
+dos filas idénticas en una lista de cien no se distinguen: se edita la
+equivocada y el error sale semanas después en un ticket. Y **no encadena
+sufijos**: duplicar una copia da «(copia 2)», no «(copia) (copia)», que a la
+cuarta variante ya no cabe en el botón del POS.
+
+### Y una decisión que sale de aquí, para Chris
+
+**`recetas.codigo_pos` no es único en la base.** Hoy no hay duplicados —se
+comprobó—, pero nada los impide. Un índice único parcial por
+`(restaurante_id, codigo_pos)` los rechazaría en el momento en vez de dejar que
+aparezcan. **Toca el esquema, así que va a la lista de decisiones.**
+
 ## 1 · Reimpresión del ticket — **CERRADO el 18-ago**
 
 **Lo que pidió Chris:** un botón para cuando un cliente quiere una copia. **La

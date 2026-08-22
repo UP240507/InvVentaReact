@@ -442,6 +442,22 @@ Necesita la migración `20260822130000_gastos_escala.sql`.
 
 ---
 
+## 9f · Duplicar receta — nuevo el 22-ago
+
+- [ ] `Catálogos → Recetas`, icono de copiar en una receta con insumos y
+      modificadores. Se abre el formulario con **todo relleno**.
+- [ ] El nombre dice **«(copia)»** y el **código POS está vacío**. Ése es el
+      importante: la columna no es única en la base, y dos platillos con el
+      mismo código no dan error — se descubren cuando el POS trae el que no era.
+- [ ] **Cerrar sin guardar no deja nada.** Duplicar no crea filas por sí solo.
+- [ ] Guardar crea una receta NUEVA: la original sigue igual, con su código.
+- [ ] Duplicar dos veces seguidas da «(copia)» y **«(copia 2)»**, no dos
+      nombres iguales.
+- [ ] Duplicar una copia da «(copia 2)», **no «(copia) (copia)»**.
+- [ ] Cambiar una cantidad en la copia **no toca la receta original**.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6
