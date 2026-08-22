@@ -7,6 +7,11 @@ import {
   agregarGastos,
   generarRecurrentes,
   resumenGastos,
+  ESCALAS,
+  escalaDeGasto,
+  sinClasificar,
+  filtrarPorEscala,
+  cuantosSinClasificar,
 } from './Gastos';
 
 const CATEGORIAS = [
@@ -281,5 +286,85 @@ describe('resumenGastos', () => {
   it('no explota sin nada', () => {
     expect(() => resumenGastos()).not.toThrow();
     expect(resumenGastos().total).toBe(0);
+  });
+});
+
+// ─── Las dos pestañas ────────────────────────────────────────────────────────
+// Chris (22-ago): separar los gastos del turno de los fuertes. Se llama por lo
+// que es y no «caja chica», porque una etiqueta no tiene saldo y el nombre no
+// puede prometer lo que la pantalla no hace.
+
+describe('filtrarPorEscala — y lo que NUNCA puede esconder', () => {
+  const lista = [
+    { id: 1, concepto: 'Hielo', escala: 'turno' },
+    { id: 2, concepto: 'Renta', escala: 'fuerte' },
+    { id: 3, concepto: 'Viejo, de antes de la columna' }, // sin escala
+    { id: 4, concepto: 'Vacío', escala: '  ' },
+    { id: 5, concepto: 'Inventado', escala: 'mediano' },
+  ];
+
+  it('LA REGLA QUE IMPORTA: lo sin clasificar sale en LAS DOS pestañas', () => {
+    // El fallo caro de una pantalla de dinero con filtros no es enseñar de más:
+    // es esconder. Si las filas viejas cayeran fuera de las dos vistas, un
+    // gasto real quedaría invisible y sólo se notaría al cuadrar el mes, si
+    // alguien lo cuadra. Enseñarlo dos veces se ve y se corrige en un clic; no
+    // enseñarlo no se ve nunca.
+    const turno = filtrarPorEscala(lista, 'turno').map((g) => g.id);
+    const fuerte = filtrarPorEscala(lista, 'fuerte').map((g) => g.id);
+
+    expect(turno).toContain(3);
+    expect(fuerte).toContain(3);
+    // Y ningún gasto se queda fuera de las dos.
+    const vistos = new Set([...turno, ...fuerte]);
+    lista.forEach((g) => expect(vistos.has(g.id)).toBe(true));
+  });
+
+  it('cada pestaña sí deja fuera la escala contraria', () => {
+    expect(filtrarPorEscala(lista, 'turno').map((g) => g.id)).not.toContain(2);
+    expect(filtrarPorEscala(lista, 'fuerte').map((g) => g.id)).not.toContain(1);
+  });
+
+  it('«todos» devuelve la lista tal cual', () => {
+    expect(filtrarPorEscala(lista, 'todos')).toHaveLength(5);
+    expect(filtrarPorEscala(lista)).toHaveLength(5);
+  });
+
+  it('un valor corrupto cuenta como sin clasificar, no como perdido', () => {
+    // 'mediano' no es una escala válida. Tratarlo como desconocido lo deja
+    // visible en las dos vistas; tratarlo como su propia categoría lo
+    // escondería de ambas, que es justo lo que no puede pasar.
+    expect(escalaDeGasto({ escala: 'mediano' })).toBeNull();
+    expect(filtrarPorEscala(lista, 'turno').map((g) => g.id)).toContain(5);
+    expect(filtrarPorEscala(lista, 'fuerte').map((g) => g.id)).toContain(5);
+  });
+
+  it('aguanta basura sin reventar', () => {
+    expect(filtrarPorEscala(null, 'turno')).toEqual([]);
+    expect(filtrarPorEscala(undefined)).toEqual([]);
+    expect(escalaDeGasto(null)).toBeNull();
+    expect(escalaDeGasto(undefined)).toBeNull();
+  });
+
+  it('`sinClasificar` es la pregunta con nombre propio', () => {
+    // Se hace en tres sitios de la pantalla —el chip, el aviso y el filtro— y
+    // en los tres tiene que significar lo mismo.
+    expect(sinClasificar({ escala: 'turno' })).toBe(false);
+    expect(sinClasificar({ escala: 'fuerte' })).toBe(false);
+    expect(sinClasificar({})).toBe(true);
+    expect(sinClasificar({ escala: 'mediano' })).toBe(true);
+    expect(sinClasificar(null)).toBe(true);
+  });
+
+  it('cuenta los que faltan por clasificar', () => {
+    expect(cuantosSinClasificar(lista)).toBe(3);
+    expect(cuantosSinClasificar([])).toBe(0);
+    expect(cuantosSinClasificar(null)).toBe(0);
+  });
+
+  it('la pestaña por defecto es la del turno, y va primera', () => {
+    // No es cosmética: es la que se usa con prisa y con gente esperando, así
+    // que es la que no debe costar un clic.
+    expect(ESCALAS[0].id).toBe('turno');
+    expect(ESCALAS.map((e) => e.id)).toEqual(['turno', 'fuerte', 'todos']);
   });
 });

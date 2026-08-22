@@ -419,6 +419,29 @@ fallos — ruidosos, eso sí, no callados.
 
 ---
 
+## 9e · Gastos en dos pestañas — nuevo el 22-ago
+
+Necesita la migración `20260822130000_gastos_escala.sql`.
+
+- [ ] `Gastos` abre en **«Del turno»**, no en «Todos». Es la que se usa con
+      prisa.
+- [ ] Registrar un gasto nuevo: el formulario ya viene en «del turno» y la
+      ayuda dice que **no lleva saldo ni reposiciones**. Nadie debe esperar
+      aquí una caja chica.
+- [ ] Registrar uno «fuerte». Cada uno aparece **sólo en su pestaña**.
+- [ ] **El paso que importa:** los gastos de antes de hoy salen en **las dos**
+      pestañas, con el distintivo «Sin clasificar», y arriba dice cuántos
+      quedan. Ninguno puede quedarse fuera de las dos vistas.
+- [ ] Abrir uno de ésos, elegir escala y guardar: desaparece del aviso y se
+      queda en una sola pestaña.
+- [ ] **El total del periodo NO cambia al cambiar de pestaña.** La pestaña
+      filtra la lista, no las cifras: si el total bajara, una pestaña estaría
+      haciendo que el mes pareciera más barato de lo que fue.
+- [ ] Editar un gasto viejo **sin tocar la escala** lo deja sin clasificar, no
+      lo mete en «del turno» por defecto.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6

@@ -194,3 +194,69 @@ export function resumenGastos({
   const delPeriodo = gastosEnRango(todos, desde, hasta);
   return { ...agregarGastos(delPeriodo, categorias), gastos: delPeriodo };
 }
+
+// ─── LAS DOS PESTAÑAS: DEL TURNO Y FUERTES ──────────────────────────────────
+
+/**
+ * Las dos escalas de gasto, y una tercera vista que lo enseña todo.
+ *
+ * ── POR QUÉ NO SE LLAMAN «CAJA CHICA» Y «CAJA GRANDE» ──────────────────────
+ * Porque **una etiqueta no es una caja**. «Caja chica» promete un saldo —cuánto
+ * queda, cuánto hay que reponer— y eso necesita fondo, retiros y reposiciones,
+ * o sea un arqueo pequeño. Con dos pestañas y una columna, la pregunta «¿cuánto
+ * queda?» no se puede responder.
+ *
+ * Decisión de Chris (22-ago): las pestañas ahora, con el nombre honesto, y el
+ * saldo cuando haga falta. Un nombre que promete lo que la pantalla no hace es
+ * cómo dentro de dos meses alguien pregunta y la respuesta es «eso no lo hace».
+ *
+ * `turno` va primero y es la vista por defecto, y no es un detalle de interfaz:
+ * es la que se usa **con prisa y con gente esperando**, así que es la que no
+ * debe costar un clic.
+ */
+export const ESCALAS = [
+  { id: 'turno', label: 'Del turno' },
+  { id: 'fuerte', label: 'Fuertes' },
+  { id: 'todos', label: 'Todos' },
+];
+
+/** La escala de un gasto, o `null` si nadie la ha puesto. */
+export function escalaDeGasto(g) {
+  const v = String(g?.escala ?? '').trim();
+  return v === 'turno' || v === 'fuerte' ? v : null;
+}
+
+/** ¿Está sin clasificar? Se pregunta tanto que merece nombre propio. */
+export function sinClasificar(g) {
+  return escalaDeGasto(g) === null;
+}
+
+/**
+ * Filtra la lista por escala.
+ *
+ * ── LA REGLA QUE IMPORTA: LO SIN CLASIFICAR NO DESAPARECE ──────────────────
+ * Un gasto sin escala sale en LAS DOS pestañas, no en ninguna. Es deliberado y
+ * es la decisión de diseño de toda esta función.
+ *
+ * El fallo caro de una pantalla de dinero con filtros no es enseñar de más: es
+ * **esconder**. Si las filas viejas —las que existían antes de que la columna
+ * existiera— cayeran fuera de las dos vistas, un gasto real quedaría invisible
+ * y sólo se notaría al cuadrar el mes, si alguien lo cuadra. Enseñarlo dos
+ * veces se ve y se corrige en un clic; no enseñarlo no se ve nunca.
+ *
+ * Y no infla ninguna cifra: el total del periodo se calcula sobre todos los
+ * gastos, no sobre esta lista.
+ */
+export function filtrarPorEscala(gastos = [], escala = 'todos') {
+  const lista = Array.isArray(gastos) ? gastos : [];
+  if (escala !== 'turno' && escala !== 'fuerte') return lista;
+  return lista.filter((g) => {
+    const e = escalaDeGasto(g);
+    return e === null || e === escala;
+  });
+}
+
+/** Cuántos gastos siguen sin clasificar. Lo usa el aviso de la pantalla. */
+export function cuantosSinClasificar(gastos = []) {
+  return (Array.isArray(gastos) ? gastos : []).filter(sinClasificar).length;
+}

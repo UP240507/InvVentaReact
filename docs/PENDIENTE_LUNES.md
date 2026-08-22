@@ -721,57 +721,76 @@ circulando no dejan huella en ninguna parte.
 
 ---
 
-## 2 · Gastos en dos pestañas: caja chica y caja grande
+## 2 · Gastos en dos pestañas — **HECHO el 22-ago**
 
-**Lo que pidió Chris:** dividir la pantalla de gastos en dos tabs.
+**Lo que pidió Chris:** separar los gastos pequeños del turno —«a la hora de la
+chinga»— de los fuertes.
 
-- **Caja chica** — donde se queda la pantalla «a la hora de la chinga». Es la
-  vista por defecto: los gastos pequeños del turno.
-- **Caja grande** — los gastos fuertes.
+### La decisión: pestañas ya, con el nombre honesto
 
-Que caja chica sea la pestaña por defecto no es un detalle de UI: es la que se
-usa con prisa y con gente esperando, así que es la que no debe costar un clic.
+De las dos opciones que quedaban abiertas, Chris eligió (22-ago) una tercera:
+**las pestañas, pero llamadas por lo que son.**
 
-### Ya estaba evaluada, y salió la nº 1 de las cinco
+El problema de la opción A no era lo que hacía, era cómo se llamaba. **Una
+etiqueta no es una caja.** «Caja chica» promete un saldo —cuánto queda, cuánto
+hay que reponer— y para eso hacen falta fondo, retiros y reposiciones. Con dos
+pestañas y una columna, esa pregunta no se puede responder.
 
-`docs/EVALUACION_5_PROPUESTAS.md` §2. Sin prerrequisitos, valor inmediato, y con
-el patrón de arqueo ya escrito en `lib/Arqueo.js` que se puede copiar.
+Así que se llaman **«Del turno»** y **«Fuertes»**. Con el nombre honesto, A deja
+de ser una promesa rota y pasa a ser una función terminada. El saldo se
+construye el día que haga falta, y entonces será una decisión nueva y no una
+deuda.
 
-### La trampa que ya está documentada
+### La columna
 
-**`gastos.origen` YA EXISTE y significa otra cosa**: sus valores son `manual` y
-`recurrente`, o sea la procedencia del registro, no de qué caja salió el dinero.
-Reutilizarla metería dos significados en una columna y el día que alguien filtre
-por `origen` obtendrá una mezcla.
+`gastos.escala`, con `'turno' | 'fuerte'`. **No se reutilizó `gastos.origen`**,
+que ya existe y significa otra cosa —`manual` | `recurrente` | `nomina`, la
+procedencia del REGISTRO, no la del dinero—. Dos significados en una columna es
+cómo el día que alguien filtre por `origen` obtiene una mezcla.
 
-**Va un eje nuevo: `caja: 'chica' | 'grande'`.**
+**Nullable y sin defecto**, y esto es lo que más se pensó. Las filas que ya
+existían no se pueden clasificar sin inventárselo: nadie sabe hoy si aquella
+renta fue del turno o fuerte, y un defecto las habría etiquetado a todas igual
+de mal.
 
-### Lo que hay que decidir antes de escribir
+### La regla que manda sobre todo lo demás
 
-La evaluación levantó algo que sigue abierto, y conviene resolverlo con Chris el
-lunes en vez de descubrirlo a media implementación:
+**Un gasto sin escala sale en LAS DOS pestañas, no en ninguna.**
 
-> **Una etiqueta no es una caja.** Con dos tabs y una columna `caja`, la
-> pregunta «¿cuánto queda en la caja chica?» **no se puede responder**. Para eso
-> hacen falta **fondo, retiros y reposiciones** — o sea, un arqueo pequeño.
+El fallo caro de una pantalla de dinero con filtros no es enseñar de más: es
+**esconder**. Si las filas viejas cayeran fuera de las dos vistas, un gasto real
+quedaría invisible y sólo se notaría al cuadrar el mes —si alguien lo cuadra—.
+Enseñarlo dos veces se ve y se corrige en un clic; no enseñarlo no se ve nunca.
 
-Dos alcances posibles:
+Y no infla nada: **el total del periodo se calcula sobre todos los gastos, no
+sobre la lista filtrada**, así que una pestaña nunca hace que el periodo parezca
+más barato de lo que fue.
 
-|                                  | Qué da                                                                          | Qué cuesta                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **A · Sólo las pestañas**        | Separa y filtra los gastos. La pantalla queda como Chris la describió.          | Muy poco. Pero «caja chica» sigue siendo un filtro con nombre ambicioso: no dice cuánto queda. |
-| **B · Pestañas + fondo y saldo** | Responde «cuánto queda» y «cuánto hay que reponer». Es la caja chica de verdad. | Más: modelar fondo, retiros y reposiciones. Hay patrón en `lib/Arqueo.js`.                     |
+Para que no se lea como un duplicado, cada fila sin escala lleva un distintivo
+**«Sin clasificar»**, y arriba hay un aviso con cuántas quedan — para que la
+lista se vacíe algún día en vez de volverse ruido permanente. Un valor corrupto
+(`escala: 'mediano'`) cuenta como sin clasificar, no como una tercera categoría
+que lo escondería de las dos.
 
-**Mi lectura:** empezar por A, pero **sabiendo que es A**. Ponerle «caja chica» a
-un filtro y llamarlo terminado es lo que hace que dentro de dos meses alguien
-pregunte cuánto queda y la respuesta sea «eso no lo hace». Si el nombre promete
-un saldo, hay que llegar a B.
+### Detalles que no son obvios
 
-Lo que sí encaja sin inventar nada desde el principio: **la firma de quién pidió
-y quién autorizó**, con el mismo PIN que ya funciona para los descuentos en
-`ModalCobro`, y con rastro en auditoría.
+- **«Del turno» va primero y es lo que abre.** No es cosmética: es la que se usa
+  con prisa y con gente esperando, así que es la que no debe costar un clic.
+- **El formulario arranca en «del turno»** por lo mismo. El fuerte se registra
+  sentado, y ahí un clic de más no duele.
+- **Al editar una fila vieja no se le inventa escala.** Que siga «sin
+  clasificar» es información; ponerle «turno» porque sí sería una afirmación
+  falsa.
 
----
+### Lo que sigue pendiente, y queda dicho
+
+- **El saldo de la caja chica** (fondo, retiros, reposiciones). Hay patrón que
+  copiar en `lib/Arqueo.js`. Hoy no se promete, así que no se debe.
+- **La firma de quién pidió y quién autorizó**, con el mismo PIN de los
+  descuentos en `ModalCobro` y rastro en auditoría. Encaja sin inventar nada.
+
+**Pruebas:** 8 en `Gastos.test.js`, y la que importa es la de que nada
+desaparece de las dos pestañas. Suite en 856.
 
 ## 3 · Los dos fallos de las E2E (13-ago)
 

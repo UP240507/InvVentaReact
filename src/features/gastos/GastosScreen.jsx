@@ -50,6 +50,11 @@ import {
 import { PERIODOS, rangoDePeriodo } from '../../lib/Metricas';
 import {
   resumenGastos,
+  ESCALAS,
+  escalaDeGasto,
+  sinClasificar,
+  filtrarPorEscala,
+  cuantosSinClasificar,
   generarRecurrentes,
   fechaDeGasto,
 } from '../../lib/Gastos';
@@ -70,6 +75,9 @@ const VACIO = {
   fecha: hoyISO(),
   proveedor: '',
   nota: '',
+  // Arranca en «del turno» porque es el que se captura con prisa y con gente
+  // esperando. El fuerte se registra sentado, y ahí un clic de más no duele.
+  escala: 'turno',
 };
 
 // Una plantilla NO es un gasto: es la regla que propone uno cada mes. Por eso
@@ -96,6 +104,8 @@ export default function GastosScreen() {
   const { enqueueAction } = useSyncStore();
 
   const [periodo, setPeriodo] = useState('mes');
+  // Del turno · Fuertes · Todos. Arranca en «turno» a propósito (ver ESCALAS).
+  const [escala, setEscala] = useState('turno');
   const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(VACIO);
   const [editId, setEditId] = useState(null);
@@ -124,9 +134,17 @@ export default function GastosScreen() {
     [gastos, nominas, categorias, rango],
   );
 
+  const pendientesDeClasificar = useMemo(
+    () => cuantosSinClasificar(resumen.gastos),
+    [resumen.gastos],
+  );
+
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return [...resumen.gastos]
+    // El filtro de escala va ANTES que el de texto y no toca los totales: la
+    // tarjeta de «Total del periodo» sigue sumando todo, así que una pestaña
+    // nunca hace que el periodo parezca más barato de lo que fue.
+    return filtrarPorEscala([...resumen.gastos], escala)
       .filter(
         (g) =>
           !q ||
@@ -134,7 +152,7 @@ export default function GastosScreen() {
           (g.proveedor || '').toLowerCase().includes(q),
       )
       .sort((a, b) => (fechaDeGasto(b) ?? 0) - (fechaDeGasto(a) ?? 0));
-  }, [resumen.gastos, busqueda]);
+  }, [resumen.gastos, busqueda, escala]);
 
   // ── Plantillas recurrentes: generar lo que toque ──────────────────────────
   // Se dispara al abrir la pantalla y al cerrar el panel de plantillas, no en un
@@ -253,6 +271,10 @@ export default function GastosScreen() {
       ...form,
       monto: Math.round(monto * 100) / 100,
       id: editId || Date.now(),
+      // Al editar una fila vieja sin escala, si el formulario no la trae se
+      // deja en null: no se le inventa una. Que siga «sin clasificar» es
+      // información; ponerle «turno» porque sí sería una afirmación falsa.
+      escala: escalaDeGasto(form) ?? escalaDeGasto(anterior),
       origen: anterior?.origen ?? 'manual',
       origen_ref: anterior?.origen_ref ?? null,
       estado: anterior?.estado ?? 'pagado',
@@ -417,6 +439,14 @@ export default function GastosScreen() {
             {g.origen === 'recurrente' && (
               <Repeat className="w-3 h-3 text-adm-muted shrink-0" />
             )}
+            {/* Sale en las dos pestañas a propósito —esconder dinero es el
+                fallo caro aquí— así que hay que decir POR QUÉ está en las dos.
+                Sin esta marca parecería un gasto duplicado. */}
+            {sinClasificar(g) && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-adm-warn border border-adm-warn/40 rounded px-1.5 py-0.5 shrink-0">
+                Sin clasificar
+              </span>
+            )}
           </p>
           {g.proveedor && (
             <p className="text-xs text-adm-muted truncate">{g.proveedor}</p>
@@ -509,6 +539,11 @@ export default function GastosScreen() {
         acciones={
           <>
             <SegmentedControl
+              opciones={ESCALAS}
+              valor={escala}
+              onChange={setEscala}
+            />
+            <SegmentedControl
               opciones={PERIODOS}
               valor={periodo}
               onChange={setPeriodo}
@@ -536,6 +571,32 @@ export default function GastosScreen() {
           </>
         }
       />
+
+      {/* ── LOS QUE SIGUEN SIN CLASIFICAR ────────────────────────────────
+          Las filas anteriores al 22-ago no tienen escala, y no se les inventó
+          una: nadie sabe hoy si aquella renta fue del turno o fuerte, y un
+          defecto las habría etiquetado a todas igual de mal. Salen en las dos
+          pestañas para que no desaparezca dinero de la vista, y este aviso
+          dice cuántas quedan para que la lista se vacíe algún día en vez de
+          convertirse en ruido permanente. */}
+      {pendientesDeClasificar > 0 && (
+        <Card className="mb-5 border-adm-warn">
+          <CardBody className="flex items-center gap-3 flex-wrap">
+            <span className="text-[10px] font-black uppercase tracking-wider text-adm-warn border border-adm-warn/40 rounded px-1.5 py-0.5">
+              Sin clasificar
+            </span>
+            <p className="text-sm font-bold text-adm-ink">
+              {pendientesDeClasificar}{' '}
+              {pendientesDeClasificar === 1 ? 'gasto' : 'gastos'} de antes de
+              esta pantalla siguen sin escala.
+            </p>
+            <p className="text-xs text-adm-muted">
+              Salen en las dos pestañas para que no se pierdan de vista. Ábrelos
+              y elige «del turno» o «fuerte» para que dejen de repetirse.
+            </p>
+          </CardBody>
+        </Card>
+      )}
 
       {/* ── Totales del periodo ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
@@ -641,6 +702,23 @@ export default function GastosScreen() {
               placeholder="Ej. Recibo de luz de julio"
               required
             />
+          </Field>
+          {/* ── DE QUÉ ESCALA ES ─────────────────────────────────────────
+              Va arriba y no al final: es la decisión que separa las dos
+              pestañas, y quien captura con prisa la contesta sin pensar. La
+              ayuda dice lo que es y —más importante— lo que NO es, para que
+              nadie espere aquí un saldo de caja chica. */}
+          <Field label="¿De qué escala?" requerido>
+            <SegmentedControl
+              opciones={ESCALAS.filter((e) => e.id !== 'todos')}
+              valor={form.escala || 'turno'}
+              onChange={(v) => setForm({ ...form, escala: v })}
+            />
+            <p className="text-xs text-adm-muted mt-1.5">
+              «Del turno» es el gasto chico del servicio; «fuerte», el grande y
+              planificado. Es una etiqueta para separar y filtrar —no lleva
+              saldo ni reposiciones.
+            </p>
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Categoría" requerido>
