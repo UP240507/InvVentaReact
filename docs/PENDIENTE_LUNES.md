@@ -497,16 +497,30 @@ no rompe nada — ni la app ni PostgREST emiten TRUNCATE nunca.
 Y `20260822120100_folios_reservados_append_only.sql`, que es el mismo fallo en
 pequeño: la tabla que decía ser append-only tenía DELETE y UPDATE concedidos.
 
-### Lo que queda decidido y NO hecho
+### Y la segunda mitad, también hecha (Chris: «ponlo todo al 100»)
 
-`anon` conserva INSERT, UPDATE y DELETE en las 31 tablas. Hoy no puede usarlos
-—`get_restaurante_id()` devuelve NULL—, pero eso es **una sola capa**. El día
-que alguien escriba una política `using (true)` para depurar algo, o que esa
-función devuelva algo para un token anónimo, queda abierto.
+`20260822120300_anon_sin_privilegios.sql`. **`anon` se queda sin nada** salvo
+SELECT en `planes` y `addons`, que son el catálogo que se lee antes de entrar.
+Cero privilegios de escritura en toda la base, y los privilegios por defecto
+cambiados para que las tablas futuras tampoco le den nada.
 
-Revocárselos es igual de gratis (la app siempre habla autenticada), pero toca
-las 31 tablas de golpe y merece hacerse mirando, no de paso. **Decisión
-pendiente de Chris.**
+Comprobado **antes** de revocar, no después:
+
+- Todas las tablas menos una tienen políticas `restaurante_id =
+get_restaurante_id()`, que en sesión anónima no dejan pasar ninguna fila. O
+  sea que **ninguna escritura anónima funcionaba ya**: revocar no podía romper
+  un flujo vivo, porque si algo dependiera de ello ya estaría roto.
+- La excepción, `login_intentos`, tiene RLS y **cero políticas**: no la toca
+  nadie por PostgREST. La escribe una función.
+- Las únicas lecturas que no dependen del tenant son `planes_select` y
+  `addons_select`, ambas `using (true)`. Ésas se conservan.
+- El registro va por Edge Function (`service_role`) y el login usa el esquema
+  `auth`, no tablas de `public`.
+
+El _linter_ de seguridad después: ningún hallazgo nuevo. Lo que queda son los
+tres RPC `SECURITY DEFINER` —que son deliberados, es el patrón de los ledger— y
+**la protección de contraseñas filtradas, que está apagada**: es un interruptor
+en Auth y no lo toco sin que Chris lo diga.
 
 ## 0b · Lo que encontró Chris el 21-ago
 
