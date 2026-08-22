@@ -522,6 +522,34 @@ tres RPC `SECURITY DEFINER` —que son deliberados, es el patrón de los ledger�
 **la protección de contraseñas filtradas, que está apagada**: es un interruptor
 en Auth y no lo toco sin que Chris lo diga.
 
+## 0c · Los PIN de AZUL, fuera del repositorio (22-ago)
+
+`e2e/helpers.js` llevaba los PIN reales del local escritos como valores por
+defecto. No es higiene: **ese PIN es el que autoriza reabrir una cuenta,
+aplicar un descuento y desbloquear el KDS**. Cualquiera con acceso al
+repositorio tenía en cuatro líneas el permiso de encargado.
+
+Y estaba en dos sitios. El segundo era peor de encontrar: **`Autorizacion.test.js`
+lo usaba de dato de prueba** — copiado, seguramente, para «probar con algo de
+verdad». Un dato de prueba que coincide con una credencial viva es una
+credencial viva escrita en el repositorio, aunque esté rodeada de `expect`.
+
+**Ahora salen sólo del entorno y sin valor por defecto.** Poner uno «de
+desarrollo» es cómo vuelve el problema: alguien lo actualiza al bueno para que
+le funcione y nadie se entera. Sin defecto, la suite no arranca y lo dice en
+una línea.
+
+```
+$env:E2E_CODIGO='AZUL-C172'; $env:E2E_PIN_CAJERO='…'; $env:E2E_PIN_MESERO='…'
+npm run e2e
+```
+
+`e2e/humo.spec.js` **no usa nada de esto** —no inicia sesión— y por eso sigue
+pudiendo correr en cada publicación sin credenciales.
+
+**Sigue pendiente y es de Chris:** los PIN que estuvieron en el repo hay que
+**cambiarlos**. Quitarlos del árbol no los borra del historial de git.
+
 ## 0b · Lo que encontró Chris el 21-ago
 
 ### 1 · La nota bloqueada en un platillo ya enviado — **HECHO**

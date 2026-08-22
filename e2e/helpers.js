@@ -1,11 +1,53 @@
 // e2e/helpers.js — utilidades compartidas de la suite
-// Credenciales por env con defaults del tenant de desarrollo (AZUL).
-// Para CI o tenant TEST dedicado: exportar E2E_CODIGO / E2E_PIN_CAJERO / E2E_PIN_MESERO.
+//
+// ── LAS CREDENCIALES SALEN DEL ENTORNO, Y SÓLO DEL ENTORNO (22-ago) ─────────
+// Hasta hoy los PIN reales de AZUL venían escritos aquí como valores por
+// defecto. No es un detalle de higiene: **ese PIN es el que autoriza reabrir
+// una cuenta, aplicar un descuento y desbloquear el KDS**. Cualquiera con
+// acceso al repositorio —hoy, o el día que entre alguien más, o si el repo
+// deja de ser privado— tenía en cuatro líneas el permiso de encargado del
+// local.
+//
+// Y el precedente ya existe: el 13-ago se coló la llave del updater en un
+// commit. Se purgó, pero la lección fue que un secreto en el árbol se queda
+// ahí hasta que alguien lo mira.
+//
+// **No hay valor por defecto a propósito.** Poner uno «de desarrollo» es cómo
+// vuelve el problema: alguien lo actualiza al PIN bueno para que le funcione y
+// nadie se entera. Sin defecto, la suite no arranca sin las variables y lo
+// dice en una línea.
+//
+//   PowerShell:
+//     $env:E2E_CODIGO='AZUL-C172'; $env:E2E_PIN_CAJERO='…'; $env:E2E_PIN_MESERO='…'
+//     npm run e2e
+//
+// `e2e/humo.spec.js` NO usa nada de esto: no inicia sesión, y por eso es la
+// que puede correr en cada publicación.
 import { expect } from '@playwright/test';
 
-export const CODIGO = process.env.E2E_CODIGO || 'AZUL-C172';
-export const PIN_CAJERO = process.env.E2E_PIN_CAJERO || '131415';
-export const PIN_MESERO = process.env.E2E_PIN_MESERO || '331213';
+/**
+ * Lee una variable obligatoria, o para la suite explicando qué falta.
+ *
+ * Se lanza al importar y no al usarse: mejor que falle antes de abrir el
+ * navegador que a mitad de un login, donde el síntoma sería un PIN vacío y un
+ * «Entrar» deshabilitado que no explica nada.
+ */
+const exigir = (nombre, ejemplo) => {
+  // `globalThis.process` y no `process` a secas: el ESLint del repo no declara
+  // los globales de Node para esta carpeta, y un error de lint por leer una
+  // variable de entorno sería ruido permanente en la línea base.
+  const v = (globalThis.process?.env?.[nombre] || '').trim();
+  if (v) return v;
+  throw new Error(
+    `Falta ${nombre}. Las credenciales de las E2E ya no viven en el repositorio.\n` +
+      `  Exporta ${nombre} antes de correr la suite (ej. ${ejemplo}).\n` +
+      `  Ver la cabecera de e2e/helpers.js.`,
+  );
+};
+
+export const CODIGO = exigir('E2E_CODIGO', 'AZUL-C172');
+export const PIN_CAJERO = exigir('E2E_PIN_CAJERO', 'seis dígitos');
+export const PIN_MESERO = exigir('E2E_PIN_MESERO', 'seis dígitos');
 
 export const STATE_CAJERO = 'e2e/.auth/cajero.json';
 export const STATE_MESERO = 'e2e/.auth/mesero.json';
@@ -43,9 +85,7 @@ export async function loginEmpleado(page, pin) {
   // activaría el candado de jornada). Con empleadoActivo el escape "Ya registré
   // mi entrada — continuar" siempre está visible y navega a la ruta por rol.
   if (/\/checador/.test(page.url())) {
-    await page
-      .getByRole('button', { name: /ya registré mi entrada/i })
-      .click();
+    await page.getByRole('button', { name: /ya registré mi entrada/i }).click();
     await page.waitForURL(/\/(espera|mesas|kds|pos|dashboard)/, {
       timeout: 20_000,
     });

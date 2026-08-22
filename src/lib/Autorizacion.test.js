@@ -16,7 +16,13 @@ const roles = [
   { rol: 'Mesero', capacidades: { autoriza_descuentos: false } },
 ];
 
-const jefa = { id: 1, nombre: 'Sairi', rol: 'Admin', pin: '331213' };
+// Los PIN de estas pruebas son INVENTADOS, y tiene que seguir siendo así.
+// Hasta el 22-ago este fixture usaba un PIN real de AZUL —el mismo que
+// autoriza reabrir cuentas y aplicar descuentos—, copiado seguramente para
+// «probar con algo de verdad». Un dato de prueba que coincide con una
+// credencial viva es una credencial viva escrita en el repositorio, aunque
+// esté rodeada de `expect`.
+const jefa = { id: 1, nombre: 'Sairi', rol: 'Admin', pin: '112233' };
 const mesero = { id: 2, nombre: 'Diego', rol: 'Mesero', pin: '445566' };
 
 const buscar = (pin, staff = [jefa, mesero]) =>
@@ -29,7 +35,7 @@ const buscar = (pin, staff = [jefa, mesero]) =>
 
 describe('buscarAutorizador', () => {
   it('encuentra a quien tiene la capacidad y el PIN', () => {
-    expect(buscar('331213')?.nombre).toBe('Sairi');
+    expect(buscar('112233')?.nombre).toBe('Sairi');
   });
 
   it('el PIN correcto de alguien SIN la capacidad no autoriza', () => {
@@ -41,13 +47,13 @@ describe('buscarAutorizador', () => {
     // La comprobación que más fácil se pierde al copiar el bloque, y la única
     // cuyo olvido no se nota probando: sigue funcionando todo, sólo que
     // autoriza alguien que ya no trabaja aquí.
-    expect(buscar('331213', [{ ...jefa, activo: false }])).toBeNull();
+    expect(buscar('112233', [{ ...jefa, activo: false }])).toBeNull();
   });
 
   it('tolera los `false` que llegan como texto o como cero', () => {
     // Vienen así de formularios y de bases antiguas.
     for (const falso of [false, 'false', 0]) {
-      expect(buscar('331213', [{ ...jefa, activo: falso }])).toBeNull();
+      expect(buscar('112233', [{ ...jefa, activo: falso }])).toBeNull();
     }
     expect(empleadoActivo({ activo: undefined })).toBe(true);
   });
@@ -81,13 +87,13 @@ describe('buscarAutorizador', () => {
       buscarAutorizador({
         staff: [jefa],
         roles_permisos: roles,
-        pin: '331213',
+        pin: '112233',
       }),
     ).toBeNull();
   });
 
   it('sin staff no revienta', () => {
-    expect(buscar('331213', [])).toBeNull();
+    expect(buscar('112233', [])).toBeNull();
     expect(buscarAutorizador({})).toBeNull();
   });
 });
