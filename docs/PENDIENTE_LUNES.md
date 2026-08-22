@@ -769,8 +769,22 @@ niegue si `requiere_fondo_caja` está puesto y el monto viene vacío.
   un reporte que cambia de opinión sobre un mes cerrado es cómo se pierde la
   confianza en los números.
 
-**Siguiente paso:** `docs/DISENO_TURNOS.md` con esquema, migración, qué
-pantallas cambian y en qué orden — para revisarlo antes de tocar una tabla.
+**Escrito: `docs/DISENO_TURNOS.md`** — esquema, migración, qué pantallas
+cambian y en qué orden. **Sin implementar**, a la espera de que Chris lo revise.
+
+Dos cosas salieron al escribirlo y merecen estar también aquí:
+
+- **`ventas.turno_id` YA EXISTE** y apunta a la sesión de caja (`turnos`), que
+  es otra cosa: alguien la abre, alguien la cierra y se arquea contra el cajón.
+  Reutilizarla para la franja del día sería el error de `gastos.origen` —dos
+  significados en una columna— pero con dinero de por medio y en la tabla más
+  consultada. La columna nueva se llama **`franja`**.
+- **Me corregí en un punto.** Al presentar «se deriva del reloj» dije que
+  permitiría reclasificar el pasado, y eso choca de frente con el argumento de
+  no dejar configurable la venta a caballo. No se puede tener las dos: la
+  franja **se calcula al escribir y se guarda**, con un relleno de una sola vez
+  para lo ya existente. Así mover el corte afecta a lo que venga y nunca a un
+  mes cerrado.
 
 ## 1 · Reimpresión del ticket — **CERRADO el 18-ago**
 
