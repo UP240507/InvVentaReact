@@ -451,6 +451,63 @@ compila con devtools, o esos datos salen a una pantalla.
 
 ---
 
+## 0a · SEGURIDAD — `anon` podía vaciar la base entera (22-ago, TAPADO)
+
+Salió al verificar los permisos de `folios_reservados`, y resultó ser general.
+
+**Las 31 tablas le daban a `anon` INSERT, UPDATE, DELETE y TRUNCATE.** Es el
+reparto por defecto de Supabase para toda tabla nueva del esquema `public`, y
+no lo quita un `revoke all … from public`: `anon` y `authenticated` son roles,
+no PUBLIC. El `grant select, insert` que llevaba la migración era **aditivo**.
+
+Para los cuatro primeros hay red debajo: las políticas son
+`restaurante_id = get_restaurante_id()`, y en sesión anónima esa función
+devuelve NULL, así que la comparación da NULL y no pasa ninguna fila.
+
+**Con TRUNCATE no hay red.** RLS se aplica a SELECT, INSERT, UPDATE y DELETE.
+TRUNCATE se controla **únicamente con el privilegio**.
+
+### Comprobado, no supuesto
+
+Banco desechable sobre la base de AZUL: tabla con RLS activada, sin ninguna
+política, `grant all to anon`, `set role anon`, `truncate`.
+
+```
+antes = 3 · después = 0 · resultado = TRUNCATE PASÓ
+```
+
+### Por qué era grave de verdad
+
+**La llave `anon` es pública por diseño**: viaja dentro del bundle que la caja
+sirve por LAN a cada teléfono de la sala. Cualquiera que abriera ese bundle
+podía **vaciar todas las tablas de todos los locales**, sin autenticarse, con
+una línea. Ventas, auditoría, catálogo, todo.
+
+Y es el patrón de este proyecto llevado a su peor caso: dos capas correctas
+—grants razonables por un lado, RLS por el otro— y el hueco justo en medio,
+porque una de las dos no cubría lo que se daba por hecho que cubría.
+
+### Lo que se hizo
+
+`20260822120200_revocar_truncate_anon.sql`: revoca TRUNCATE a `anon` y a
+`authenticated` en las 32 tablas, y cambia los privilegios por defecto para que
+las tablas futuras no lo hereden. Comprobado después: **cero tablas**. Revocar
+no rompe nada — ni la app ni PostgREST emiten TRUNCATE nunca.
+
+Y `20260822120100_folios_reservados_append_only.sql`, que es el mismo fallo en
+pequeño: la tabla que decía ser append-only tenía DELETE y UPDATE concedidos.
+
+### Lo que queda decidido y NO hecho
+
+`anon` conserva INSERT, UPDATE y DELETE en las 31 tablas. Hoy no puede usarlos
+—`get_restaurante_id()` devuelve NULL—, pero eso es **una sola capa**. El día
+que alguien escriba una política `using (true)` para depurar algo, o que esa
+función devuelva algo para un token anónimo, queda abierto.
+
+Revocárselos es igual de gratis (la app siempre habla autenticada), pero toca
+las 31 tablas de golpe y merece hacerse mirando, no de paso. **Decisión
+pendiente de Chris.**
+
 ## 0b · Lo que encontró Chris el 21-ago
 
 ### 1 · La nota bloqueada en un platillo ya enviado — **HECHO**
