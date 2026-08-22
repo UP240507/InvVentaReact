@@ -393,6 +393,32 @@ sólo queda lo que un navegador no puede tener: IPC, Supabase y realtime.
 
 ---
 
+## 9d · El folio reservado sobrevive al aparato — nuevo el 22-ago
+
+**Antes de nada, aplicar la migración `20260822120000_folios_reservados.sql`.**
+Sin ella el POS encola filas para una tabla que no existe y la cola se llena de
+fallos — ruidosos, eso sí, no callados.
+
+- [ ] Con el flujo en **`ticket_final`**, pedir la cuenta de una mesa. En
+      Supabase aparece una fila en `folios_reservados` con **el folio como
+      `id`**, la mesa, el usuario y el total impreso.
+- [ ] **Reimprimir esa misma cuenta NO crea una segunda fila.** El cliente ya
+      tiene ese papel; el hecho es uno solo.
+- [ ] Cobrarla. En `Reportes → Corte de Caja` **no** aparece en «Cuentas
+      impresas sin cobrar»: la venta ya lleva ese folio.
+- [ ] **La prueba que importa.** Pedir la cuenta de otra mesa y **NO cobrarla**.
+      Aparece en la lista, con su folio y de cuánto era. Eso es un hueco
+      documentado; antes era un hueco invisible.
+- [ ] Con el flujo en **`precuenta_y_ticket`** no se reserva nada, y es
+      correcto: ese papel no lleva número, así que no hay nada que conciliar.
+- [ ] **En la caja, `Ajustes → Hub`:** después de pedir una cuenta, el contador
+      de respaldo sube. La reserva viaja con las ventas.
+- [ ] Intentar **borrar** una fila de `folios_reservados` desde el cliente:
+      **tiene que fallar.** Sólo hay `select` e `insert`. Una tabla que existe
+      para que no falten números no puede dejar que le quiten números.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6

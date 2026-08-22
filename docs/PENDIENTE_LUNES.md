@@ -314,31 +314,79 @@ Va con la misma familia: la reimpresión que existe y nadie llama, la pestaña
 Impresoras que guardaba una lista que nadie lee, `total_divergente` que calcula
 un trigger y nada en el front consulta.
 
-### 8 · Lo que el respaldo NO cubre (fallos 6 y 7, del 17-ago)
+### 8 · Lo que el respaldo NO cubre (fallos 6 y 7) — **CERRADO el 22-ago**
 
 Salieron al probar el respaldo con un teléfono muerto de verdad. El respaldo
-funcionó; lo que falló es lo que quedó fuera de él. Detalle completo en
+funcionó; lo que falló es lo que quedó fuera de él. Detalle en
 `docs/VERIFICADO_15-AGO.md`.
 
-**La auditoría no se respalda.** `lib/Respaldo.js:33` lista `['ventas',
-'comandas', 'movimientos']`. Resultado medido: la venta `AZULHN-V-000005` está
-en los libros a las 20:09 y la auditoría se corta a las 19:40. Un cobro sin
-rastro, en la pantalla que se llama «Registro inmutable».
+**La auditoría** — cerrado el 17-ago. `lib/Respaldo.js` la lista desde
+entonces. La lista se había escrito mirando el dinero y olvidando el rastro:
+medido en AZUL, la venta `AZULHN-V-000005` estaba en los libros a las 20:09 y
+la auditoría se cortaba a las 19:40. Un cobro sin `COBRO_TICKET` en la pantalla
+que se llama «Registro inmutable».
 
-Al arreglarlo, la pregunta no es sólo «añadir `auditoria`»: es **qué más se
-pierde cuando muere un dispositivo**, y si esa lista se escribió mirando el
-dinero y olvidando el rastro.
+**El folio reservado** — cerrado el 22-ago, y **no como decía este documento**.
 
-**Y el folio reservado vive sólo en el aparato.** `handlePedirCuenta` acuña el
-folio antes de cobrar —tiene que hacerlo, el papel lleva número— y lo guarda en
-`mesa.orden_actual`, en el almacenamiento local. Si el aparato muere, la reserva
-muere con él: el cliente se queda con un papel citando `V-000004` y el cobro
-posterior emite `V-000005`. Hueco en la serie de ventas, que es exactamente la
-señal que `Folio.js` dice querer evitar.
+`handlePedirCuenta` acuña el folio antes de cobrar —tiene que hacerlo, el papel
+lleva número— y lo guardaba sólo en `mesa.orden_actual`, o sea en el
+almacenamiento del aparato. Si el aparato muere, la reserva muere con él. Y el
+daño no es sólo el hueco en la serie: **el cliente se queda con un papel
+citando un número que ninguna venta va a llevar.** Un documento en la calle que
+no corresponde a nada.
 
-Al tocarlo, **no romper lo que ya está bien**: acuñar pronto es correcto, y que
-el folio no cambie al reabrir también — comprobado en producción el mismo día.
-Lo que hay que mover es dónde vive la reserva.
+#### Por qué NO se metió `mesas` en el respaldo
+
+Era lo que decía el plan, y está mal. Las tablas que ya se respaldan son
+**hechos que sólo se añaden**: reproducirlos desde un aparato muerto no puede
+deshacer nada. `mesas` es lo contrario — **estado mutable y compartido**—, y
+adoptar la mesa de un teléfono que murió a las 20:05 puede **resucitar una mesa
+que otro aparato cerró a las 20:20**. Habría sido cambiar un fallo por uno
+peor, y de los que no dan error.
+
+Lo que había que salvar no era la mesa: era **la reserva**. Y una reserva sí es
+un hecho que sólo se añade.
+
+#### Lo que se hizo
+
+- **`folios_reservados`** (migración `20260822120000`). El folio es el `id`, así
+  que la clave de respaldo queda legible —`folios_reservados::AZUL7K-V-000004`—
+  y se puede dictar por teléfono.
+- **Append-only de verdad, por permisos y no por costumbre:** sólo `select` e
+  `insert`. Sin `update` nadie reescribe una reserva; sin `delete` nadie borra
+  la prueba de un folio que se imprimió. Una tabla que existe para que no falten
+  números no puede permitir que le quiten números.
+- **Sin columna `estado`.** Marcar una reserva como consumida sería un UPDATE, y
+  un UPDATE es justo lo que impide que el respaldo la reproduzca sin riesgo. Que
+  se consumió **se sabe mirando si existe una venta con ese folio**: dos hechos
+  y una consulta, en vez de un estado que sincronizar entre aparatos que a veces
+  no se hablan.
+- Entra en `TABLAS_RESPALDADAS`, y con eso el deduplicado, la adopción y la
+  reejecución funcionan solos: el mecanismo ya era genérico.
+- Se anota **sólo en la primera impresión**. Reimprimir reusa el folio —el
+  cliente ya tiene ese papel— y anotarlo otra vez sería anotar dos veces el
+  mismo hecho.
+
+#### Y la mitad que la hace útil
+
+`foliosSinVenta(reservas, ventas)` y una tarjeta en `Reportes → Corte de Caja`:
+**«Cuentas impresas sin cobrar»**, con folio, mesa, quién y de cuánto era.
+
+Va sin esto la tabla sería un registro que nadie lee, y de ésos ya hay
+demasiados en este proyecto: la pestaña de Impresoras que guardaba una lista
+muerta, `comprobante_url`, `total_divergente` calculándose para nadie durante
+meses.
+
+**No es una alarma, es una lista para mirar al cerrar.** Un hueco puede ser
+inocente: la mesa pidió la cuenta y se marchó. Lo que no puede pasar es que
+nadie sepa que existe.
+
+Se carga al abrir la pestaña y no en el arranque de la app: es un dato de
+cierre que la mayoría de los aparatos no mira nunca, y meterlo en el
+`Promise.all` del boot le cobraría el arranque a todo el mundo.
+
+**Pruebas:** 12 nuevas (`Folio.test.js`, `Respaldo.test.js`), incluida la que
+fija que **`mesas` NO se respalda** — para que la idea no vuelva a colarse.
 
 ### 6 · Dos recortes de la interfaz (Chris, 17-ago) — **HECHOS el 18-ago**
 

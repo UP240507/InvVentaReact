@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
@@ -33,6 +33,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { aISOLocal } from '../../lib/Fechas';
+import { foliosSinVenta } from '../../lib/Folio';
+import { supabase } from '../../api/supabase';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) =>
@@ -311,6 +313,37 @@ export default function ReportesScreen() {
       return f && f >= inicio && f <= fin;
     });
   }, [turnos, fechaInicio, fechaFin]);
+
+  // ── LOS FOLIOS QUE SE IMPRIMIERON Y NUNCA LLEGARON A VENTA ────────────────
+  // Se cargan aquí y NO en el arranque de la app a propósito: es un dato de
+  // cierre que la mayoría de los aparatos no va a mirar nunca, y meterlo en el
+  // `Promise.all` del boot le cobraría el arranque a todo el mundo por una
+  // pantalla que abre el dueño.
+  const [reservas, setReservas] = useState([]);
+  useEffect(() => {
+    if (tab !== 'zcut') return;
+    let vivo = true;
+    supabase
+      .from('folios_reservados')
+      .select('*')
+      .gte('reservado_en', `${fechaInicio}T00:00:00`)
+      .lte('reservado_en', `${fechaFin}T23:59:59`)
+      .order('reservado_en', { ascending: false })
+      .then(({ data }) => {
+        if (vivo) setReservas(data || []);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [tab, fechaInicio, fechaFin]);
+
+  // Un hueco puede ser inocente —la mesa pidió la cuenta y se fue sin pagar—,
+  // así que esto NO es una alarma: es una lista para mirar al cerrar. Lo que no
+  // puede pasar es que nadie sepa que existe.
+  const huecos = useMemo(
+    () => foliosSinVenta(reservas, ventas || []),
+    [reservas, ventas],
+  );
 
   // ── Z-Cut: ventas del turno seleccionado ────────────────────────────────────
   const ventasTurno = useMemo(() => {
@@ -689,6 +722,52 @@ export default function ReportesScreen() {
         )}
 
         {/* ══ CORTE Z ══ */}
+        {tab === 'zcut' && huecos.length > 0 && (
+          /* ── FOLIOS IMPRESOS QUE NUNCA LLEGARON A VENTA ──────────────────
+             Un hueco puede ser inocente: la mesa pidió la cuenta y se fue sin
+             pagar, o el aparato murió entre imprimir y cobrar. Por eso esto no
+             es una alarma sino una lista para mirar al cerrar. Lo que no puede
+             pasar es que nadie sepa que existe: el cliente tiene un papel con
+             un número, y hasta hoy ese número podía no corresponder a nada sin
+             que quedara rastro en ninguna parte. */
+          <div className="mb-6 bg-white dark:bg-adm-panel rounded-ui-lg border-2 border-adm-warn shadow-sm p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertTriangle className="w-5 h-5 text-adm-warn shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-[10px] font-black text-adm-warn uppercase tracking-widest">
+                  Cuentas impresas sin cobrar · {huecos.length}
+                </h3>
+                <p className="text-xs font-bold text-adm-muted mt-1 max-w-2xl">
+                  Se imprimió un papel con estos folios y no existe una venta
+                  que los lleve. Puede ser una mesa que se fue sin pagar, o un
+                  aparato que murió entre imprimir y cobrar. Cuadra cada uno
+                  antes de cerrar el periodo.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {huecos.map((h) => (
+                <div
+                  key={h.id}
+                  className="flex items-center justify-between gap-4 bg-adm-chip/40 dark:bg-adm-bg rounded-ui px-4 py-2.5 flex-wrap"
+                >
+                  <span className="font-mono font-black text-sm text-adm-ink">
+                    {h.id}
+                  </span>
+                  <span className="text-xs font-bold text-adm-muted">
+                    {h.mesa_nombre || 'Sin mesa'}
+                    {h.usuario ? ` · ${h.usuario}` : ''}
+                    {h.dispositivo ? ` · ${h.dispositivo}` : ''}
+                  </span>
+                  <span className="font-black text-sm text-adm-warn">
+                    {h.total_impreso == null ? '—' : fmt(h.total_impreso)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === 'zcut' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Lista de turnos */}
