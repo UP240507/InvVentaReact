@@ -483,6 +483,26 @@ lista y el clic no los cubre ninguna suite.
 
 ---
 
+## 9h · Merma plegada y vista previa del modificador — nuevo el 22-ago
+
+- [ ] `Recetas → Ingredientes`: donde estaba el campo de merma hay un
+      **«+ Merma»**. La fila se teclea sin pasar por él.
+- [ ] **El paso que importa:** poner una merma distinta de 0 y agregar el
+      ingrediente; al volver a un ingrediente con merma puesta, **el campo se
+      ve** aunque nadie lo haya desplegado. Un valor puesto no se esconde: la
+      merma cambia el costo del platillo.
+- [ ] `Catálogos → Modificadores → editar un grupo`: debajo de «En la caja se
+      verá así» hay **«Pruébalo»** con las opciones tocables.
+- [ ] Con **«Selección única»**, tocar dos opciones deja **una** marcada.
+      Con **«múltiple»**, deja **las dos**. Ésa es la distinción que hay que
+      poder ver sin leer nada.
+- [ ] Con **obligatorio** marcado y nada elegido, aparece el aviso de que el
+      cajero no podrá agregar el platillo. Al elegir una, desaparece.
+- [ ] Cerrar y abrir otro grupo: **la prueba está en blanco**, no con lo tocado
+      en el anterior.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6

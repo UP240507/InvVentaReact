@@ -70,6 +70,11 @@ export default function RecetasScreen() {
   const [busquedaInsumo, setBusquedaInsumo] = useState('');
   const [listaAbierta, setListaAbierta] = useState(false);
   const [resaltado, setResaltado] = useState(-1);
+  // ── LA MERMA, PLEGADA ─────────────────────────────────────────────────────
+  // Ocupaba sitio en cada fila aunque valiera 0, que es lo que vale casi
+  // siempre. Se despliega a petición… con una regla: nunca se pliega un valor
+  // distinto de cero (ver abajo).
+  const [mermaAbierta, setMermaAbierta] = useState(false);
   const [cantidadInsumo, setCantidadInsumo] = useState('');
   const [mermaInsumo, setMermaInsumo] = useState(0);
   // PAQUETES: selector de recetas componentes (combo fijo a precio de paquete).
@@ -499,6 +504,7 @@ export default function RecetasScreen() {
     setMermaInsumo(0);
     setBusquedaInsumo('');
     setResaltado(-1);
+    setMermaAbierta(false);
     // Y el foco vuelve al buscador: el siguiente ingrediente se empieza a
     // teclear sin tocar el ratón. Es lo que convierte «añadir uno» en «cargar
     // una receta».
@@ -1268,19 +1274,47 @@ export default function RecetasScreen() {
                             }}
                             className="w-24 bg-adm-ink dark:bg-adm-panel border border-adm-field font-black text-adm-bg rounded-ui text-center outline-none focus:border-adm-warn"
                           />
-                          <div className="bg-adm-ink dark:bg-adm-panel border border-adm-border rounded-ui flex items-center px-4 focus-within:border-adm-warn transition-colors">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={mermaInsumo}
-                              onChange={(e) => setMermaInsumo(e.target.value)}
-                              className="w-16 bg-transparent font-black text-adm-bg dark:text-adm-ink text-center pr-2 outline-none"
-                              placeholder="0"
-                            />
-                            <span className="text-[10px] font-black text-adm-muted">
-                              % Merma
-                            </span>
-                          </div>
+                          {/* ── LA MERMA SÓLO CUANDO HACE FALTA ──────────
+                              Vale 0 en casi todos los ingredientes y ocupaba
+                              sitio en todos. Plegada, la fila se teclea más
+                              rápido; y la cadena de teclado no la atraviesa,
+                              así que Enter en la cantidad sigue agregando.
+
+                              LA REGLA: si la merma NO es cero, el campo se
+                              queda visible aunque nadie lo haya desplegado.
+                              Plegar un valor puesto sería esconder un dato que
+                              cambia el costo del platillo, y eso se descubre
+                              mirando un margen que no cuadra — o sea tarde. */}
+                          {mermaAbierta || Number(mermaInsumo) > 0 ? (
+                            <div className="bg-adm-ink dark:bg-adm-panel border border-adm-border rounded-ui flex items-center px-4 focus-within:border-adm-warn transition-colors">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={mermaInsumo}
+                                onChange={(e) => setMermaInsumo(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key !== 'Enter') return;
+                                  e.preventDefault();
+                                  agregarIngrediente();
+                                }}
+                                className="w-16 bg-transparent font-black text-adm-bg dark:text-adm-ink text-center pr-2 outline-none"
+                                placeholder="0"
+                              />
+                              <span className="text-[10px] font-black text-adm-muted">
+                                % Merma
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setMermaAbierta(true)}
+                              title="Porcentaje que se pierde al limpiar o porcionar este insumo"
+                              className="px-4 rounded-ui border border-dashed border-adm-border text-[10px] font-black text-adm-muted uppercase tracking-wider hover:border-adm-warn hover:text-adm-warn transition-colors"
+                            >
+                              + Merma
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={agregarIngrediente}

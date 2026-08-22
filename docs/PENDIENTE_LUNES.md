@@ -700,6 +700,20 @@ el catálogo duele, no un estado estable.
 la pantalla —foco, lista, clic— no lo cubre ninguna suite y no se puede
 ejercitar sin entrar a la app. Va al checklist.
 
+### La merma, plegada — **HECHO**
+
+Ocupaba sitio en cada fila aunque valiera 0, que es lo que vale en casi todos
+los ingredientes. Ahora hay un «+ Merma» y el campo aparece a petición.
+
+**Con una regla, y es la de siempre en esta sesión:** si la merma **no** es
+cero, el campo se queda visible aunque nadie lo haya desplegado. Plegar un
+valor puesto sería esconder un dato que **cambia el costo del platillo**, y eso
+se descubre mirando un margen que no cuadra — o sea tarde. Es la misma decisión
+que en los gastos sin clasificar: un filtro puede resumir, no esconder.
+
+La cadena de teclado no la atraviesa, así que Enter en la cantidad sigue
+agregando sin pasar por la merma. Y si se despliega, Enter ahí también agrega.
+
 ### Y una decisión que sale de aquí, para Chris
 
 **`recetas.codigo_pos` no es único en la base.** Hoy no hay duplicados —se
@@ -1278,8 +1292,20 @@ causas que salieron al mirarla, **dos ya están arregladas**:
   `ModificadoresScreen` pinta un chip: «En N platillos» o **«Todavía sin
   usar»**, con una línea que dice dónde se ata. Dato que ya estaba en memoria;
   lo único que faltaba era enseñarlo.
-- **Vista previa de cómo se verá en el POS**, para el concepto grupo vs opción.
-  Enseñar en vez de explicar.
+- ✅ **HECHO el 22-ago — la vista previa, y se puede TOCAR.** «Grupo» y
+  «opción» son abstracciones, y la frase de `textoDeReglas` las describe pero
+  no las enseña. El bloque «Pruébalo · así lo toca el cajero» sí: pulsando dos
+  opciones se ve de una vez que «única» sustituye y «múltiple» acumula, que es
+  justo la distinción que más cuesta.
+
+  Usa **`alternar` y `seleccionCompleta`, las mismas funciones que el modal del
+  POS** — no es una imitación que se pueda desincronizar: si algún día cambia
+  la regla, cambia aquí sola. Mismo criterio que `textoDeReglas`.
+
+  Y el aviso de obligatorio se calcula con la función que apaga el botón
+  «Agregar» en la caja, así que **quien marca la casilla ve aquí el muro que
+  está creando**, en vez de descubrirlo un viernes por la noche.
+
 - **El panel de ayuda** que pidió Chris, para el recorrido de tres pantallas.
   Va el tercero a propósito: si los dos de arriba están hechos, el panel tiene
   mucho menos que explicar.

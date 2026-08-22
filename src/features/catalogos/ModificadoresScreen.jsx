@@ -10,7 +10,12 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { textoDeReglas, recetasQueUsan } from '../../lib/Modificadores';
+import {
+  textoDeReglas,
+  recetasQueUsan,
+  alternar,
+  seleccionCompleta,
+} from '../../lib/Modificadores';
 import {
   ListPlus,
   Plus,
@@ -42,6 +47,12 @@ export default function ModificadoresScreen() {
     opciones: [],
   });
 
+  // ── LA VISTA PREVIA ───────────────────────────────────────────────────────
+  // Lo que el cajero verá, aquí y ahora, tocable. Es la respuesta a lo que
+  // Chris señaló el 13-ago: «grupo» y «opción» son abstracciones y explicarlas
+  // con palabras no funciona — se entienden tocándolas una vez.
+  const [seleccionPrueba, setSeleccionPrueba] = useState({});
+
   const [opcionNombre, setOpcionNombre] = useState('');
   const [opcionPrecio, setOpcionPrecio] = useState(0);
   const [opcionProductoId, setOpcionProductoId] = useState('');
@@ -71,6 +82,11 @@ export default function ModificadoresScreen() {
       });
     }
     limpiarInputsOpcion();
+    // La prueba arranca en blanco cada vez. Heredar lo tocado en el grupo
+    // anterior enseñaría opciones marcadas que no son de éste, y la vista
+    // previa dejaría de mostrar lo que el cajero verá — que es su único
+    // trabajo.
+    setSeleccionPrueba({});
     setIsModalOpen(true);
   };
 
@@ -476,6 +492,81 @@ export default function ModificadoresScreen() {
                     <p className="text-sm font-bold text-adm-ink">
                       {textoDeReglas(formData)}
                     </p>
+                  </div>
+
+                  {/* ── Y AQUÍ SE PUEDE TOCAR ────────────────────────────────
+                      «Grupo» y «opción» son abstracciones, y la frase de
+                      arriba las describe pero no las enseña. Esto sí: pulsando
+                      dos opciones se ve de una vez que «única» sustituye y
+                      «múltiple» acumula, que es justo la distinción que Chris
+                      señaló como la que más cuesta (13-ago).
+
+                      Usa `alternar` y `seleccionCompleta`, LAS MISMAS
+                      funciones que el modal del punto de venta. No es una
+                      imitación que se pueda desincronizar: si algún día
+                      cambia la regla, cambia aquí sola. Mismo criterio que
+                      `textoDeReglas` arriba. */}
+                  <div className="mt-3 p-3 rounded-ui border-2 border-dashed border-adm-border">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-adm-muted mb-2">
+                      Pruébalo · así lo toca el cajero
+                    </p>
+                    {(formData.opciones || []).length === 0 ? (
+                      <p className="text-xs font-bold text-adm-muted">
+                        Agrega opciones abajo y aparecerán aquí.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(formData.opciones || []).map((op) => {
+                            const marcadas = (
+                              seleccionPrueba[String(formData.id ?? 'nuevo')] ||
+                              []
+                            ).map(String);
+                            const activa = marcadas.includes(
+                              String(op.id_opcion),
+                            );
+                            return (
+                              <button
+                                key={op.id_opcion}
+                                type="button"
+                                onClick={() =>
+                                  setSeleccionPrueba((prev) =>
+                                    alternar(
+                                      {
+                                        ...formData,
+                                        id: formData.id ?? 'nuevo',
+                                      },
+                                      prev,
+                                      op.id_opcion,
+                                    ),
+                                  )
+                                }
+                                className={`px-3 py-2 rounded-ui font-black text-xs border-2 text-left transition-all active:scale-95 ${
+                                  activa
+                                    ? 'border-adm-info bg-adm-info/10 text-adm-info'
+                                    : 'border-adm-border bg-adm-bg text-adm-muted'
+                                }`}
+                              >
+                                {op.nombre}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* El aviso de obligatorio se calcula con la misma
+                            función que apaga el botón «Agregar» en el POS.
+                            Así, quien marca la casilla ve AQUÍ el muro que
+                            está creando, en vez de descubrirlo un viernes. */}
+                        {!seleccionCompleta(
+                          [{ ...formData, id: formData.id ?? 'nuevo' }],
+                          seleccionPrueba,
+                        ) && (
+                          <p className="text-[11px] font-bold text-adm-warn mt-2">
+                            Sin elegir aquí, el cajero no puede agregar el
+                            platillo.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
