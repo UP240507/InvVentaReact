@@ -33,13 +33,23 @@ export default defineConfig({
     timeout: 120_000, // build + preview
   },
   projects: [
+    // ── La puerta de publicar ────────────────────────────────────────────
+    // SIN `dependencies` y sin sesión a propósito: no inicia sesión, no
+    // escribe una fila y no depende del estado del turno. Es el único
+    // proyecto que puede correr en cada publicación sin ensuciar el tenant de
+    // AZUL — ver la cabecera de `e2e/humo.spec.js`.
+    {
+      name: 'humo',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /humo\.spec\.js/,
+    },
     // Logins UI una vez por rol → e2e/.auth/{cajero,mesero}.json
     { name: 'setup', testMatch: /auth\.setup\.js/ },
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup'],
-      testIgnore: /render\.spec\.js/,
+      testIgnore: /(render|humo)\.spec\.js/,
     },
     // Requisito de renderizado: tablet landscape y portrait, SOLO smoke visual.
     {

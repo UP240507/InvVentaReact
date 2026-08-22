@@ -879,13 +879,74 @@ distancia—. Eso ningún viewport lo contesta. Pero es un juicio distinto de
 «esto está roto», y eso último ya está demostrado y se puede corregir sin
 esperar a conseguir nada.
 
-### 3.3 · Y lo que hay que decidir
+### 3.3 · Las E2E — **RESUELTO el 22-ago, pero no como se planteó**
 
-Unas E2E que nadie corre no son una red de seguridad: son una foto vieja que da
-sensación de cobertura. O entran en el ritual —junto a `cargo test` y
-`test:rapido`— o hay que asumir en voz alta que no cuentan.
+**Decisión de Chris:** entran en el guion de publicar, no en cada commit. Piden
+tenant y navegador, así que en cada commit serían fricción constante; antes de
+`npm run publicar` es donde de verdad protegen, porque es el momento en que un
+fallo llega al local.
 
----
+#### Al ir a montarlo salió algo que cambia la forma de la solución
+
+**`flujo-pos.spec.js` y `realtime-turnos.spec.js` mutan el tenant de AZUL EN
+VIVO.** Abren turnos, cobran ventas, mueven inventario — está dicho en
+`playwright.config.ts`, y es la razón de `workers: 1`.
+
+Meterlos en el guion de publicar significaría **meter ventas falsas en los
+libros del cliente cada vez que se sube una versión**. Ensuciaría el corte Z,
+los folios sin venta y el ticket promedio: justo los reportes que existen para
+que el dueño confíe en sus números. **Una puerta de calidad que corrompe los
+datos de producción no es una puerta de calidad.**
+
+Y `render.spec.js` tampoco sirve de puerta: su snapshot da 27 % de píxeles
+distintos sin explicar (§3.2). Bloquearía toda publicación por un fallo que ni
+siquiera se reproduce en banco.
+
+#### Lo que sí puede ser una puerta hoy: `e2e/humo.spec.js`
+
+**No toca la base.** No inicia sesión, no escribe una fila, no depende del
+estado del turno. Compila, sirve el build y comprueba las tres cosas que se
+rompen al publicar y no se notan hasta que el cliente abre la caja:
+
+1. **Que el bundle arranca y pinta.** Una pantalla en blanco es el desenlace de
+   un import roto o de un chunk que no subió, y ninguna prueba unitaria lo ve.
+2. **Que la CSP no bloquea nada.** Desde el 22-ago la caja lleva política y no
+   hay devtools en release: un bloqueo deja la pantalla a medias sin decir por
+   qué.
+3. **Que no hay excepciones en el arranque.**
+
+**El detalle que casi lo convierte en teatro:** `npm run preview` sirve el build
+**sin** cabecera de seguridad —la política vive en `tauri.conf.json` y sólo la
+aplica la ventana de Tauri—, así que mirar violaciones sobre el preview a secas
+habría sido una comprobación **que no puede fallar nunca**. Se detectó al
+montarlo. Ahora el test **lee la política del propio `tauri.conf.json` y la
+inyecta** en cada respuesta: leerla del archivo en vez de copiarla es lo que
+impide que las dos diverjan.
+
+#### Verificado en los dos sentidos
+
+- Contra el build real: **pasa**.
+- Con `font-src 'none'` metido a mano en la política: **falla**, y nombra las
+  ocho woff2 una a una.
+
+Un banco que no puede fallar no prueba nada, y éste falla cuando debe.
+
+#### La escotilla, y por qué es explícita
+
+`npm run publicar -- --sin-humo "la nota"`. Imprime un aviso llamativo y sigue.
+Existe para la noche en que haya que publicar con el entorno roto, y es una
+bandera y no un silencio a propósito: saltarse la puerta tiene que ser una
+decisión que alguien toma, no algo que ocurre.
+
+La bandera se saca de los argumentos **antes** de armar la nota, o acabaría
+impresa en el aviso que lee el dueño del restaurante.
+
+#### Lo que sigue pendiente
+
+**Un tenant de pruebas desechable.** Es la salida real para las E2E de flujo:
+mientras no exista, siguen siendo manuales y hay que correrlas sabiendo lo que
+escriben. Con él, `flujo-pos` y `realtime-turnos` podrían entrar también a la
+puerta.
 
 ## 4 · Lo fiscal de los gastos — notas, NO decidido
 

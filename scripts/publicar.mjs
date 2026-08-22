@@ -88,7 +88,14 @@ function correr(cmd, args) {
 // ── 0 · La nota, antes que nada ────────────────────────────────────────────
 // Se valida aquí y no después de comprobar diez cosas: si falta, que lo diga
 // en el primer segundo y no en el décimo.
-const nota = process.argv.slice(2).join(' ').trim();
+const argumentos = process.argv.slice(2);
+// La bandera se saca ANTES de armar la nota, o acabaría impresa en el aviso
+// que lee el dueño del restaurante.
+const sinHumo = argumentos.includes('--sin-humo');
+const nota = argumentos
+  .filter((a) => a !== '--sin-humo')
+  .join(' ')
+  .trim();
 if (!nota) {
   morir(
     'Falta la nota de la versión.',
@@ -221,6 +228,51 @@ if (correr('gh', ['release', 'view', etiqueta, '--repo', REPO]).ok) {
     'Sube el número y vuelve a compilar:',
     '  npm run version -- patch',
   );
+}
+
+// ── 4.5 · La prueba de humo, contra el build que se va a subir ─────────────
+// Decisión de Chris (22-ago): las E2E entran en el guion de publicar, no en
+// cada commit.
+//
+// Lo que entra aquí es SÓLO `e2e/humo.spec.js`, y la razón importa: los otros
+// specs —`flujo-pos`, `realtime-turnos`— **mutan el tenant de AZUL en vivo**.
+// Meterlos aquí sería meter ventas falsas en los libros del cliente cada vez
+// que se sube una versión, ensuciando el corte Z y el ticket promedio. Una
+// puerta de calidad que corrompe datos de producción no es una puerta.
+// `render.spec` tampoco: su snapshot da 27 % de píxeles distintos sin explicar
+// (§3.2), y bloquearía toda publicación por un fallo que ni se reproduce.
+//
+// El humo no toca la base: compila, sirve el build, lo abre con la MISMA
+// política de seguridad que lleva la caja y comprueba que arranca, que pinta y
+// que la CSP no bloquea nada. Es exactamente lo que se rompe al publicar y no
+// se nota hasta que el cliente abre la aplicación.
+//
+// Va ANTES de generar el `latest.json`: si falla, no queda nada a medias.
+if (sinHumo) {
+  console.warn('\n⚠  Publicando SIN la prueba de humo (--sin-humo).');
+  console.warn(
+    '   Nadie ha comprobado que este build arranque ni que la CSP lo deje.\n',
+  );
+} else {
+  console.log('\nPrueba de humo (compila y abre el build)…');
+  const humo = spawnSync(bin('npx'), ['playwright', 'test', '--project=humo'], {
+    cwd: RAIZ,
+    stdio: 'inherit',
+  });
+  if (humo.status !== 0) {
+    morir(
+      'La prueba de humo falló. El release NO se ha publicado.',
+      'Este build o no arranca, o la política de seguridad le bloquea algo.',
+      'Las dos cosas dejan la caja del cliente a medias sin dar un error',
+      'visible, que es justo lo que esta puerta existe para evitar.',
+      '',
+      'Para verlo con detalle:',
+      '  npm run e2e:humo',
+      '',
+      'Y si de verdad hace falta publicar sin ella:',
+      '  npm run publicar -- --sin-humo "la nota"',
+    );
+  }
 }
 
 // ── 5 · Regenerar el `latest.json` AHORA ───────────────────────────────────

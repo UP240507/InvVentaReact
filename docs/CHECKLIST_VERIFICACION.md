@@ -480,8 +480,12 @@ El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
 
 - **El pulso del cajón.** El de AZUL está averiado y sólo abre con llave. Hasta
   que se repare o se pruebe en otro cajón.
-- **Las E2E.** `flujo-pos.spec.js` quedó con el regex del folio al día el
-  18-ago, pero **no se ha corrido**: piden tenant y navegador. Y sigue en pie lo
+- **Las E2E de flujo.** `flujo-pos.spec.js` quedó con el regex del folio al día
+  el 18-ago, pero **no se ha corrido**: piden tenant y navegador, y sobre todo
+  **escriben en el tenant de AZUL en vivo** (turnos, ventas, movimientos). Por
+  eso NO entraron en el guion de publicar: la puerta es `e2e/humo.spec.js`, que
+  no toca la base. Correrlas a mano sigue siendo válido — sabiendo lo que
+  escriben. La salida real es un tenant desechable. Y sigue en pie lo
   del §3.3 del lunes: unas E2E que nadie corre no son una red de seguridad, son
   una foto vieja que da sensación de cobertura. O entran en el ritual o se dice
   en voz alta que no cuentan.

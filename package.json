@@ -14,6 +14,7 @@
     "test:ui": "vitest --ui",
     "test:cov": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:humo": "playwright test --project=humo",
     "e2e:ui": "playwright test --ui",
     "contraste": "node scripts/verificar-contraste.mjs",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"scripts/**/*.mjs\"",
