@@ -10,6 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   siguienteFolio,
+  reservaDeFolio,
+  foliosSinVenta,
   siguienteConsecutivo,
   prefijoDispositivo,
   letrasDelLocal,
@@ -312,5 +314,129 @@ describe('prefijo acuñado sin nombre del local', () => {
     expect(uno).toMatch(/-V-000001$/);
     expect(dos).toMatch(/^AZUL/);
     expect(dos).toMatch(/-V-000002$/);
+  });
+});
+
+// ─── La reserva ──────────────────────────────────────────────────────────────
+// El folio se acuña al imprimir la cuenta, antes de que exista la venta. Hasta
+// el 22-ago esa reserva vivía sólo en el aparato: si moría entre imprimir y
+// cobrar, el cliente se quedaba con un papel citando un número que ninguna
+// venta iba a llevar. Medido en AZUL el 17-ago.
+
+describe('reservaDeFolio — el hecho que sobrevive al aparato', () => {
+  const datos = {
+    mesaId: 'm-4',
+    mesaNombre: 'Mesa 4',
+    dispositivo: 'iPhone de Ana',
+    usuario: 'Ana',
+    total: 940.5,
+    fecha: '2026-08-22T20:05:00.000Z',
+  };
+
+  it('el folio ES el id', () => {
+    // Ya es único por construcción, y así la clave de respaldo del hub queda
+    // legible: `folios_reservados::AZUL7K-V-000004` se dicta por teléfono, un
+    // uuid no.
+    expect(reservaDeFolio('AZUL7K-V-000004', datos).id).toBe('AZUL7K-V-000004');
+  });
+
+  it('la serie sale del propio folio, no de un parámetro', () => {
+    // Para que no puedan discrepar. Un parámetro aparte es una segunda fuente
+    // de verdad esperando a desincronizarse.
+    expect(reservaDeFolio('AZUL7K-V-000004').serie).toBe('V');
+    expect(reservaDeFolio('AZUL7K-C-000012').serie).toBe('C');
+  });
+
+  it('un folio con forma rara cae a la serie de ventas', () => {
+    expect(reservaDeFolio('SUELTO').serie).toBe(SERIE_VENTA);
+  });
+
+  it('lleva de quién y de qué mesa era', () => {
+    const r = reservaDeFolio('AZUL7K-V-000004', datos);
+    expect(r.mesa_id).toBe('m-4');
+    expect(r.mesa_nombre).toBe('Mesa 4');
+    expect(r.dispositivo).toBe('iPhone de Ana');
+    expect(r.usuario).toBe('Ana');
+    expect(r.total_impreso).toBe(940.5);
+    expect(r.reservado_en).toBe('2026-08-22T20:05:00.000Z');
+  });
+
+  it('sin total, `null` y NO cero', () => {
+    // Un cero afirma que la cuenta era de cero. Aquí no se sabe, y decir que
+    // se sabe es peor que callar.
+    expect(reservaDeFolio('AZUL7K-V-000004', {}).total_impreso).toBeNull();
+    expect(
+      reservaDeFolio('AZUL7K-V-000004', { total: 'x' }).total_impreso,
+    ).toBeNull();
+    // Pero un cero de verdad sí pasa.
+    expect(reservaDeFolio('AZUL7K-V-000004', { total: 0 }).total_impreso).toBe(
+      0,
+    );
+  });
+
+  it('los campos vacíos entran como null, no como cadena vacía', () => {
+    const r = reservaDeFolio('AZUL7K-V-000004', { mesaId: '   ', usuario: '' });
+    expect(r.mesa_id).toBeNull();
+    expect(r.usuario).toBeNull();
+  });
+
+  it('sin folio no hay reserva', () => {
+    expect(reservaDeFolio('')).toBeNull();
+    expect(reservaDeFolio(null)).toBeNull();
+    expect(reservaDeFolio('   ')).toBeNull();
+  });
+
+  it('NO lleva estado ni consumido', () => {
+    // Marcar una reserva como consumida sería un UPDATE, y un UPDATE es lo que
+    // impide que el respaldo la reproduzca sin riesgo. Que se consumió se sabe
+    // mirando si hay una venta con ese folio.
+    const r = reservaDeFolio('AZUL7K-V-000004', datos);
+    expect(r).not.toHaveProperty('estado');
+    expect(r).not.toHaveProperty('consumido');
+  });
+});
+
+describe('foliosSinVenta — los huecos, con nombre', () => {
+  const reservas = [
+    { id: 'AZUL7K-V-000004' },
+    { id: 'AZUL7K-V-000005' },
+    { id: 'AZULHN-V-000001' },
+  ];
+
+  it('deja fuera los que sí llegaron a venta', () => {
+    const huecos = foliosSinVenta(reservas, [
+      { folio: 'AZUL7K-V-000005' },
+      { folio: 'AZULHN-V-000001' },
+    ]);
+    expect(huecos.map((h) => h.id)).toEqual(['AZUL7K-V-000004']);
+  });
+
+  it('un espacio de más no inventa un hueco', () => {
+    // El folio pasa por la cola, por el NDJSON del hub y por Postgres. Basta un
+    // espacio para que dos cadenas iguales dejen de serlo, y el síntoma sería
+    // mandar a alguien a buscar un problema que no existe.
+    expect(
+      foliosSinVenta(
+        [{ id: ' AZUL7K-V-000004 ' }],
+        [{ folio: 'AZUL7K-V-000004' }],
+      ),
+    ).toEqual([]);
+  });
+
+  it('ventas sin folio no tapan ningún hueco', () => {
+    // Una venta con folio vacío no consume nada. Si contara, un solo registro
+    // corrupto haría desaparecer todos los huecos de golpe.
+    expect(
+      foliosSinVenta(
+        [{ id: 'AZUL7K-V-000004' }],
+        [{ folio: '' }, { folio: null }, {}],
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('sin reservas no hay huecos, y aguanta basura', () => {
+    expect(foliosSinVenta([], [{ folio: 'X' }])).toEqual([]);
+    expect(foliosSinVenta(null, null)).toEqual([]);
+    expect(foliosSinVenta(undefined, undefined)).toEqual([]);
   });
 });

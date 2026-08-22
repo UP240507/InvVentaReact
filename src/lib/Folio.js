@@ -286,3 +286,88 @@ export function sinPersistencia({ almacen = almacenLocal } = {}) {
   if (!almacen.escribir(sonda, '1')) return true;
   return almacen.leer(sonda) !== '1';
 }
+
+// ─── LA RESERVA, QUE TIENE QUE SOBREVIVIR AL APARATO ─────────────────────────
+
+/**
+ * La fila de `folios_reservados` que acompaña a un folio recién acuñado.
+ *
+ * ── POR QUÉ EXISTE ─────────────────────────────────────────────────────────
+ * El folio se acuña al imprimir la cuenta, antes de que la venta exista —tiene
+ * que ser así, el papel lleva número—. Hasta hoy esa reserva vivía sólo en
+ * `mesa.orden_actual`, en el almacenamiento del aparato. Medido en AZUL el
+ * 17-ago: si el aparato muere entre imprimir y cobrar, la reserva muere con él
+ * y el cliente se queda con un papel citando un número que ninguna venta va a
+ * llevar. No es sólo un hueco en la serie: es **un documento en la calle que
+ * no corresponde a nada.**
+ *
+ * Con la reserva en su propia tabla —respaldada como las ventas— el hecho
+ * sobrevive al aparato, y la conciliación deja de ser adivinanza.
+ *
+ * ── POR QUÉ EL FOLIO ES EL `id` ────────────────────────────────────────────
+ * Porque ya es único por construcción (prefijo de dispositivo + consecutivo) y
+ * porque hace legible la clave de respaldo del hub:
+ * `folios_reservados::AZUL7K-V-000004`. Cuando haya que diagnosticar algo por
+ * teléfono, eso se dicta; un uuid no.
+ *
+ * ── LO QUE NO LLEVA, Y ES DELIBERADO ───────────────────────────────────────
+ * No hay `estado` ni `consumido`. Marcar una reserva como consumida sería un
+ * UPDATE, y un UPDATE es justo lo que impide que el respaldo la reproduzca sin
+ * riesgo. Que se haya consumido se sabe mirando si existe una venta con ese
+ * folio — ver `foliosSinVenta`.
+ */
+export function reservaDeFolio(folio, datos = {}) {
+  const texto = String(folio || '').trim();
+  if (!texto) return null;
+
+  const limpio = (v) => {
+    const s = v == null ? '' : String(v).trim();
+    return s === '' ? null : s;
+  };
+
+  const total = Number(datos.total);
+
+  return {
+    id: texto,
+    // La serie sale del propio folio (`PREFIJO-V-000123`), no de un parámetro,
+    // para que no puedan discrepar. Si el folio no tiene la forma esperada se
+    // cae a 'V', que es la serie del documento que importa.
+    serie: texto.split('-')[1] || SERIE_VENTA,
+    mesa_id: limpio(datos.mesaId),
+    mesa_nombre: limpio(datos.mesaNombre),
+    dispositivo: limpio(datos.dispositivo),
+    usuario: limpio(datos.usuario),
+    // `null` y no 0 si no hay total: un cero diría «la cuenta era de cero»,
+    // que es una afirmación, y aquí no se sabe.
+    total_impreso: Number.isFinite(total) ? total : null,
+    reservado_en: datos.fecha || new Date().toISOString(),
+  };
+}
+
+/**
+ * Reservas que nunca llegaron a ser una venta — los huecos, con nombre.
+ *
+ * Es la mitad que hace útil a la tabla. Sin esto sería un registro que nadie
+ * lee, y este proyecto ya tiene demasiados de ésos: la pestaña de Impresoras
+ * que guardaba una lista muerta, `comprobante_url`, `total_divergente`
+ * calculándose para nadie durante meses.
+ *
+ * Un hueco puede ser inocente —la mesa pidió la cuenta y se marchó sin
+ * pagar—, y por eso esto NO es una alarma: es una lista para mirar al cerrar.
+ * Lo que no puede pasar es que nadie sepa que existe.
+ *
+ * La comparación va por texto y recortada: el folio viaja por la cola, por el
+ * NDJSON del hub y por Postgres, y basta un espacio para que dos cadenas
+ * iguales dejen de serlo — y el síntoma sería un hueco fantasma, que manda a
+ * buscar un problema que no existe.
+ */
+export function foliosSinVenta(reservas = [], ventas = []) {
+  const emitidos = new Set(
+    (Array.isArray(ventas) ? ventas : [])
+      .map((v) => String(v?.folio ?? '').trim())
+      .filter(Boolean),
+  );
+  return (Array.isArray(reservas) ? reservas : []).filter(
+    (r) => !emitidos.has(String(r?.id ?? '').trim()),
+  );
+}

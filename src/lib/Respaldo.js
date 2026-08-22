@@ -47,6 +47,22 @@ export const TABLAS_RESPALDADAS = [
   // descubre nunca, y el hueco aparece exactamente donde alguien que quisiera
   // esconder algo lo dejaría.
   'auditoria',
+  // ── FOLIOS RESERVADOS, DESDE EL 22-AGO ──────────────────────────────────
+  // El folio se acuña al imprimir la cuenta, antes de que la venta exista, y
+  // hasta hoy esa reserva vivía sólo en `mesa.orden_actual`, o sea en el
+  // aparato. Medido en AZUL el 17-ago: si el aparato muere entre imprimir y
+  // cobrar, el cliente se queda con un papel citando un número que ninguna
+  // venta va a llevar. No es sólo un hueco en la serie —eso ya sería malo— es
+  // un documento en la calle que no corresponde a nada.
+  //
+  // Entra aquí y NO entra `mesas`, aunque el plan del lunes decía lo
+  // contrario. La diferencia es la que sostiene toda esta lista: estas tablas
+  // son hechos que sólo se añaden, y reproducirlos desde un aparato muerto no
+  // puede deshacer nada. `mesas` es estado mutable y compartido: adoptar la
+  // mesa de un teléfono que murió a las 20:05 puede RESUCITAR una mesa que
+  // otro cerró a las 20:20. Sería cambiar un fallo por uno peor, y de los que
+  // no dan error. Una reserva, en cambio, sí es un hecho que sólo se añade.
+  'folios_reservados',
 ];
 
 /**

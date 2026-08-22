@@ -224,13 +224,41 @@ describe('las listas no se editan sin querer', () => {
   // `auditoria` entró el 17-ago, y sólo después de que su id dejara de ser
   // `Date.now()` —que todos los aparatos comparten— y pasara a `SERIE_AUDITORIA`.
   // El orden de esos dos cambios no es negociable.
-  it('las tablas respaldadas son exactamente estas cuatro', () => {
+  it('las tablas respaldadas son exactamente estas cinco', () => {
     expect(TABLAS_RESPALDADAS).toEqual([
       'ventas',
       'comandas',
       'movimientos',
       'auditoria',
+      'folios_reservados',
     ]);
+  });
+
+  // ── Y LA QUE NO ESTÁ, QUE ES LA QUE MÁS IMPORTA ─────────────────────────
+  // El plan del lunes decía meter `mesas` para salvar la reserva del folio.
+  // Está mal, y esta prueba existe para que no vuelva a colarse: todas las de
+  // arriba son hechos que sólo se AÑADEN, y reproducirlos desde un aparato
+  // muerto no puede deshacer nada. `mesas` es estado mutable y compartido —
+  // adoptar la mesa de un teléfono que murió a las 20:05 puede resucitar una
+  // que otro cerró a las 20:20. Lo que se respalda es la RESERVA, que sí es un
+  // hecho que sólo se añade.
+  it('mesas NO se respalda: es estado mutable, no un hecho', () => {
+    expect(TABLAS_RESPALDADAS).not.toContain('mesas');
+    expect(
+      claveDeRespaldo({ tabla: 'mesas', metodo: 'upsert', data: { id: 4 } }),
+    ).toBeNull();
+  });
+
+  // El folio ES el id, y por eso la clave del hub se puede dictar por
+  // teléfono cuando haya que diagnosticar algo.
+  it('la reserva de folio se respalda con el folio como clave', () => {
+    expect(
+      claveDeRespaldo({
+        tabla: 'folios_reservados',
+        metodo: 'insert',
+        data: { id: 'AZUL7K-V-000004' },
+      }),
+    ).toBe('folios_reservados::AZUL7K-V-000004');
   });
 
   // Lo que se protege con esto: una venta huérfana se acaba descubriendo al

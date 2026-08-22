@@ -50,6 +50,7 @@ import {
   enviarPreCuenta,
   abrirCajon,
   salioPapel,
+  nombreDeEsteDispositivo,
 } from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
 import {
@@ -64,7 +65,12 @@ import {
   repartirPorNota,
 } from '../../lib/Modificadores';
 import { buscarAutorizador, sesionAutoriza } from '../../lib/Autorizacion';
-import { siguienteFolio, SERIE_VENTA, SERIE_COMANDA } from '../../lib/Folio';
+import {
+  siguienteFolio,
+  reservaDeFolio,
+  SERIE_VENTA,
+  SERIE_COMANDA,
+} from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
 import { useAtajos } from '../../hooks/useAtajos';
 import {
@@ -928,13 +934,19 @@ export default function PosScreen() {
     const flujo = configuracion?.flujo_cuenta || 'precuenta_y_ticket';
     const esTicketFinal = flujo === 'ticket_final';
 
+    // ── EL FOLIO, Y SI ES NUEVO O REUSADO ──────────────────────────────────
+    // Reabrir o reimprimir NO cambia el número: el cliente ya tiene ese papel
+    // en la mano. Sólo la primera vez se acuña, y esa distinción es la que
+    // decide si hay que anotar una reserva nueva o no.
+    const folioPrevio = mesaActual?.orden_actual?.folio || null;
     const folioCuenta = esTicketFinal
-      ? mesaActual?.orden_actual?.folio ||
+      ? folioPrevio ||
         siguienteFolio({
           serie: SERIE_VENTA,
           nombreLocal: configuracion?.nombre_empresa,
         })
       : null;
+    const folioReciénAcuñado = esTicketFinal && !folioPrevio && !!folioCuenta;
 
     // ── POR QUÉ SE CUENTAN LAS IMPRESIONES ──────────────────────────────────
     // El id del documento sale del folio, y el folio NO cambia al reabrir —eso
@@ -978,6 +990,36 @@ export default function PosScreen() {
         m.id === mesaActual.id ? mesaActualizada : m,
       ),
     }));
+
+    // ── LA RESERVA DEL FOLIO, QUE TIENE QUE SOBREVIVIR A ESTE APARATO ──────
+    // Hasta el 22-ago el número reservado vivía SÓLO en `mesa.orden_actual`,
+    // o sea en el almacenamiento de este teléfono. Si el teléfono muere entre
+    // imprimir y cobrar, la reserva muere con él: el cliente se queda con un
+    // papel citando un número que ninguna venta va a llevar. Pasó en AZUL el
+    // 17-ago, y no es sólo un hueco en la serie —eso ya sería malo— es un
+    // documento en la calle que no corresponde a nada.
+    //
+    // `folios_reservados` está en `TABLAS_RESPALDADAS`, así que esta línea es
+    // todo lo que hace falta: la cola la manda a Supabase y el hub se queda
+    // con su copia. Al adoptar un aparato caído, la reserva vuelve.
+    //
+    // Sólo en la PRIMERA impresión. Reimprimir reusa el mismo folio —el
+    // cliente ya tiene ese papel— y anotar la reserva otra vez sería anotar
+    // dos veces el mismo hecho.
+    if (folioReciénAcuñado) {
+      const reserva = reservaDeFolio(folioCuenta, {
+        mesaId: mesaActual?.id,
+        mesaNombre: mesaActual?.nombre,
+        dispositivo: nombreDeEsteDispositivo(),
+        usuario: user?.nombre ?? 'Mesero',
+        total: granTotal,
+      });
+      if (reserva)
+        enqueueAction('folios_reservados', 'insert', {
+          ...reserva,
+          restaurante_id: useAuthStore.getState().restauranteId, // RLS
+        });
+    }
 
     // ── EL PAPEL PARA LA MESA ────────────────────────────────────────────
     // Hasta ahora «Pedir Cuenta» sólo cambiaba el estado y avisaba a caja: el
