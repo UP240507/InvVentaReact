@@ -39,7 +39,6 @@ import {
   Select,
   Chip,
   EmptyState,
-  ConfirmModal,
 } from '../../components/ui';
 import { useAppStore } from '../../store/useAppStore';
 import { documentoDePrueba } from '../../lib/Comanda';
@@ -59,8 +58,6 @@ import {
   ANCHO_80,
   listarDispositivos,
   revocarDispositivo,
-  resumenDeRevocacion,
-  revocarTodos,
   enlacePairing,
   enTauri,
   respaldoPendiente,
@@ -73,6 +70,7 @@ import {
   versionInstalada,
 } from '../../lib/Actualizacion';
 import { generar, aSvg } from '../../lib/QR';
+import { bloqueosCsp, limpiarBloqueosCsp } from '../../lib/AvisosCsp';
 
 /**
  * Estado + detalle de la cola en una sola lectura.
@@ -109,6 +107,13 @@ function hace(ms) {
 }
 
 export default function HubScreen() {
+  // ── LOS BLOQUEOS DE SEGURIDAD, DONDE ALGUIEN PUEDA LEERLOS ────────────────
+  // Desde el 22-ago la caja lleva CSP, y un CSP mal puesto no da un error
+  // legible: deja la pantalla a medias. En release no hay consola donde
+  // mirarlo, así que este es el sitio. Se lee una vez al montar y no en vivo
+  // a propósito: los bloqueos que importan ocurren en el arranque, y una lista
+  // que cambia sola mientras se lee es más difícil de dictar por teléfono.
+  const [bloqueos, setBloqueos] = useState(() => bloqueosCsp());
   const { configuracion, showToast } = useAppStore();
 
   const [info, setInfo] = useState(null);
@@ -306,52 +311,6 @@ export default function HubScreen() {
     } else {
       showToast(r.error, 'error');
     }
-  };
-
-  // ── REVOCAR TODOS AL CERRAR TURNO ────────────────────────────────────────
-  // `null` = sin diálogo. Un objeto = el resumen que se pidió al hub y que la
-  // confirmación va a leer en voz alta.
-  //
-  // Se pregunta ANTES de abrir el diálogo, y no se abre con números inventados
-  // ni con un «cargando…»: el dato es justamente lo que hace que la
-  // confirmación sirva de algo. Sin él, esto es un «¿seguro?» más de los que se
-  // pulsan sin leer.
-  const [confirmarRevocarTodos, setConfirmarRevocarTodos] = useState(null);
-
-  const pedirRevocarTodos = async () => {
-    const r = await resumenDeRevocacion();
-    if (!r.ok) return showToast(r.error, 'error');
-    if (!r.dispositivos) {
-      return showToast('No hay dispositivos emparejados.', 'info');
-    }
-    setConfirmarRevocarTodos(r);
-  };
-
-  const ejecutarRevocarTodos = async () => {
-    const habiaPendientes = confirmarRevocarTodos?.ventas_pendientes || 0;
-    setConfirmarRevocarTodos(null);
-
-    const r = await revocarTodos();
-    if (!r.ok) return showToast(r.error, 'error');
-
-    showToast(
-      `${r.revocados} dispositivo${r.revocados === 1 ? '' : 's'} fuera. Tendrán que volver a escanear el QR.`,
-      'success',
-    );
-    refrescar();
-
-    // ── DRENAR JUSTO DESPUÉS, Y NO ANTES ──────────────────────────────────
-    // Revocar saca al aparato de la ventana de «vivo», así que sus ventas sin
-    // confirmar pasan a «Por adoptar» EN ESTE MOMENTO, sin esperar los 15
-    // minutos. Si se revoca y no se drena, se quedan en el disco de la caja
-    // esperando a un aparato que ya no va a volver: no se pierden —el respaldo
-    // las tiene— pero nadie va a ir a buscarlas.
-    //
-    // Se hace solo y no se ofrece con otro botón porque el que acaba de
-    // confirmar ya leyó cuántas ventas había: pedirle una segunda pulsación
-    // para lo que es la mitad de la operación es cómo se queda a medias.
-    await refrescarRespaldo();
-    if (habiaPendientes > 0) await ejecutarDrenaje();
   };
 
   const alPrevisualizar = async () => {
@@ -601,34 +560,6 @@ export default function HubScreen() {
               Revocar uno lo deja sin imprimir de inmediato, sin tocar a los
               demás ni reiniciar la caja.
             </p>
-
-            {/* ── AL CERRAR TURNO ──────────────────────────────────────────
-                Los dispositivos se acumulan: cada teléfono que alguna vez
-                escaneó el QR sigue emparejado para siempre, incluido el del
-                mesero que se fue en marzo.
-
-                NO es automático al cerrar turno, y es deliberado: un turno se
-                cierra mientras alguien puede seguir cobrando una última mesa, y
-                a un mesero al que le revocan el teléfono a media cuenta la app
-                deja de imprimirle sin decirle por qué. Botón explícito, y con
-                los números delante. */}
-            {enTauri() && dispositivos.length > 0 && (
-              <div className="flex items-center justify-between gap-3 mb-4 p-3 rounded-ui border border-adm-border bg-adm-bg">
-                <p className="text-xs font-bold text-adm-muted">
-                  Al cerrar el turno puedes sacarlos a todos de una vez. Cada
-                  uno tendrá que volver a escanear el QR.
-                </p>
-                <Button
-                  variante="peligro"
-                  tamano="sm"
-                  icono={Ban}
-                  onClick={pedirRevocarTodos}
-                  className="shrink-0"
-                >
-                  Revocar todos
-                </Button>
-              </div>
-            )}
 
             {dispositivos.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-adm-muted">
@@ -983,6 +914,59 @@ export default function HubScreen() {
         </Card>
       </div>
 
+      {/* ── Bloqueos de seguridad (CSP) ──────────────────────────────────
+          Sólo aparece si hay algo. Una tarjeta vacía permanente enseñaría a
+          ignorarla, y esta tiene que llamar la atención el día que salga. */}
+      {bloqueos.length > 0 && (
+        <Card className="mt-6 border-adm-danger">
+          <CardBody>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-fraunces font-bold text-lg mb-1 text-adm-danger">
+                  Bloqueos de seguridad
+                </h2>
+                <p className="text-sm text-adm-muted mb-4">
+                  La app intentó cargar algo que la política de seguridad no
+                  permite. Puede ser la causa de que una pantalla se vea a
+                  medias, de que falte una tipografía o de que no lleguen los
+                  cambios en vivo.{' '}
+                  <strong>Dictale esta lista a soporte.</strong>
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  limpiarBloqueosCsp();
+                  setBloqueos([]);
+                }}
+              >
+                Limpiar
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {bloqueos.map((b) => (
+                <div
+                  key={b.firma}
+                  className="bg-adm-bg border border-adm-border rounded-ui p-3 text-xs font-mono"
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-adm-danger">
+                      {b.directiva}
+                    </span>
+                    {b.veces > 1 && <Chip>{b.veces} veces</Chip>}
+                  </div>
+                  <p className="text-adm-muted break-all mt-1">{b.bloqueado}</p>
+                  {b.documento && (
+                    <p className="text-adm-muted break-all opacity-70">
+                      en {b.documento}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       {/* ── Vista previa ─────────────────────────────────────────────────── */}
       {vista && (
         <Card className="mt-6">
@@ -1009,47 +993,6 @@ export default function HubScreen() {
             descripcion="Abre InvVenta desde la caja para configurar la impresión, o conéctate a la dirección que muestra la caja."
           />
         </div>
-      )}
-      {/* La confirmación dice NÚMEROS, no «¿seguro?». Revocar a ciegas es
-          barato de deshacer —se vuelve a escanear el QR— pero a media comida
-          cuesta un servicio, así que quien pulsa tiene que ver a cuántos afecta
-          y cuánto trabajo sin subir hay colgando. */}
-      {confirmarRevocarTodos && (
-        <ConfirmModal
-          titulo={`Revocar ${confirmarRevocarTodos.dispositivos} dispositivo${
-            confirmarRevocarTodos.dispositivos === 1 ? '' : 's'
-          }`}
-          icono={Ban}
-          textoConfirmar="Revocar todos"
-          onCancelar={() => setConfirmarRevocarTodos(null)}
-          onConfirmar={ejecutarRevocarTodos}
-          mensaje={
-            <>
-              <p>
-                Van a quedarse todos sin imprimir. Para volver a usarlos hay que
-                escanear el QR otra vez en cada uno.
-              </p>
-              {confirmarRevocarTodos.ventas_pendientes > 0 ? (
-                <p className="mt-3 font-bold text-adm-ink">
-                  {confirmarRevocarTodos.con_pendientes} de ellos tiene
-                  {confirmarRevocarTodos.con_pendientes === 1 ? '' : 'n'}{' '}
-                  {confirmarRevocarTodos.ventas_pendientes} venta
-                  {confirmarRevocarTodos.ventas_pendientes === 1 ? '' : 's'} sin
-                  subir. Al revocar, esta caja las recupera enseguida — se hace
-                  solo, aquí mismo.
-                </p>
-              ) : (
-                <p className="mt-3">
-                  Ninguno tiene ventas sin subir: no hay nada que recuperar
-                  después.
-                </p>
-              )}
-              <p className="mt-3 text-xs">
-                La caja no se ve afectada: no está emparejada consigo misma.
-              </p>
-            </>
-          }
-        />
       )}
     </PageShell>
   );

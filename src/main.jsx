@@ -35,6 +35,32 @@ import '@fontsource/dm-sans/latin-400.css';
 import './index.css';
 import App from './App.jsx';
 import { abrirDBSegura } from './store/localDB';
+import { vigilarCsp } from './lib/AvisosCsp';
+
+// ── EL DETECTOR DE BLOQUEOS DEL CSP, ANTES DE MONTAR NADA ───────────────────
+// Se engancha aquí y no dentro de un componente porque los bloqueos que más
+// importan —una fuente, una hoja de estilo, el propio bundle— ocurren ANTES de
+// que React haya montado. Y hace falta porque en release no hay consola: sin
+// esto, un CSP mal puesto deja la pantalla a medias sin decir por qué, que es
+// exactamente el patrón de fallo que este proyecto persigue.
+//
+// El aviso en pantalla va por `useAppStore` importado al vuelo: este archivo
+// corre antes que el store, y colgar el arranque de él sería cambiar un riesgo
+// pequeño por uno grande.
+vigilarCsp((bloqueo) => {
+  import('./store/useAppStore')
+    .then(({ useAppStore }) =>
+      useAppStore
+        .getState()
+        .showToast?.(
+          `Seguridad: se bloqueó ${bloqueo.directiva}. Avisa a soporte y mira Ajustes › Hub.`,
+          'error',
+        ),
+    )
+    .catch(() => {
+      /* Sin store todavía; el bloqueo ya quedó guardado igual. */
+    });
+});
 
 // Auto-reparación de Dexie ANTES de montar la app: si la base quedó inconsistente
 // (v140 vacía por un upgrade bloqueado), se recrea limpia. .finally garantiza que
