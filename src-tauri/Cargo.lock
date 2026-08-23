@@ -1828,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "invventa"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "axum",
  "mdns-sd",
