@@ -16,6 +16,7 @@ import {
   copiaDeReceta,
   filtrarInsumos,
   moverSeleccion,
+  recetaConMismoCodigo,
 } from '../../lib/Recetas';
 import {
   ChefHat,
@@ -346,6 +347,26 @@ export default function RecetasScreen() {
     } else if ((form.insumos || []).length === 0) {
       return showToast('Agrega al menos 1 ingrediente.', 'error');
     }
+
+    // ── EL CÓDIGO POS NO SE PUEDE REPETIR ────────────────────────────────
+    // Desde el 22-ago la base lo impide con un índice único parcial por local.
+    // Pero el índice RECHAZA y no EXPLICA: sin esta comprobación, guardar un
+    // código repetido devuelve un `23505` desde la cola —o sea después, porque
+    // la cola es asíncrona— y la pantalla ya habría dicho «guardado».
+    //
+    // Las dos hacen falta. Ésta no puede ser la única porque la cola escribe
+    // directo a Supabase sin pasar por aquí; el índice no puede ser el único
+    // porque «23505» no es una frase que nadie entienda.
+    const choca = recetaConMismoCodigo(form.codigo_pos, recetas || [], editId);
+    if (choca) {
+      return showToast(
+        `El código «${(form.codigo_pos || '').trim().toUpperCase()}» ya lo usa «${choca.nombre}»${
+          choca.activo === false ? ' (archivado, pero sigue ocupándolo)' : ''
+        }. Ponle otro o déjalo vacío.`,
+        'error',
+      );
+    }
+
     const categoriaFinal =
       form.categoria === '__nueva__' ? inputNuevaCat.trim() : form.categoria;
     // Payload CANÓNICO: solo columnas vivas de 'recetas' (precio_venta, costo,

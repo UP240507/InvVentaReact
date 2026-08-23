@@ -199,3 +199,44 @@ export function moverSeleccion(indice, paso, total) {
   const siguiente = actual + (paso > 0 ? 1 : -1);
   return Math.max(0, Math.min(total - 1, siguiente < 0 ? 0 : siguiente));
 }
+
+/**
+ * ¿Hay otra receta con este mismo código POS?
+ *
+ * ── POR QUÉ HACE FALTA SI YA HAY ÍNDICE ÚNICO EN LA BASE ───────────────────
+ * Porque el índice **rechaza**, pero no **explica**. Sin esto, guardar una
+ * receta con un código repetido devuelve un `23505` desde la cola de
+ * sincronización: la fila se va al buzón de fallidas y el usuario ve, en el
+ * mejor de los casos, un código de error de Postgres. Peor todavía, lo ve
+ * **después** —la cola es asíncrona—, así que la pantalla ya le dijo
+ * «guardado».
+ *
+ * El índice es la garantía y esta función es la cortesía. Las dos hacen falta:
+ * la comprobación de pantalla no puede ser la única porque la cola escribe
+ * directo a Supabase y no pasa por aquí, y el índice no puede ser el único
+ * porque «23505» no es una frase que nadie entienda.
+ *
+ * ── LA COMPARACIÓN ES LA MISMA QUE LA DEL ÍNDICE ───────────────────────────
+ * `lower(trim(...))`, y las inactivas cuentan. Si la pantalla comparara de otra
+ * forma que la base, habría códigos que la pantalla acepta y la base rechaza —
+ * o sea el error de Postgres otra vez, sólo que ahora con la sorpresa añadida
+ * de que la pantalla había dicho que sí.
+ *
+ * @returns {object|null} La receta que ya usa ese código, o `null`.
+ */
+export function recetaConMismoCodigo(codigo, recetas = [], idActual = null) {
+  const c = String(codigo ?? '')
+    .trim()
+    .toLowerCase();
+  if (!c) return null; // Sin código no hay choque: el índice es parcial.
+
+  return (
+    (Array.isArray(recetas) ? recetas : []).find(
+      (r) =>
+        String(r?.id ?? '') !== String(idActual ?? '') &&
+        String(r?.codigo_pos ?? '')
+          .trim()
+          .toLowerCase() === c,
+    ) || null
+  );
+}

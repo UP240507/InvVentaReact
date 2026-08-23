@@ -503,6 +503,23 @@ lista y el clic no los cubre ninguna suite.
 
 ---
 
+## 9i · El código POS ya no se puede repetir — nuevo el 22-ago
+
+Migración `20260822140000`. **Ya aplicada** en la base de AZUL.
+
+- [ ] Dar de alta una receta con un código que ya existe: **la pantalla lo
+      frena antes de guardar** y dice **qué platillo lo usa**, no «error 23505».
+- [ ] Probar con **otra caja o espacios** («p01 » contra «P01»): también lo
+      frena. Para quien busca es el mismo código.
+- [ ] Probar contra una receta **archivada**: también lo frena, y el aviso dice
+      que está archivada. Un platillo oculto sigue ocupando su código.
+- [ ] **Dos recetas SIN código se pueden guardar las dos.** Si esto fallara, el
+      catálogo no podría crecer — el código es opcional.
+- [ ] Editar una receta y guardarla **sin cambiar el código** no da error: no
+      choca consigo misma.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
 Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6

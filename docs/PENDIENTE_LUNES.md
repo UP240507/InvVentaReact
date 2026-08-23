@@ -714,12 +714,41 @@ que en los gastos sin clasificar: un filtro puede resumir, no esconder.
 La cadena de teclado no la atraviesa, así que Enter en la cantidad sigue
 agregando sin pasar por la merma. Y si se despliega, Enter ahí también agrega.
 
-### Y una decisión que sale de aquí, para Chris
+### El código POS, único por local — **HECHO el 22-ago**
 
-**`recetas.codigo_pos` no es único en la base.** Hoy no hay duplicados —se
-comprobó—, pero nada los impide. Un índice único parcial por
-`(restaurante_id, codigo_pos)` los rechazaría en el momento en vez de dejar que
-aparezcan. **Toca el esquema, así que va a la lista de decisiones.**
+Era la decisión que salió de duplicar receta, y Chris la tomó: **índice único
+parcial**, `(restaurante_id, lower(trim(codigo_pos))) where codigo_pos <> ''`.
+
+- **Por local**, porque el código es del menú de cada restaurante: dos clientes
+  distintos tienen que poder usar «P01». Uno global convertiría el catálogo de
+  uno en un límite para el otro.
+- **Parcial**, porque el código es opcional. Sin la cláusula `where`, dos
+  recetas sin código chocarían entre sí y no se podría dar de alta la segunda.
+- **`lower(trim(...))`**, porque «P01», «p01» y «P01 » son el mismo código para
+  quien lo busca. Dejarlos convivir sería cumplir la letra de la regla y no la
+  intención.
+
+**Verificado en los dos sentidos**, sobre filas desechables y con la
+transacción deshecha después:
+
+```
+insertar «ZZTEST» y « zztest »  → rechazado (correcto)
+insertar dos recetas SIN código → pasan las dos (correcto)
+```
+
+Un índice que existe no es un índice que rechaza; y uno que rechaza de más
+habría dejado el catálogo sin poder crecer.
+
+**Y la mitad amable, que hacía falta igual.** El índice rechaza pero no
+explica: sin más, guardar un código repetido devolvería un `23505` desde la
+cola —o sea **después**, porque la cola es asíncrona, cuando la pantalla ya
+dijo «guardado»—. `recetaConMismoCodigo()` lo comprueba antes y dice **cuál**
+platillo lo usa, incluso si está archivado (las archivadas también ocupan
+código, igual que en el índice).
+
+Las dos hacen falta: la pantalla no puede ser la única porque **la cola escribe
+directo a Supabase sin pasar por ahí**, y el índice no puede ser el único
+porque «23505» no es una frase que nadie entienda.
 
 ## 0e · La pestaña «Turnos» de Configuración, fuera (22-ago)
 

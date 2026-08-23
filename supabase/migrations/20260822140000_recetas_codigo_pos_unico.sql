@@ -1,0 +1,42 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- El código POS deja de poder duplicarse dentro de un mismo local
+--
+-- Salió al montar «duplicar receta» (22-ago). La pregunta abierta del diseño era
+-- si `codigo_pos` era único, y **no lo era**: ni índice ni constraint. Dos
+-- platillos con el mismo código entraban sin dar un solo error, y a partir de
+-- ahí quien buscara por código se llevaba uno de los dos —siempre el mismo, y no
+-- necesariamente el que quería—. El otro quedaba invendible por código sin que
+-- nada lo dijera.
+--
+-- ── POR QUÉ POR LOCAL ──────────────────────────────────────────────────────
+-- El código es del menú de cada restaurante: dos clientes distintos tienen que
+-- poder usar «P01» los dos. Un índice global convertiría el catálogo de uno en
+-- un límite para el otro.
+--
+-- ── POR QUÉ PARCIAL ────────────────────────────────────────────────────────
+-- Porque el código es **opcional**: hay platillos sin él y salen en la lista
+-- como «NO-POS». Sin la cláusula `where`, dos recetas sin código chocarían
+-- entre sí y **no se podría dar de alta la segunda**. Y con `NULL` no bastaría:
+-- la app guarda cadena vacía, no `NULL`, así que se normalizan los dos casos
+-- con `coalesce(trim(...), '')`.
+--
+-- ── POR QUÉ `lower(trim(...))` ─────────────────────────────────────────────
+-- El código se teclea a mano. «P01», «p01» y «P01 » son el mismo código para
+-- quien lo busca, así que dejarlos convivir sería cumplir la letra de la regla
+-- y no la intención — el POS seguiría trayendo el que no era.
+--
+-- ── VERIFICADO, Y EN LOS DOS SENTIDOS ──────────────────────────────────────
+-- Antes de crearlo: cero colisiones con los datos de hoy, incluidas las recetas
+-- inactivas (que también ocupan código). Y después, sobre filas desechables
+-- dentro de una transacción deshecha:
+--
+--   · insertar «ZZTEST» y « zztest » → **rechazado** (correcto)
+--   · insertar dos recetas SIN código → **pasan las dos** (correcto)
+--
+-- Un índice que existe no es un índice que rechaza; y uno que rechaza de más
+-- habría dejado el catálogo sin poder crecer.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create unique index if not exists recetas_codigo_pos_unico_por_local
+  on public.recetas (restaurante_id, lower(trim(codigo_pos)))
+  where coalesce(trim(codigo_pos), '') <> '';

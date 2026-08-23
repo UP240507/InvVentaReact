@@ -5,6 +5,7 @@ import {
   filtrarInsumos,
   normalizaBusqueda,
   moverSeleccion,
+  recetaConMismoCodigo,
 } from './Recetas';
 
 const base = {
@@ -226,5 +227,49 @@ describe('moverSeleccion', () => {
   it('sin opciones devuelve -1, para no tener que distinguir casos fuera', () => {
     expect(moverSeleccion(0, 1, 0)).toBe(-1);
     expect(moverSeleccion(0, 1, null)).toBe(-1);
+  });
+});
+
+describe('recetaConMismoCodigo — la cortesía que le falta al índice', () => {
+  const catalogo = [
+    { id: 1, nombre: 'Tacos', codigo_pos: 'P01' },
+    { id: 2, nombre: 'Sopa', codigo_pos: '' },
+    { id: 3, nombre: 'Flan archivado', codigo_pos: 'P09', activo: false },
+  ];
+
+  it('encuentra el choque y devuelve CUÁL es', () => {
+    // Devolver la receta y no un booleano es lo que permite decir «ese código
+    // ya lo usa Tacos» en vez de «código duplicado», que obliga a buscarlo.
+    expect(recetaConMismoCodigo('P01', catalogo)?.nombre).toBe('Tacos');
+  });
+
+  it('compara igual que el índice: sin mayúsculas y sin espacios', () => {
+    // Si la pantalla comparara distinto que la base, habría códigos que la
+    // pantalla acepta y la base rechaza — el error de Postgres otra vez, con
+    // la sorpresa de que la pantalla ya había dicho que sí.
+    expect(recetaConMismoCodigo(' p01 ', catalogo)?.id).toBe(1);
+  });
+
+  it('las ARCHIVADAS también ocupan código', () => {
+    // El índice no distingue activo de inactivo, así que la pantalla tampoco
+    // puede. Un platillo archivado sigue reservando su código.
+    expect(recetaConMismoCodigo('P09', catalogo)?.id).toBe(3);
+  });
+
+  it('la receta que se está editando no choca consigo misma', () => {
+    expect(recetaConMismoCodigo('P01', catalogo, 1)).toBeNull();
+  });
+
+  it('sin código no hay choque, porque el índice es parcial', () => {
+    // Dos platillos sin código son legales. Si esto devolviera algo, no se
+    // podría dar de alta el segundo.
+    expect(recetaConMismoCodigo('', catalogo)).toBeNull();
+    expect(recetaConMismoCodigo('   ', catalogo)).toBeNull();
+    expect(recetaConMismoCodigo(null, catalogo)).toBeNull();
+  });
+
+  it('aguanta basura', () => {
+    expect(recetaConMismoCodigo('P01', null)).toBeNull();
+    expect(recetaConMismoCodigo('P01', undefined)).toBeNull();
   });
 });
