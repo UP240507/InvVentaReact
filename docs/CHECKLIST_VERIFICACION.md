@@ -1,8 +1,45 @@
 # Checklist de verificación — lo que FALTA por comprobar
 
-Reescrito el 18-ago para la sesión de campo con la **0.2.6**. Este documento es
-**sólo lo pendiente**: lo verificado el 15-ago vive en `docs/VERIFICADO_15-AGO.md`,
-y el porqué de cada arreglo en `docs/PENDIENTE_LUNES.md`.
+Al día para la **0.2.8**, que es la que lleva el logo térmico, las franjas y las
+cuentas parciales. Este documento es **sólo lo pendiente**: lo verificado el
+15-ago vive en `docs/VERIFICADO_15-AGO.md`, y el porqué de cada arreglo en
+`docs/PENDIENTE_LUNES.md`.
+
+**Lo que pasó con la 0.2.7, porque explica por qué hay una 0.2.8.** La 0.2.7 se
+publicó el 23-ago anunciando el logo y las cuentas parciales, y el binario no
+las traía: el trabajo de ese día no estaba en la carpeta —ni commits, ni
+ficheros, ni una sola de sus cadenas en el `dist`— aunque **sus dos migraciones
+sí se habían aplicado a la base de AZUL**. Se corrigió la nota del release (el
+asset `latest.json`, que es el que lee la caja, y el cuerpo) y se reconstruyeron
+las tres funciones. Si algo vuelve a aparecer en la nota sin aparecer en el
+código, es el mismo fallo otra vez — de ahí el paso nuevo del §10.
+
+**Para qué sirve pasar esto, que no es publicar una versión.** La verificación es
+la puerta de la **fase de sombra** (§12): AZUL sigue operando con Soft Restaurant
+y captura lo mismo en InvVenta, hasta que los dos cuadren varios días seguidos.
+Sólo después se apaga el otro. Lo que se decide aquí es si el sistema está en
+condiciones de que alguien le dedique ese doble trabajo.
+
+**Hay una versión corta de este documento**, sólo con los puntos y sin los
+porqués, para llevarla en la mano: `docs/CHECKLIST_CAMPO.md`. Se deriva de éste;
+si los dos discrepan, **manda éste**.
+
+**La ruta, porque son veinte bloques y el orden importa:**
+
+1. **§0**, en la máquina, antes de salir.
+2. **§1** — en qué flujo está AZUL. Va antes que nada porque cambia qué prueba
+   el §2.
+3. **Lo que rompe en silencio: §9c (CSP) y §10 (updater).** El CSP primero: si
+   falla, ninguna de las pruebas de abajo significa nada.
+4. **Lo de papel, en cadena:** §9j (el logo, que sale en el primer papel que
+   imprimas) → §2 (la cuenta) → §9l (las cuentas parciales) → §9d (el folio
+   reservado) → §5 (reimprimir) → §7 (corte Z y vale).
+5. **§3** — respaldo, adopción y el drenaje en ráfaga. Es el bloque más largo y
+   necesita un teléfono sin red; no se empieza con prisa.
+6. **Lo de pantalla:** §4, §6, §8, §9, §9b, §9e, §9f, §9g, §9h, §9i, §9k
+   (franjas).
+7. **§11 al cerrar.** No se salta nunca: las dos cosas que deja mal una sesión de
+   pruebas muerden con el local abierto.
 
 **La regla, igual que con la impresora: si un paso falla, para y dilo.** Con
 varios cambios encima del mismo flujo, seguir adelante convierte un fallo
@@ -35,7 +72,10 @@ cómo se pierde el único que verificaba algo.
   > —vienen de compartir estado global con `--isolate=false`; ese archivo solo
   > pasa 11 de 11—. **Si aparece un séptimo, ESE sí es nuevo.**
 
-- [ ] Las **cinco** versiones en **0.2.6** (`npm run version` lo comprueba —
+- [ ] Las **cinco** versiones en **0.2.8** (`npm run version` — hay que subirla:
+      la 0.2.7 ya está publicada y una caja nunca se ofrece a sí misma la
+      versión que ya tiene)
+- [x] ~~Las cinco versiones en 0.2.7~~ (`npm run version` lo comprueba —
       desde el 18-ago también mira `Cargo.lock` y `package-lock.json`, que se
       quedaban fuera y se desalineaban solos).
 
@@ -117,7 +157,7 @@ opinión.
 el archivo, y comprobado que fallan sin el arreglo. Esto de aquí verifica el
 cableado en la caja de verdad.
 
-- [ ] **Al instalar la 0.2.6, drenar una vez con «Recuperar ahora».** Lo que ya
+- [ ] **Al instalar la 0.2.8, drenar una vez con «Recuperar ahora».** Lo que ya
       está en el disco lleva tokens de arranques muertos y no se distingue de lo
       de un teléfono revocado, así que se ofrecerá esa última vez. Adoptar de
       más es inofensivo: `upsert` sobre una clave ya única.
@@ -520,21 +560,141 @@ Migración `20260822140000`. **Ya aplicada** en la base de AZUL.
 
 ---
 
+## 9j · El logo en papel térmico — nuevo el 23-ago
+
+Se guarda el MAPA DE BITS, no la URL: la caja imprime sin internet. La
+conversión la hace `lib/LogoTermico.js` (28 pruebas) y el raster `GS v 0` está
+en `hub/escpos.rs` (11 pruebas, con control negativo). **En papel no lo ha visto
+nadie todavía.**
+
+- [ ] `Ajustes → Configuración → Restaurante`: elegir una imagen. Aparece la
+      vista previa **en blanco y negro puro**, no la imagen original con sus
+      grises. Eso es lo que va a salir; si la vista enseñara el PNG bonito, «se
+      ve bien» no querría decir nada.
+- [ ] Guardar y **imprimir una prueba desde `Ajustes → Hub`**. El logo sale
+      arriba del nombre, centrado y sin franjas ni escalones.
+- [ ] **Un logo con fondo transparente** (un PNG de marca cualquiera). Tiene que
+      salir la marca, **no un rectángulo negro**: es el fallo típico, porque lo
+      transparente lleva RGB negro debajo.
+- [ ] Cobrar una venta: el **ticket** lo lleva. Pedir una cuenta: la **cuenta**
+      también.
+- [ ] **La comanda NO lo lleva** — cocina no necesita la marca, y cada punto
+      impreso es tiempo de impresora con un mesero esperando la tira.
+- [ ] El **corte Z** y el **vale de propina** tampoco: son papeles internos.
+- [ ] **El paso que protege a la impresora:** con un logo puesto, imprimir diez
+      documentos seguidos sin que la impresora se quede muda. Si un logo llegara
+      a medias, la cabecera anuncia bytes que no llegan y la impresora **se
+      queda esperando** — no da error, deja de imprimir. Por eso se valida
+      antes de emitir; esto comprueba que la validación es la buena.
+- [ ] Quitar el logo desde Configuración: los papeles vuelven a salir con el
+      nombre del local y **nada más cambia**.
+
+---
+
+## 9k · Las franjas (turno matutino / vespertino) — nuevo el 23-ago
+
+Columna `franja` estampada al escribir en `ventas`, `movimientos` y `gastos`.
+`lib/Franjas.js`, 24 pruebas. **Migración ya aplicada en la base de AZUL.**
+
+**El paso que protege a todos los locales, y va PRIMERO:**
+
+- [ ] **Sin tocar ningún ajuste, todo se comporta exactamente como ayer.** Ni
+      una palabra nueva en el POS, ni en Reportes, ni en Gastos. Con
+      `franjas_activas = false` la columna se guarda en `null` y no hay filtro
+      que enseñar. **Si esto falla, no se publica.**
+
+Después, encendiéndolas en `Ajustes → Configuración → Turnos`:
+
+- [ ] Cobrar antes de la hora de corte y después: cada venta cae en su franja.
+      Se comprueba en `public.ventas`, columna `franja`.
+- [ ] **La venta a caballo:** abrir mesa antes del corte y cobrarla después →
+      cuenta como **vespertino**. Es el cobro lo que manda, y no es
+      configurable: el billete entró en el cajón de la tarde.
+- [ ] Mover la hora de corte **no cambia** ninguna venta ya cobrada. Ésta es la
+      garantía de que el pasado no se reescribe.
+- [ ] Un movimiento de inventario (una merma) cae en su franja, y **el stock
+      total no se parte ni se duplica**: sigue siendo un número por producto.
+- [ ] Un gasto capturado se estampa. Uno de antes se queda **sin clasificar** —
+      no se le inventa una franja a lo que se capturó cuando el concepto no
+      existía.
+- [ ] `Reportes`: aparece el selector **Todo el día / Matutino / Vespertino**.
+      Al elegir uno, **las cifras cambian** (es para comparar los dos turnos) y
+      arriba dice cuántas ventas quedaron fuera por estar sin clasificar.
+- [ ] **La cuenta que tiene que cuadrar:** ventas del matutino + ventas del
+      vespertino ≤ ventas del día. Si diera más, lo sin clasificar se estaría
+      contando dos veces.
+- [ ] Apagar las franjas otra vez: la pantalla vuelve a ser la de antes y **los
+      datos ya estampados se quedan** donde están.
+
+---
+
+## 9l · Las cuentas parciales (§F) — nuevo el 23-ago
+
+Tres de ocho se van antes y pagan lo suyo. Se elige **al pedir la cuenta**, no
+en el cobro, porque decide qué papel se imprime. `lib/CuentasParciales.js`, 26
+pruebas. **Sólo con el flujo `ticket_final`**, que es el de AZUL.
+
+- [ ] En una mesa con varias cosas aparece **«Cuenta aparte para unos cuantos»**.
+      Con el flujo en `precuenta_y_ticket` **no aparece**, y es correcto: ese
+      papel no lleva número, así que no habría nada que conciliar.
+- [ ] Elegir **unidades, no renglones**: de «4 cervezas» se pueden llevar 2.
+- [ ] Sale **un papel con su propio folio**, con sólo lo de ese grupo y su
+      total. **Ese total NO es una fracción del total de la mesa**: comprueba
+      que subtotal + IVA cuadran con las líneas que salen impresas.
+- [ ] La mesa **sigue abierta**: los que quedan pueden pedir otra ronda.
+- [ ] **EL PASO QUE IMPORTA:** con la cuenta ya impresa, pedir **otra cerveza**.
+      Tiene que aparecer un renglón NUEVO — la línea facturada no puede
+      engordar. Si engordara, el papel diría 2 y se cobrarían 3.
+- [ ] Intentar cambiar la cantidad de la línea ya facturada: **la pantalla lo
+      frena** y dice en qué cuenta salió.
+- [ ] **Cobrar esa cuenta**: en el modal de cobro **no hay división por
+      platillos** —ya se decidió en el papel— y sí siguen la división por
+      personas y el pago en partes.
+- [ ] En `public.ventas`, la venta lleva **el folio del papel**, no uno nuevo.
+      Es la comprobación de fondo de todo el bloque.
+- [ ] En `Reportes → Corte de Caja`, esa cuenta **no** aparece en «Cuentas
+      impresas sin cobrar».
+- [ ] Imprimir una segunda cuenta de la misma mesa: **folio distinto**, y las
+      dos conviven. Cobrar una **no toca** la otra.
+- [ ] **Deshacer** una cuenta impresa devuelve sus líneas al carrito común, y
+      queda `CUENTA_PARCIAL_DESHECHA` en Auditoría. Ese papel ya no vale.
+- [ ] Cobrar la última cuenta **libera la mesa**.
+- [ ] **Con algo ya enviado a cocina:** mandar 2 de 4 cervezas a producción,
+      hacer una parcial de 2, y comprobar que **ninguna de las dos líneas
+      permite quitar del carrito lo que está en la barra**. Es el fallo que no
+      da error y deja una línea imposible de borrar para siempre.
+
+---
+
 ## 10 · El updater — la ronda completa, que por fin se puede
 
-Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.6
-**es** esa versión. Guía en `docs/CHECKLIST_ACTUALIZACIONES.md`.
+Llevaba pendiente desde el 15-ago porque hacía falta una versión N+1. La 0.2.8
+**es** esa versión, y se salta desde la **0.2.7**. Guía en
+`docs/CHECKLIST_ACTUALIZACIONES.md`.
 
-- [ ] Con la versión **anterior instalada**, pulsar «Buscar actualización» →
-      ofrece la 0.2.6.
+- [ ] Con la **0.2.7 instalada**, pulsar «Buscar actualización» → ofrece la
+      0.2.8.
 - [ ] El aviso enseña **la nota de la versión**, y se entiende sin saber de
       programación. Ver `avisoDeActualizacion()`.
+- [ ] **Y la nota dice cosas que esta versión trae.** Es el argumento que se le
+      teclea a `npm run publicar`: `latest-json.mjs` la mete en el
+      `release/latest.json` que se sube como asset, y `gh` la usa de cuerpo del
+      release. **Nadie la comprueba contra el código.** El 23-ago anunció el
+      logo y las cuentas parciales, que no están en el binario, y así se
+      publicó. Leerla contra la lista de arriba **antes** de teclearla. Una nota
+      falsa no da error — la lee el cliente.
+
+  > **Y si ya se publicó con la nota mal**, editar el archivo de disco no
+  > arregla nada: el aviso de la caja lee el **asset** del release. Hay que
+  > reponer las dos caras —`gh release upload … --clobber` para el asset y
+  > `gh release edit … --notes-file` para el cuerpo—, y comprobarlo desde una
+  > caja, no desde la pantalla de GitHub.
 - [ ] «Versión instalada» dice la **anterior** y no un guion. Ése fue el arreglo
       del 17-ago que **nunca se ha probado**: sólo actúa desde una versión que
       ya lo lleve dentro, y hasta ahora no había a dónde saltar desde una.
 - [ ] Instalar. Windows enseña el aviso azul —«Más información» → «Ejecutar de
       todas formas»—, la caja se cierra y se vuelve a abrir sola.
-- [ ] Al volver, «Versión instalada» dice **0.2.6**.
+- [ ] Al volver, «Versión instalada» dice **0.2.8**.
 
 > Para compilar el bundle hay que exportar `TAURI_SIGNING_PRIVATE_KEY` y su
 > contraseña **en la misma sesión de shell**, o revienta al firmar, al final del
@@ -551,6 +711,85 @@ El 17-ago la caja quedó en un hotspot (`10.245.x.x`) y con el transporte en
       va, los meseros pierden el hub y el QR guardado apunta a una IP muerta.
 - [ ] El transporte **a la impresora de Windows**. Éste muerde en silencio: los
       cobros pasan, todo «funciona», y no sale un papel en todo el servicio.
+
+---
+
+## 12 · Lo que viene después: sombra, y luego solo InvVenta
+
+Pasar los bloques de arriba **no significa que AZUL pueda operar con esto**. La
+verificación dice que el sistema no se rompe; la sombra dice si sirve para el
+servicio real. Son dos preguntas distintas y la segunda no la contesta ningún
+checklist técnico.
+
+### 12.1 · Antes de la sombra hay un requisito que no es de código
+
+- [ ] **El menú de AZUL, cargado.** Hoy la base tiene **6 recetas** —las de
+      ejemplo del desarrollo: Pizza, Hamburguesa, Jugo, Chilaquiles, Arrachera
+      Norteña y Desayuno Mexicano— y **10 insumos**. Con eso no se puede tomar
+      una comanda de verdad, así que la sombra no puede ni empezar.
+- [ ] **Los insumos que esas recetas usan**, con su unidad de consumo y su costo
+      de entrada. Ojo con las unidades de compra (`DISENO_ALCANCE_INVENTARIO.md`):
+      si el catálogo entra con la naranja por arpilla convertida a mano, el costo
+      promedio nace torcido y **no se corrige nunca solo**.
+- [ ] **Las mesas reales** del local. Hoy hay 3.
+- [ ] **Los empleados** con su rol y su PIN.
+
+### 12.2 · La sombra: los dos sistemas a la vez
+
+Soft Restaurant sigue siendo el sistema **oficial**: es el que cobra y el que da
+el papel al cliente. InvVenta captura lo mismo, en paralelo, sin cobrar.
+
+**Esto dobla el trabajo de captura, y es la razón por la que las sombras se
+abandonan.** Conviene decidir antes quién teclea en InvVenta —el dueño, un
+capitán— y aceptar que no será el servicio completo si el local está lleno.
+
+Lo que se compara **al cierre de cada día**, y se anota:
+
+| Qué | Soft Restaurant | InvVenta | ¿Cuadra? |
+| --- | --- | --- | --- |
+| Número de tickets | | | |
+| Total de ventas del día | | | |
+| Efectivo declarado contra el corte Z | | | |
+| Los tres platillos más vendidos | | | |
+
+- [ ] **La diferencia se investiga el mismo día**, no al final de la semana. Un
+      descuadre de hace cuatro días ya no se puede reconstruir: nadie se acuerda
+      de qué mesa fue.
+- [ ] Se anota **qué pasó**, no sólo que no cuadró. «Faltó un ticket» y «el
+      total difiere en 3 pesos» son fallos distintos y se arreglan en sitios
+      distintos.
+
+**Cuánto dura:** hasta **cinco días de servicio seguidos cuadrando**, y que al
+menos uno sea de los de más carga (fin de semana). Cinco días de martes flojo no
+prueban nada: lo que rompe un POS es el sábado a las tres de la tarde.
+
+**Lo que NO se hace en sombra:** no se le da al cliente el papel de InvVenta, no
+se factura desde InvVenta, y no se toca el inventario de Soft Restaurant. Si el
+papel de InvVenta sale a la mesa, ya no es sombra: es producción sin haberlo
+decidido.
+
+### 12.3 · El paso a solo InvVenta
+
+- [ ] Cinco días cuadrando, con un día de carga alta entre ellos.
+- [ ] **Ningún fallo de impresión sin explicar** en esos días. Un papel que no
+      salió y no se sabe por qué es el que va a salir el día que Soft Restaurant
+      ya no esté.
+- [ ] **El inventario de InvVenta contra un conteo físico**, aunque sea de diez
+      insumos. Es la única forma de saber si el descuento por receta está bien
+      puesto — y en AZUL nunca se ha contado (`DISENO_ALCANCE_INVENTARIO.md`).
+- [ ] **La vuelta atrás, escrita antes de necesitarla:** qué se hace si el día 2
+      sin Soft Restaurant algo falla. Como mínimo: Soft Restaurant sigue
+      instalado y con su licencia viva durante el primer mes.
+- [ ] Decidido **quién llama a quién** cuando la caja no imprime en hora de
+      comida.
+
+### 12.4 · Y sólo entonces, lo que hoy está bloqueado
+
+Con el local operando de verdad, se desbloquean solas tres cosas que hoy se
+diseñan a ciegas: los **consumos de personal** (hace falta ver cuánto consume el
+personal de verdad), las **unidades de compra** (hace falta ver qué llega y en
+qué empaque) y la pregunta de fondo de las **franjas** — si AZUL las quiere
+porque las necesita o por costumbre.
 
 ---
 
