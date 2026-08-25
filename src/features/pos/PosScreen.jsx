@@ -72,6 +72,19 @@ import {
   SERIE_COMANDA,
 } from '../../lib/Folio';
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
+import { franjaAlEscribir } from '../../lib/Franjas';
+import {
+  separarCuenta,
+  haySeleccion,
+  quedaPorFacturar,
+  lineasDeCuenta,
+  trasCobrarCuenta,
+  estaFacturada,
+  foliosDelCarrito,
+  pendientes,
+  deshacerCuenta,
+  CAMPO_FOLIO,
+} from '../../lib/CuentasParciales';
 import { useAtajos } from '../../hooks/useAtajos';
 import {
   useConectividad,
@@ -246,6 +259,13 @@ export default function PosScreen() {
   // Cuadro de «¿cuántas personas?». Se abre solo, al pedir la cuenta de una
   // mesa a la que nadie le puso el número. `null` = cerrado.
   const [modalComensales, setModalComensales] = useState(null);
+  // ── CUENTAS PARCIALES (§F) ────────────────────────────────────────────────
+  // `modalParcial` es la selección de unidades que se está armando; `null` =
+  // cerrado. `cuentaACobrar` es el folio de la cuenta que se está pagando: con
+  // él puesto, el cobro NO vuelve a preguntar qué se cobra, porque eso ya lo
+  // dice el papel que el cliente tiene delante.
+  const [modalParcial, setModalParcial] = useState(null);
+  const [cuentaACobrar, setCuentaACobrar] = useState(null);
   const [pinReapertura, setPinReapertura] = useState('');
   const [pinReaperturaError, setPinReaperturaError] = useState('');
   const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
@@ -364,6 +384,50 @@ export default function PosScreen() {
     else setShowModalCobro(true);
   };
 
+  // ── LAS ACCIONES DE LA CUENTA PARCIAL ────────────────────────────────────
+  const abrirParcial = () => {
+    if (!isMesa || !quedaPorFacturar(carrito)) return;
+    setModalParcial({});
+  };
+
+  const cambiarUnidadesParcial = (linea, delta) => {
+    setModalParcial((prev) => {
+      const actual = safeNumber(prev?.[linea.id], 0);
+      const tope = safeNumber(linea.cantidad, 0);
+      const nueva = Math.min(Math.max(actual + delta, 0), tope);
+      const copia = { ...(prev || {}) };
+      if (nueva > 0) copia[linea.id] = nueva;
+      else delete copia[linea.id];
+      return copia;
+    });
+  };
+
+  const confirmarParcial = () => {
+    const seleccion = modalParcial || {};
+    setModalParcial(null);
+    // Pasa por el mismo camino que la cuenta entera: mismo folio reservado,
+    // misma auditoría, mismo papel. Lo único distinto es qué líneas lleva.
+    handlePedirCuenta({ seleccion });
+  };
+
+  /** Cobrar una cuenta ya impresa: se paga lo que dice ESE papel. */
+  const cobrarCuenta = (folio) => {
+    setCuentaACobrar(folio);
+    setShowModalCobro(true);
+  };
+
+  /** Devolver un grupo al carrito común, antes de que pague. */
+  const deshacerCuentaParcial = (folio) => {
+    setCarrito((prev) => deshacerCuenta(prev, folio));
+    registrarAuditoria?.({
+      accion: 'CUENTA_PARCIAL_DESHECHA',
+      modulo: 'POS',
+      nivel: 'warning',
+      detalles: `Folio ${folio} devuelto al carrito en ${mesaActual?.nombre ?? mesaActual?.id}. El papel impreso queda sin venta.`,
+    });
+    showToast(`Cuenta ${folio} deshecha. Ese papel ya no vale.`, 'info');
+  };
+
   const intentarCobrar = () => {
     // Aviso si hay rondas en producción/listas que aún no se entregan a la mesa.
     if (
@@ -467,6 +531,24 @@ export default function PosScreen() {
     ivaRate: ivaRaw,
     preciosIncluyenIva,
   });
+
+  /**
+   * El total de una cuenta ya impresa.
+   *
+   * Sale del mismo motor que todo lo demás. Guardar el total junto al folio
+   * habría sido más rápido y sería el principio de la segunda fuente de
+   * verdad: si alguien edita una línea, el número guardado se queda viejo.
+   */
+  const totalDeCuenta = (folio) =>
+    calcularVenta({
+      items: lineasDeCuenta(carrito, folio).map((i) => ({
+        precio: getPrecio(i),
+        cantidad: safeNumber(i?.cantidad, 0),
+        descuento: i?.descuento ?? null,
+      })),
+      ivaRate: ivaRaw,
+      preciosIncluyenIva,
+    }).total;
 
   // ─── ACCIONES DEL CARRITO ────────────────────────────────────────────────
   const handleCambiarComensales = (delta) => {
@@ -673,8 +755,26 @@ export default function PosScreen() {
     setModalMods(null);
   };
 
+  /**
+   * Una línea que ya salió en una cuenta impresa no se puede tocar.
+   *
+   * El cliente tiene ese papel en la mano: cambiarle la cantidad haría que el
+   * cobro dijera una cosa y el papel otra, sin que nada diera error. Para eso
+   * está `deshacerCuenta` — devolver el grupo al carrito común es explícito y
+   * deja la mesa en un estado que se entiende.
+   */
+  const rechazarSiFacturada = (item) => {
+    if (!estaFacturada(item)) return false;
+    showToast(
+      `Eso ya salió en la cuenta ${item[CAMPO_FOLIO]}. Deshaz esa cuenta para cambiarlo.`,
+      'error',
+    );
+    return true;
+  };
+
   const modificarCantidad = (id, delta) => {
     if (bloqueadoPorCuenta()) return;
+    if (rechazarSiFacturada(carrito.find((i) => i.id === id))) return;
     setCarrito((prev) =>
       prev.map((item) => {
         if (item.id === id) {
@@ -723,6 +823,7 @@ export default function PosScreen() {
   const removerDelCarrito = (id) => {
     if (bloqueadoPorCuenta()) return;
     const itemEnCarrito = carrito.find((i) => i.id === id);
+    if (rechazarSiFacturada(itemEnCarrito)) return;
     if (itemEnCarrito && (itemEnCarrito.cantidad_enviada || 0) > 0) {
       showToast(
         'No puedes eliminar un platillo que ya está en la cocina.',
@@ -901,7 +1002,7 @@ export default function PosScreen() {
    *   Va como parámetro y no leído del estado porque el `setState` que lo
    *   guarda no ha llegado a este render todavía.
    */
-  const handlePedirCuenta = ({ comensales = null } = {}) => {
+  const handlePedirCuenta = ({ comensales = null, seleccion = null } = {}) => {
     if (!isMesa || carrito.length === 0) return;
 
     // ── CUÁNTA GENTE HAY EN LA MESA, ANTES DE IMPRIMIR ────────────────────
@@ -938,15 +1039,52 @@ export default function PosScreen() {
     // Reabrir o reimprimir NO cambia el número: el cliente ya tiene ese papel
     // en la mano. Sólo la primera vez se acuña, y esa distinción es la que
     // decide si hay que anotar una reserva nueva o no.
+    // ── LA CUENTA PARCIAL (§F) ──────────────────────────────────────────────
+    // Tres de ocho se van antes y pagan lo suyo. Se elige AQUÍ y no en el
+    // cobro porque decide qué papel se imprime, y ese papel es el documento.
+    //
+    // Sólo con `ticket_final`: en el flujo de dos papeles la pre-cuenta no
+    // lleva número, así que no habría nada que conciliar y partirla sería
+    // repartir papeles sin folio que luego nadie puede casar con una venta.
+    const esParcial = esTicketFinal && haySeleccion(carrito, seleccion || {});
+
     const folioPrevio = mesaActual?.orden_actual?.folio || null;
+    // Una parcial NUNCA reusa el folio de otra: cada grupo se lleva su papel
+    // con su número, y dos papeles distintos con el mismo folio no se pueden
+    // conciliar contra dos ventas distintas.
     const folioCuenta = esTicketFinal
-      ? folioPrevio ||
+      ? (esParcial ? null : folioPrevio) ||
         siguienteFolio({
           serie: SERIE_VENTA,
           nombreLocal: configuracion?.nombre_empresa,
         })
       : null;
-    const folioReciénAcuñado = esTicketFinal && !folioPrevio && !!folioCuenta;
+    const folioReciénAcuñado =
+      esTicketFinal && (esParcial || !folioPrevio) && !!folioCuenta;
+
+    // El carrito se parte ANTES de imprimir: lo que se marca con el folio es
+    // exactamente lo que va al papel. Ver `lib/CuentasParciales.js` sobre por
+    // qué el folio vive en la línea y no en una lista aparte.
+    const separado = esParcial
+      ? separarCuenta(carrito, seleccion, folioCuenta)
+      : { carrito, parte: [] };
+    const carritoTrasCuenta = separado.carrito;
+    const itemsDeLaCuenta = esParcial ? separado.parte : carrito;
+
+    // Las cifras de la parte pasan por el motor, nunca por un prorrateo del
+    // total: un porcentaje redondea distinto que la suma de sus líneas, y el
+    // papel acabaría diciendo un peso más o menos que el cobro.
+    const fiscalCuenta = esParcial
+      ? calcularVenta({
+          items: itemsDeLaCuenta.map((i) => ({
+            precio: getPrecio(i),
+            cantidad: safeNumber(i?.cantidad, 0),
+            descuento: i?.descuento ?? null,
+          })),
+          ivaRate: ivaRaw,
+          preciosIncluyenIva,
+        })
+      : { subtotal, iva: totalIva, total: granTotal };
 
     // ── POR QUÉ SE CUENTAN LAS IMPRESIONES ──────────────────────────────────
     // El id del documento sale del folio, y el folio NO cambia al reabrir —eso
@@ -969,19 +1107,30 @@ export default function PosScreen() {
     );
     const impresionActual = impresionesPrevias + 1;
 
+    // Si queda gente por facturar, la mesa NO se cierra: los que siguen
+    // sentados pueden pedir otra ronda. Sólo cuando ya no queda nada sin
+    // facturar la mesa pasa a `por_cobrar`, que es lo que bloquea la edición.
+    const mesaSigueAbierta = esParcial && quedaPorFacturar(carritoTrasCuenta);
+
     const mesaActualizada = {
       ...mesaActual,
-      estado: 'por_cobrar',
+      estado: mesaSigueAbierta ? 'ocupada' : 'por_cobrar',
       // Se persiste junto con el resto del cambio de estado. Guardarlo en su
       // propio `enqueueAction` haría dos escrituras sobre la misma fila y la
       // segunda pisaría a la primera si llegaran desordenadas.
       comensales_reales: comensalesCuenta,
       orden_actual: {
-        items: carrito,
+        // El carrito ENTERO, con las líneas ya marcadas con su folio dentro.
+        // No hay una lista de cuentas aparte: sería una segunda fuente de
+        // verdad sobre las mismas unidades, y en cuanto una se editara sin la
+        // otra el papel y el cobro dejarían de coincidir sin dar error.
+        items: carritoTrasCuenta,
         subtotal,
         total: granTotal,
         impresiones: impresionActual,
-        ...(folioCuenta ? { folio: folioCuenta } : {}),
+        // El folio «de la mesa» sólo tiene sentido cuando la cuenta es una.
+        // Con parciales, cada línea lleva el suyo y la mesa no tiene uno.
+        ...(folioCuenta && !esParcial ? { folio: folioCuenta } : {}),
       },
     };
     enqueueAction('mesas', 'upsert', mesaActualizada);
@@ -1012,7 +1161,10 @@ export default function PosScreen() {
         mesaNombre: mesaActual?.nombre,
         dispositivo: nombreDeEsteDispositivo(),
         usuario: user?.nombre ?? 'Mesero',
-        total: granTotal,
+        // El total de ESTE papel. Con una parcial, reservar el total de la
+        // mesa haría que «cuentas impresas sin cobrar» dijera de más y el
+        // hueco documentado dejara de cuadrar contra la venta.
+        total: fiscalCuenta.total,
       });
       if (reserva)
         enqueueAction('folios_reservados', 'insert', {
@@ -1030,7 +1182,23 @@ export default function PosScreen() {
     // impresión es que la impresora nunca detiene la operación: la mesa ya
     // quedó marcada como `por_cobrar` arriba, y eso —que es lo que sostiene el
     // cobro— no depende de que haya papel.
-    const datosCuenta = datosDeLaCuenta({ comensales: comensalesCuenta });
+    const datosCuenta = {
+      ...datosDeLaCuenta({ comensales: comensalesCuenta }),
+      // Con una parcial, el papel lleva SÓLO lo de este grupo y sus cifras.
+      ...(esParcial
+        ? {
+            items: itemsDeLaCuenta,
+            subtotal: fiscalCuenta.subtotal,
+            iva: fiscalCuenta.iva,
+            total: fiscalCuenta.total,
+          }
+        : {}),
+    };
+
+    // El carrito de pantalla se actualiza AQUÍ, después de haber construido el
+    // papel: si se hiciera antes, `datosDeLaCuenta` leería el carrito ya
+    // partido y el documento saldría con las líneas equivocadas.
+    if (esParcial) setCarrito(carritoTrasCuenta);
 
     // Un papel o dos, según el local. Con `ticket_final` el que se lleva a la
     // mesa YA es el comprobante —lleva folio y no lleva método de pago, que es
@@ -1208,9 +1376,19 @@ export default function PosScreen() {
 
   const handleProcesarVenta = async (datosPago) => {
     setIsProcessing(true);
-    const isParcial = datosPago?.isCobroParcial;
-    let itemsTicket = carrito;
-    let carritoRestante = [];
+    // ── COBRAR UNA CUENTA YA IMPRESA (§F) ─────────────────────────────────
+    // Cuando se cobra una parcial, lo que se cobra NO se vuelve a elegir: es
+    // exactamente lo que dice el papel que el cliente tiene en la mano. Por
+    // eso `divisionBloqueada` esconde la división por platillos en el modal, y
+    // por eso aquí las líneas se leen por folio y no por selección.
+    const folioDeLaCuenta = cuentaACobrar || null;
+    const isParcial = !folioDeLaCuenta && datosPago?.isCobroParcial;
+    let itemsTicket = folioDeLaCuenta
+      ? lineasDeCuenta(carrito, folioDeLaCuenta)
+      : carrito;
+    let carritoRestante = folioDeLaCuenta
+      ? trasCobrarCuenta(carrito, folioDeLaCuenta)
+      : [];
 
     if (isParcial) {
       itemsTicket = [];
@@ -1273,6 +1451,13 @@ export default function PosScreen() {
     const turnoActivo =
       (turnos || []).find((t) => t.estado === 'abierto') || null;
 
+    // ── EL INSTANTE DEL COBRO, UNA SOLA VEZ ─────────────────────────────────
+    // `fecha` y `franja` tienen que salir del MISMO reloj. Con dos `new Date()`
+    // separados, una venta cobrada a las 15:59:59.999 podría guardarse con
+    // fecha de la mañana y franja de la tarde, y ese desacuerdo no daría error:
+    // aparecería como un peso descuadrado entre dos reportes, un día al año.
+    const cobradoEn = new Date();
+
     const nuevaVentaBD = {
       // Clave primaria con carril de dispositivo, no el reloj pelado. Ver
       // `lib/IdVenta.js`: `Date.now()` lo comparten todos los teléfonos, así
@@ -1289,7 +1474,10 @@ export default function PosScreen() {
       // El folio de la cuenta si ya se imprimió una (flujo `ticket_final`): el
       // cliente tiene ese número en la mano y la venta tiene que llevar el
       // mismo. Sólo se emite uno nuevo si no había.
+      // Con una cuenta parcial, el número es el de ESE papel — el que tiene
+      // delante quien está pagando—, no el de la mesa.
       folio:
+        folioDeLaCuenta ||
         mesaActual?.orden_actual?.folio ||
         siguienteFolio({
           serie: SERIE_VENTA,
@@ -1308,7 +1496,18 @@ export default function PosScreen() {
       tarjeta: montoTarjeta,
       transferencia: montoTransferencia,
       usuario: user?.nombre ?? 'Sistema',
-      fecha: new Date().toISOString(),
+      fecha: cobradoEn.toISOString(),
+      // ── LA FRANJA VA POR EL COBRO, NO POR LA APERTURA DE LA MESA ─────────
+      // Una mesa abierta a las 15:50 y cobrada a las 16:10 cuenta como
+      // vespertino, y no es configurable: el corte Z cuadra contra el efectivo
+      // del cajón, así que si el billete entró en la tarde y la venta contara
+      // para la mañana, **los arqueos de las dos franjas salen mal a la vez**.
+      // A quién se le acredita el trabajo es otra pregunta, y se contesta en el
+      // reporte filtrando por hora de apertura. Ver `docs/DISENO_TURNOS.md` §1.3.
+      //
+      // Con `franjas_activas = false` esto es `null` — o sea, todos los locales
+      // de hoy siguen exactamente igual.
+      franja: franjaAlEscribir(configuracion, cobradoEn),
       propina: fiscalTicket.propina,
       // ── CUÁNTAS VECES HA SALIDO ESTE TICKET EN PAPEL ────────────────────
       // Nace en 1 porque abajo se imprime, y en 0 cuando NO se imprime nada
@@ -1335,7 +1534,8 @@ export default function PosScreen() {
       iva: ivaTicket,
       cambio_entregado: safeNumber(datosPago?.cambio, 0),
       mesa_nombre: isMesa ? mesaActual.nombre : 'Directa',
-      _quedaGente: isParcial && carritoRestante.length > 0,
+      _quedaGente:
+        (isParcial || !!folioDeLaCuenta) && carritoRestante.length > 0,
     };
 
     enqueueAction('ventas', 'insert', nuevaVentaBD);
@@ -1467,6 +1667,16 @@ export default function PosScreen() {
           ...mesaActual,
           estado: 'ocupada',
           orden_actual: {
+            // ── SE CONSERVAN `folio` E `impresiones` ─────────────────────
+            // Aquí faltaban las dos, y era un fallo de los de esta casa: tras
+            // un cobro parcial la mesa OLVIDABA el folio de la cuenta ya
+            // impresa, así que la siguiente impresión acuñaba un número nuevo
+            // y el cliente se quedaba con dos papeles distintos de la misma
+            // cuenta. Nada daba error; el hueco aparecía en la serie.
+            ...(mesaActual?.orden_actual?.folio
+              ? { folio: mesaActual.orden_actual.folio }
+              : {}),
+            impresiones: safeNumber(mesaActual?.orden_actual?.impresiones, 0),
             items: carritoRestante,
             total: calcularVenta({
               items: carritoRestante.map((it) => ({
@@ -2092,6 +2302,67 @@ export default function PosScreen() {
                   </div>
                 )}
 
+                {/* ── CUENTAS YA IMPRESAS DE ESTA MESA (§F) ────────────────
+                    Se derivan del carrito: cada línea lleva su folio. No hay
+                    una lista guardada aparte, que sería una segunda versión de
+                    lo mismo y acabaría discrepando. */}
+                {foliosDelCarrito(carrito).map((folio) => (
+                  <div
+                    key={folio}
+                    className="mb-3 p-3 rounded-ui border-2 border-ops-accent/40 bg-ops-accent/5"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-black text-ops-ink">
+                        Cuenta {folio}
+                      </p>
+                      <p className="text-sm font-black text-ops-ink">
+                        {totalDeCuenta(folio).toLocaleString('es-MX', {
+                          style: 'currency',
+                          currency: 'MXN',
+                        })}
+                      </p>
+                    </div>
+                    <p className="text-[11px] font-bold text-ops-muted mb-2">
+                      {lineasDeCuenta(carrito, folio).length} renglón(es)
+                      impresos. Se cobra exactamente lo que dice ese papel.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <OpsButton
+                        tamano="sm"
+                        variante="cobro"
+                        icono={CreditCard}
+                        onClick={() => cobrarCuenta(folio)}
+                        disabled={isProcessing}
+                      >
+                        Cobrar esta
+                      </OpsButton>
+                      <OpsButton
+                        tamano="sm"
+                        onClick={() => deshacerCuentaParcial(folio)}
+                        disabled={isProcessing}
+                      >
+                        Deshacer
+                      </OpsButton>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Dividir sólo tiene sentido con `ticket_final`: en el flujo
+                    de dos papeles la pre-cuenta no lleva número, así que no
+                    habría nada que conciliar. */}
+                {(configuracion?.flujo_cuenta || '') === 'ticket_final' &&
+                  quedaPorFacturar(carrito) && (
+                    <OpsButton
+                      tamano="sm"
+                      icono={ReceiptText}
+                      onClick={abrirParcial}
+                      disabled={carrito.length === 0}
+                      className="w-full mb-3"
+                    >
+                      Cuenta aparte para unos cuantos
+                    </OpsButton>
+                  )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <OpsButton
                     tamano="lg"
@@ -2556,12 +2827,109 @@ export default function PosScreen() {
       )}
       {showModalCobro && (
         <ModalCobro
-          total={granTotal}
+          total={cuentaACobrar ? totalDeCuenta(cuentaACobrar) : granTotal}
           comensales={isMesa ? safeNumber(mesaActual?.comensales_reales, 1) : 1}
-          carrito={carrito}
-          onClose={() => setShowModalCobro(false)}
+          carrito={
+            cuentaACobrar ? lineasDeCuenta(carrito, cuentaACobrar) : carrito
+          }
+          // La división por platillos se esconde: lo que se cobra ya está
+          // decidido y escrito en el papel que el cliente tiene delante.
+          // Preguntar otra vez abriría la puerta a cobrar algo distinto de lo
+          // que dice la cuenta, y nadie se enteraría hasta cuadrar la caja.
+          divisionBloqueada={!!cuentaACobrar}
+          onClose={() => {
+            setShowModalCobro(false);
+            setCuentaACobrar(null);
+          }}
           onProcesarPago={handleProcesarVenta}
         />
+      )}
+
+      {/* ── ELEGIR QUÉ SE LLEVA ESTE GRUPO (§F) ────────────────────────────
+          Se eligen UNIDADES, no renglones: en una mesa nadie pide en líneas
+          separadas por grupo. Hay «4 cervezas» y se van dos personas con una
+          cada una. */}
+      {modalParcial !== null && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-ops-panel border-2 border-ops-border rounded-ui w-full max-w-lg max-h-[85dvh] flex flex-col">
+            <div className="p-5 border-b border-ops-border">
+              <p className="text-sm font-black text-ops-ink">
+                ¿Qué se lleva este grupo?
+              </p>
+              <p className="text-[11px] font-bold text-ops-muted mt-1">
+                Sale un papel con su propio folio. Lo que elijas aquí es lo que
+                se cobrará después: en el cobro ya no se vuelve a preguntar.
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-2">
+              {pendientes(carrito).map((linea) => {
+                const elegidas = safeNumber(modalParcial[linea.id], 0);
+                return (
+                  <div
+                    key={linea.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-ui bg-ops-panel-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-ops-ink truncate">
+                        {linea.nombre}
+                      </p>
+                      <p className="text-[11px] font-bold text-ops-muted">
+                        {linea.cantidad} en la mesa
+                        {safeNumber(linea.cantidad_enviada, 0) > 0
+                          ? ` · ${linea.cantidad_enviada} en cocina`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        aria-label={`Quitar una unidad de ${linea.nombre}`}
+                        onClick={() => cambiarUnidadesParcial(linea, -1)}
+                        disabled={elegidas === 0}
+                        className="w-9 h-9 rounded-ui bg-ops-panel border-2 border-ops-border font-black text-ops-ink disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <span className="w-8 text-center font-black text-ops-ink">
+                        {elegidas}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Sumar una unidad de ${linea.nombre}`}
+                        onClick={() => cambiarUnidadesParcial(linea, 1)}
+                        disabled={elegidas >= safeNumber(linea.cantidad, 0)}
+                        className="w-9 h-9 rounded-ui bg-ops-panel border-2 border-ops-border font-black text-ops-ink disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-5 border-t border-ops-border flex gap-3">
+              <OpsButton
+                tamano="lg"
+                onClick={() => setModalParcial(null)}
+                className="flex-1"
+              >
+                Cancelar
+              </OpsButton>
+              <OpsButton
+                tamano="lg"
+                variante="cobro"
+                icono={ReceiptText}
+                onClick={confirmarParcial}
+                disabled={!haySeleccion(carrito, modalParcial)}
+                className="flex-1"
+              >
+                Imprimir su cuenta
+              </OpsButton>
+            </div>
+          </div>
+        </div>
       )}
 
       {ticketGenerado && (

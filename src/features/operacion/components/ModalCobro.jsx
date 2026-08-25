@@ -57,6 +57,19 @@ export default function ModalCobro({
   carrito,
   onClose,
   onProcesarPago,
+  /**
+   * Esconde la división por platillos.
+   *
+   * Se pone cuando lo que se está cobrando es una CUENTA YA IMPRESA (§F del
+   * flujo de cuenta): qué se cobra lo dice el papel que el cliente tiene en la
+   * mano, y volver a preguntarlo abriría la puerta a cobrar algo distinto de
+   * lo impreso. Nadie se enteraría hasta cuadrar la caja, si es que alguien la
+   * cuadra.
+   *
+   * La división por personas y el pago en partes siguen ahí: repartir entre
+   * cinco lo que dice el papel no cambia lo que dice el papel.
+   */
+  divisionBloqueada = false,
 }) {
   // ¿Caben las dos columnas del modal, o hay que apilarlas? Mismo umbral y
   // mismo hook que el resto de la app.
@@ -973,16 +986,26 @@ export default function ModalCobro({
               >
                 Personas
               </button>
-              <button
-                onClick={() => setTipoDivision('platillos')}
-                className={`flex-1 py-3 font-bold text-sm rounded-ui transition-all flex items-center justify-center gap-2 ${tipoDivision === 'platillos' ? 'bg-white dark:bg-ops-panel shadow-sm text-ops-accent' : 'text-ops-muted hover:text-ops-ink dark:hover:text-ops-ink'}`}
-              >
-                <Receipt className="w-4 h-4" /> Platillos
-              </button>
+              {!divisionBloqueada && (
+                <button
+                  onClick={() => setTipoDivision('platillos')}
+                  className={`flex-1 py-3 font-bold text-sm rounded-ui transition-all flex items-center justify-center gap-2 ${tipoDivision === 'platillos' ? 'bg-white dark:bg-ops-panel shadow-sm text-ops-accent' : 'text-ops-muted hover:text-ops-ink dark:hover:text-ops-ink'}`}
+                >
+                  <Receipt className="w-4 h-4" /> Platillos
+                </button>
+              )}
             </div>
 
+            {/* Se dice POR QUÉ no está: un botón que desaparece sin
+                explicación se lee como una app rota. */}
+            {divisionBloqueada && (
+              <p className="text-[11px] font-bold text-ops-muted mb-6 -mt-3">
+                Esta cuenta ya se imprimió: se cobra tal como salió en el papel.
+              </p>
+            )}
+
             {/* PANEL: POR PLATILLOS */}
-            {tipoDivision === 'platillos' && (
+            {!divisionBloqueada && tipoDivision === 'platillos' && (
               <div className="mb-6 bg-white dark:bg-ops-panel p-5 rounded-ui border border-ops-border shadow-sm animate-in slide-in-from-left-2 transition-colors">
                 <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-4">
                   1. Selecciona qué se va a cobrar ahorita:

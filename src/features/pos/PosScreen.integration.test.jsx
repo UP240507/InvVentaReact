@@ -110,3 +110,139 @@ describe('Integración cobro · PosScreen → ModalCobro → venta', () => {
     expect(venta.propina).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUENTAS PARCIALES (§F) — la red que faltaba para el flujo de MESA.
+//
+// Hasta hoy este fichero sólo cubría la venta directa de mostrador, así que el
+// eslabón que une «lo que se imprimió» con «lo que se cobra» no lo miraba nada.
+// Y es el eslabón caro: si la venta saliera con un folio distinto del que lleva
+// el papel, el cliente tendría en la mano un documento que no corresponde a
+// ninguna venta, y **nada daría error** — se vería semanas después, al buscar
+// un hueco en la serie.
+//
+// La afirmación que importa es esa: la venta lleva EL FOLIO DEL PAPEL y SU
+// total, no el de la mesa entera.
+describe('Integración · cuenta parcial en mesa → cobro', () => {
+  /** Monta una mesa de 4 cervezas ya guardada, en flujo de un solo papel. */
+  const montarMesa = () => {
+    Object.assign(h.app, {
+      recetas: [
+        { id: 9, nombre: 'Cerveza', precio_venta: 50, categoria: 'Bebidas' },
+      ],
+      mesas: [
+        {
+          id: 7,
+          nombre: 'Mesa 7',
+          estado: 'ocupada',
+          comensales_reales: 4,
+          orden_actual: {
+            items: [
+              {
+                id: 9,
+                nombre: 'Cerveza',
+                precio: 50,
+                cantidad: 4,
+                cantidad_enviada: 0,
+              },
+            ],
+            total: 200,
+          },
+        },
+      ],
+      configuracion: {
+        precios_incluyen_iva: true,
+        flujo_cuenta: 'ticket_final',
+        nombre_empresa: 'AZUL',
+      },
+    });
+    return render(
+      <MemoryRouter initialEntries={['/pos?mesa=7']}>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+  };
+
+  /** La reserva de folio que se encoló al imprimir: ahí está el número. */
+  const folioReservado = () =>
+    h.enqueued.find((a) => a[0] === 'folios_reservados')?.[2];
+
+  const mesaGuardada = () =>
+    h.enqueued.filter((a) => a[0] === 'mesas').at(-1)?.[2];
+
+  it('EL ESLABÓN: la venta lleva el folio del papel y el total de la parte', async () => {
+    const user = userEvent.setup();
+    montarMesa();
+
+    // 1 · Se elige qué se lleva el grupo: 2 de las 4 cervezas.
+    await user.click(
+      screen.getByRole('button', { name: /Cuenta aparte para unos cuantos/ }),
+    );
+    const mas = await screen.findByRole('button', {
+      name: /Sumar una unidad de Cerveza/,
+    });
+    await user.click(mas);
+    await user.click(mas);
+    await user.click(
+      screen.getByRole('button', { name: /Imprimir su cuenta/ }),
+    );
+
+    // 2 · Se imprimió UNA cuenta, con folio, y por 100 (2 × 50), no por 200.
+    const reserva = folioReservado();
+    expect(reserva, 'la cuenta parcial reserva su folio').toBeTruthy();
+    expect(reserva.total_impreso).toBe(100);
+
+    // 3 · La mesa sigue abierta: los otros dos siguen sentados.
+    expect(mesaGuardada().estado).toBe('ocupada');
+
+    // 4 · Se cobra ESA cuenta.
+    await user.click(
+      await screen.findByRole('button', { name: /Cobrar esta/ }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /Pagar Restante/ }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+
+    const venta = ventaEncolada();
+    expect(venta).toBeTruthy();
+    // ── LA AFIRMACIÓN, Y SU CONTROL NEGATIVO ─────────────────────────────
+    expect(venta.folio).toBe(reserva.id); // el folio DEL PAPEL
+    expect(venta.total).toBe(100); // lo que dice el papel…
+    expect(venta.total).not.toBe(200); // …y no la mesa entera
+    expect(venta.items).toHaveLength(1);
+    expect(venta.items[0].cantidad).toBe(2);
+  });
+
+  it('lo que queda sigue en la mesa, y la mesa no se libera', async () => {
+    const user = userEvent.setup();
+    montarMesa();
+
+    await user.click(
+      screen.getByRole('button', { name: /Cuenta aparte para unos cuantos/ }),
+    );
+    const mas = await screen.findByRole('button', {
+      name: /Sumar una unidad de Cerveza/,
+    });
+    await user.click(mas);
+    await user.click(
+      screen.getByRole('button', { name: /Imprimir su cuenta/ }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /Cobrar esta/ }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /Pagar Restante/ }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+
+    const mesa = mesaGuardada();
+    expect(mesa.estado).toBe('ocupada');
+    expect(mesa.orden_actual.items).toHaveLength(1);
+    expect(mesa.orden_actual.items[0].cantidad).toBe(3);
+  });
+});
