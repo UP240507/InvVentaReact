@@ -86,10 +86,16 @@ alter table public.folios_reservados enable row level security;
 -- ya hecha, y sin delete no hay forma de borrar la prueba de un folio que se
 -- imprimió. Una tabla que existe para que no falten números no puede permitir
 -- que le quiten números.
+-- Los `drop ... if exists` no son adorno: esta migracion ya esta APLICADA en
+-- AZUL bajo otro sello de version (20260822022834), asi que un `db push` desde
+-- el repo la vuelve a correr. Sin esta linea, `create policy` revienta con
+-- "already exists" y detiene el push entero a media tanda.
+drop policy if exists folios_reservados_lee on public.folios_reservados;
 create policy folios_reservados_lee on public.folios_reservados
   for select to authenticated
   using (restaurante_id = public.get_restaurante_id());
 
+drop policy if exists folios_reservados_inserta on public.folios_reservados;
 create policy folios_reservados_inserta on public.folios_reservados
   for insert to authenticated
   with check (restaurante_id = public.get_restaurante_id());
