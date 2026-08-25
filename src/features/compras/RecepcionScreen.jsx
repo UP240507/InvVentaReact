@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { franjaAlEscribir } from '../../lib/Franjas';
 import {
   PackageCheck,
   Download,
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function RecepcionScreen() {
-  const { ordenesCompra, productos, showToast } = useAppStore();
+  const { ordenesCompra, productos, configuracion, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
 
@@ -67,6 +68,9 @@ export default function RecepcionScreen() {
 
     let productosActualizados = [...productos];
     const nuevosMovimientos = [];
+    // Un solo instante para toda la recepción; ver el comentario del
+    // movimiento, unas líneas más abajo.
+    const recibidoEn = new Date();
 
     (orden.items || []).forEach((item, index) => {
       const prodIndex = productosActualizados.findIndex(
@@ -113,7 +117,11 @@ export default function RecepcionScreen() {
           producto_id: prod.id,
           cantidad: cantidadRecibida,
           referencia: `OC: ${orden.numero || orden.folio} | Costo Ingreso: $${costoRecibido}`,
-          fecha: new Date().toISOString(),
+          fecha: recibidoEn.toISOString(),
+          // Toda la recepción comparte instante y franja: es un solo acto, y
+          // partirla porque el bucle cruzó las 16:00 sería inventar una
+          // entrega en dos turnos.
+          franja: franjaAlEscribir(configuracion, recibidoEn),
           usuario: user?.nombre || 'Administrador',
           stock_anterior: stockAnterior,
           stock_nuevo: nuevoStock,

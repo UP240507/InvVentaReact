@@ -13,6 +13,7 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { franjaAlEscribir } from '../../lib/Franjas';
 import {
   Package,
   Plus,
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function IngredientesScreen() {
-  const { productos, showToast } = useAppStore();
+  const { productos, configuracion, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [busqueda, setBusqueda] = useState('');
@@ -150,13 +151,15 @@ export default function IngredientesScreen() {
       const stockAnterior = Number(itemEditando.stock) || 0;
       const stockNuevo = Number(payload.stock) || 0;
       if (stockNuevo !== stockAnterior) {
+        const ajustadoEn = new Date();
         enqueueAction('movimientos', 'upsert', {
           id: Date.now(),
           tipo: 'Ajuste',
           producto_id: itemEditando.id,
           cantidad: Math.abs(stockNuevo - stockAnterior),
           referencia: 'Edición manual del insumo',
-          fecha: new Date().toISOString(),
+          fecha: ajustadoEn.toISOString(),
+          franja: franjaAlEscribir(configuracion, ajustadoEn),
           usuario: useAuthStore.getState().user?.nombre || 'Sistema',
           stock_anterior: stockAnterior,
           stock_nuevo: stockNuevo,

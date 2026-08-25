@@ -59,6 +59,7 @@ import {
   fechaDeGasto,
 } from '../../lib/Gastos';
 import { hoyLocalISO } from '../../lib/Fechas';
+import { franjaAlEscribir } from '../../lib/Franjas';
 
 const dinero = (n) =>
   `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -99,6 +100,7 @@ export default function GastosScreen() {
     categorias_gasto: categorias,
     gastos_recurrentes: recurrentes,
     nominas,
+    configuracion,
     showToast,
   } = useAppStore();
   const { enqueueAction } = useSyncStore();
@@ -266,6 +268,7 @@ export default function GastosScreen() {
     const anterior = editId
       ? (gastos || []).find((g) => g.id === editId)
       : null;
+    const capturadoEn = new Date();
     const fila = {
       ...(anterior || {}),
       ...form,
@@ -275,6 +278,19 @@ export default function GastosScreen() {
       // deja en null: no se le inventa una. Que siga «sin clasificar» es
       // información; ponerle «turno» porque sí sería una afirmación falsa.
       escala: escalaDeGasto(form) ?? escalaDeGasto(anterior),
+      // ── LA FRANJA DE UN GASTO SALE DEL RELOJ, NO DE SU FECHA ─────────────
+      // `gastos.fecha` es un `date` sin hora: un gasto no puede saber su franja
+      // a partir de su propio dato de negocio. Al capturarlo se estampa el
+      // momento en que alguien lo registró, que en la práctica es cuando
+      // ocurrió —los gastos del turno se capturan en el turno—.
+      //
+      // Al EDITAR se preserva lo que hubiera, incluido `null`. Deducirle una
+      // franja a una fila de hace tres meses sería inventar un dato: su
+      // `created_at` dice cuándo se tecleó, no cuándo se gastó. Mismo criterio
+      // que la escala, tres líneas más arriba.
+      franja: anterior
+        ? (anterior.franja ?? null)
+        : franjaAlEscribir(configuracion, capturadoEn),
       origen: anterior?.origen ?? 'manual',
       origen_ref: anterior?.origen_ref ?? null,
       estado: anterior?.estado ?? 'pagado',
@@ -312,6 +328,12 @@ export default function GastosScreen() {
       ...confirmarMonto,
       monto: Math.round(monto * 100) / 100,
       estado: 'pagado',
+      // Un recurrente nace pendiente cuando alguien abre la pantalla, así que
+      // el momento de generarlo no dice nada. El de confirmarlo sí: ahí hay
+      // una persona con el recibo delante. Si ya traía franja, se respeta.
+      franja:
+        (confirmarMonto?.franja ?? null) ||
+        franjaAlEscribir(configuracion, new Date()),
     };
     delete fila._derivado;
     enqueueAction('gastos', 'upsert', fila);

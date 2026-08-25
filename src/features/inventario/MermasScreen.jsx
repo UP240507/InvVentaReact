@@ -11,6 +11,7 @@ import {
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { franjaAlEscribir } from '../../lib/Franjas';
 import {
   Trash2,
   Plus,
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export default function MermasScreen() {
-  const { productos, movimientos, showToast } = useAppStore();
+  const { productos, movimientos, configuracion, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
 
@@ -102,13 +103,21 @@ export default function MermasScreen() {
 
     const tipoMovimiento = esAlta ? 'Ajuste' : 'Merma';
 
+    // El mismo reloj para la fecha y para la franja; ver el comentario de
+    // `PosScreen` sobre por qué no pueden salir de dos `new Date()` distintos.
+    const movidoEn = new Date();
+
     const nuevoMovimiento = {
       id: Date.now(),
       tipo: tipoMovimiento,
       producto_id: producto.id,
       cantidad: cantidad,
       referencia: `[${tipoAjuste}] ${motivoAjuste.trim()}`,
-      fecha: new Date().toISOString(),
+      fecha: movidoEn.toISOString(),
+      // El inventario es UNO. La franja es una dimensión del movimiento —para
+      // poder preguntar cuánto consumió cada turno—, nunca una partición del
+      // stock: el refrigerador no se puede partir en dos. Ver §1.2 del diseño.
+      franja: franjaAlEscribir(configuracion, movidoEn),
       usuario: user?.nombre || 'Administrador',
       stock_anterior: stockActual,
       stock_nuevo: nuevoStock,

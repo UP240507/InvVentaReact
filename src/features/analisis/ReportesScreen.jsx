@@ -13,6 +13,7 @@ import {
   PageHeader,
   Card,
   SegmentedControl,
+  Chip,
   Input,
   Field,
 } from '../../components/ui';
@@ -33,6 +34,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { aISOLocal } from '../../lib/Fechas';
+import { FRANJAS, soloDeFranja, cuantasSinFranja } from '../../lib/Franjas';
 import { foliosSinVenta } from '../../lib/Folio';
 import { supabase } from '../../api/supabase';
 
@@ -117,6 +119,8 @@ export default function ReportesScreen() {
   const [fechaInicio, setFechaInicio] = useState(aISOLocal(primerDiaMes));
   const [fechaFin, setFechaFin] = useState(aISOLocal(hoy));
   const [turnoSeleccionado, setTurnoSeleccionado] = useState(null);
+  // Arranca en «todos»: mientras nadie elija, no se esconde nada.
+  const [franja, setFranja] = useState('todos');
 
   // ── Costo de receta ─────────────────────────────────────────────────────────
   const costoReceta = (ingredientes = []) =>
@@ -139,10 +143,23 @@ export default function ReportesScreen() {
     const inicio = new Date(fechaInicio + 'T00:00:00Z');
     const fin = new Date(fechaFin + 'T23:59:59Z');
 
-    const vPeriodo = (ventas || []).filter((v) => {
+    const vDelPeriodo = (ventas || []).filter((v) => {
       const f = parseUTC(v.fecha || v.created_at);
       return f && f >= inicio && f <= fin;
     });
+
+    // ── EL FILTRO DE FRANJA, Y POR QUÉ AQUÍ SÍ MUEVE LAS CIFRAS ─────────────
+    // En Gastos, la pestaña filtra la lista y deja los totales quietos. Aquí es
+    // al revés a propósito: la razón de existir de las franjas es **comparar**
+    // la mañana con la tarde —producto, propinas, mesas—, y un filtro que no
+    // cambiara las cifras no contestaría esa pregunta.
+    //
+    // Por eso se usa `soloDeFranja` y no `filtrarPorFranja`: lo sin clasificar
+    // no cuenta en ninguna de las dos, o mañana + tarde daría más que el día.
+    // Lo que queda fuera no se calla — se dice arriba, con `sinClasificar`.
+    const franjaActiva = !!configuracion?.franjas_activas && franja !== 'todos';
+    const vPeriodo = franjaActiva ? soloDeFranja(vDelPeriodo, franja) : vDelPeriodo;
+    const sinClasificar = franjaActiva ? cuantasSinFranja(vDelPeriodo) : 0;
     const cPeriodo = (ordenesCompra || []).filter((c) => {
       const f = parseUTC(c.fecha || c.created_at);
       return f && f >= inicio && f <= fin && c.estado === 'Completada';
@@ -151,10 +168,15 @@ export default function ReportesScreen() {
       const f = parseUTC(n.fecha_fin || n.created_at);
       return f && f >= inicio && f <= fin;
     });
-    const mPeriodo = (movimientos || []).filter((m) => {
+    const mDelPeriodo = (movimientos || []).filter((m) => {
       const f = parseUTC(m.fecha);
       return f && f >= inicio && f <= fin;
     });
+    // El inventario sigue siendo uno: esto filtra QUÉ MOVIMIENTOS se miran, no
+    // parte el stock. La valorización total no se toca por elegir una franja.
+    const mPeriodo = franjaActiva
+      ? soloDeFranja(mDelPeriodo, franja)
+      : mDelPeriodo;
 
     // Financiero
     const tIngresos = vPeriodo.reduce((s, v) => s + Number(v.total || 0), 0);
@@ -277,6 +299,7 @@ export default function ReportesScreen() {
 
     return {
       vPeriodo,
+      sinClasificar,
       tIngresos,
       tEfectivo,
       tTarjeta,
@@ -303,6 +326,8 @@ export default function ReportesScreen() {
     recetas,
     fechaInicio,
     fechaFin,
+    franja,
+    configuracion,
   ]);
 
   const turnosPeriodo = useMemo(() => {
@@ -596,6 +621,26 @@ export default function ReportesScreen() {
         onChange={setTab}
         opciones={TABS.map((t) => ({ id: t.id, label: t.label }))}
       />
+
+      {/* ── FRANJA DEL DÍA ────────────────────────────────────────────────────
+          Sólo aparece si el local encendió las franjas. Con el ajuste apagado
+          —que es como están todos hoy— esta pantalla no enseña ni una palabra
+          nueva, que es la condición que se puso al diseñarlo. */}
+      {configuracion?.franjas_activas && (
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <SegmentedControl
+            className="self-start"
+            valor={franja}
+            onChange={setFranja}
+            opciones={FRANJAS}
+          />
+          {data.sinClasificar > 0 && (
+            <Chip tono="alerta">
+              {data.sinClasificar} sin clasificar, fuera de estas cifras
+            </Chip>
+          )}
+        </div>
+      )}
 
       {/* ── CONTENIDO ── */}
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-media">
