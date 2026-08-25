@@ -5,6 +5,7 @@ import { PageShell, PageHeader, Card } from '../../components/ui';
 import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
 import { usePlan } from '../../hooks/usePlan';
+import { desdeArchivo, aVistaPrevia } from '../../lib/LogoTermico';
 import { cargarCatalogo, precioMXN } from '../suscripciones/checkout';
 import { supabase } from '../../api/supabase';
 import {
@@ -12,6 +13,7 @@ import {
   Building2,
   Receipt,
   Percent,
+  Clock,
   Tag,
   Printer,
   Plus,
@@ -102,6 +104,15 @@ const TABS = [
   // Para devolverlo: que `EsperaScreen` lea `fondo_caja_default` al prerellenar
   // y que la apertura se niegue si `requiere_fondo_caja` está puesto y el monto
   // viene vacío. Las dos mitades, o ninguna.
+  //
+  // ── «Turnos» VUELVE, pero significando otra cosa ──────────────────────────
+  // Ya no son los cuatro ajustes de apertura de caja que nadie leía: es la
+  // franja del día (matutino / vespertino), que sí tiene consumidores —el POS
+  // al cobrar, el inventario al mover, los gastos al capturar y el filtro de
+  // Reportes—. Se pone la pestaña **al final** de la implementación y no al
+  // principio, a propósito: hasta que existían los consumidores, activar esto
+  // no habría hecho nada, que es justo el fallo que se acaba de describir.
+  { id: 'turnos', label: 'Turnos', icon: Clock },
 ];
 
 // ── Componentes de campo reutilizables (NIVEL DE MÓDULO) ──────────────────────
@@ -328,6 +339,14 @@ export default function ConfiguracionScreen() {
     logo_url: conf.logo_url || '',
     iva: conf.iva !== undefined ? conf.iva * 100 : 16,
     mensaje_ticket: conf.mensaje_ticket || '¡Gracias por su preferencia!',
+    // Columnas reales de `configuracion`, no `cfdi_config`: las lee el POS al
+    // cobrar y el inventario al mover, así que tienen que ser consultables.
+    franjas_activas: conf.franjas_activas ?? false,
+    franja_corte: (conf.franja_corte || '16:00').slice(0, 5),
+    // El logo, ya en puntos de impresora. Ver `lib/LogoTermico.js`.
+    logo_bitmap: conf.logo_bitmap || '',
+    logo_ancho: conf.logo_ancho || 0,
+    logo_alto: conf.logo_alto || 0,
     // Desde cfdi_config jsonb
     encabezado_ticket: cfdiConf.encabezado_ticket || '',
     mostrar_propinas: cfdiConf.mostrar_propinas ?? true,
@@ -336,6 +355,50 @@ export default function ConfiguracionScreen() {
     requiere_fondo_caja: cfdiConf.requiere_fondo_caja ?? true,
     fondo_caja_default: cfdiConf.fondo_caja_default || 500,
   });
+
+  // ── El logo, en puntos ──────────────────────────────────────────────────────
+  // `vistaLogo` es el bitmap pintado de vuelta, no el archivo elegido: lo que
+  // se ve tiene que ser lo que sale por la impresora.
+  const [vistaLogo, setVistaLogo] = useState(() =>
+    aVistaPrevia(
+      {
+        bitmap: conf.logo_bitmap || '',
+        ancho: conf.logo_ancho || 0,
+        alto: conf.logo_alto || 0,
+      },
+      { escala: 2 },
+    ),
+  );
+  const [errorLogo, setErrorLogo] = useState('');
+
+  const alElegirLogo = async (e) => {
+    const archivo = e.target.files?.[0];
+    // El input se limpia siempre: sin esto, elegir el mismo archivo dos veces
+    // seguidas —después de un error, que es justo cuando se reintenta— no
+    // dispara `change` y parece que la pantalla se quedó colgada.
+    e.target.value = '';
+    if (!archivo) return;
+    setErrorLogo('');
+
+    const logo = await desdeArchivo(archivo, { cols: 32 });
+    if (!logo) {
+      setErrorLogo('No se pudo leer esa imagen. Prueba con un PNG o un JPG.');
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      logo_bitmap: logo.bitmap,
+      logo_ancho: logo.ancho,
+      logo_alto: logo.alto,
+    }));
+    setVistaLogo(aVistaPrevia(logo, { escala: 2 }));
+  };
+
+  const quitarLogo = () => {
+    setForm((f) => ({ ...f, logo_bitmap: '', logo_ancho: 0, logo_alto: 0 }));
+    setVistaLogo(null);
+    setErrorLogo('');
+  };
 
   const parseJsonb = (val) => {
     if (!val) return [];
@@ -380,6 +443,13 @@ export default function ConfiguracionScreen() {
       logo_url: form.logo_url,
       iva: parseFloat(form.iva) / 100,
       mensaje_ticket: form.mensaje_ticket,
+      franjas_activas: !!form.franjas_activas,
+      franja_corte: form.franja_corte || '16:00',
+      // Los tres van juntos o no van: un bitmap sin sus medidas es basura que
+      // el hub descartaría, y unas medidas sin bitmap no imprimen nada.
+      logo_bitmap: form.logo_bitmap || null,
+      logo_ancho: form.logo_bitmap ? form.logo_ancho : null,
+      logo_alto: form.logo_bitmap ? form.logo_alto : null,
       categorias: categorias,
       unidades: unidades,
       printer_baud: nuevaImp.puerto || conf.printer_baud || '9100',
@@ -617,35 +687,77 @@ export default function ConfiguracionScreen() {
                   setForm={setForm}
                 />
 
-                {/* Logo URL */}
+                {/* ── LOGO DEL TICKET ────────────────────────────────────────
+                    Aquí había un campo «URL del Logo» que decía «Aparece en
+                    tickets y reportes». No aparecía en ninguna parte: la
+                    columna `logo_url` existía desde hacía meses y no la leía
+                    nadie. Es el fallo de esta casa —no da error, da ausencia—,
+                    y encima el dueño concluía que el sistema estaba roto.
+
+                    Se sustituye por lo que sí imprime. `logo_url` se queda en
+                    la base sin tocar; se limpiará aparte, cuando el logo en
+                    papel esté verificado. */}
                 <div>
                   <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest block mb-1.5">
-                    URL del Logo
+                    Logo del ticket
                   </label>
-                  <div className="flex gap-3">
-                    <input
-                      type="url"
-                      value={form.logo_url}
-                      onChange={(e) =>
-                        setForm({ ...form, logo_url: e.target.value })
-                      }
-                      placeholder="https://..."
-                      className="flex-1 px-4 py-3 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-sm text-adm-ink placeholder:text-adm-muted dark:placeholder:text-adm-muted/50 outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
-                    />
-                    {form.logo_url && (
-                      <img
-                        src={form.logo_url}
-                        alt="logo preview"
-                        className="w-12 h-12 object-contain rounded-ui border-2 border-adm-border bg-adm-bg"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={alElegirLogo}
+                        className="block w-full text-xs font-bold text-adm-ink file:mr-3 file:px-4 file:py-2 file:rounded-ui file:border-0 file:bg-adm-chip file:text-adm-chip-fg file:font-black file:text-xs file:cursor-pointer"
                       />
+                      {form.logo_bitmap ? (
+                        <div className="flex items-center gap-3">
+                          <p className="text-[10px] font-bold text-adm-muted">
+                            {form.logo_ancho} × {form.logo_alto} puntos
+                          </p>
+                          <button
+                            type="button"
+                            onClick={quitarLogo}
+                            className="text-[10px] font-black uppercase tracking-widest text-adm-danger"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] font-bold text-adm-muted">
+                          Sin logo. El ticket sale con el nombre del local.
+                        </p>
+                      )}
+                      {errorLogo && (
+                        <p className="text-[10px] font-bold text-adm-danger">
+                          {errorLogo}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* La vista previa son LOS PUNTOS QUE SE VAN A IMPRIMIR, no
+                        la imagen que se eligió: blanco y negro puro, al tamaño
+                        real del papel. Si enseñáramos el PNG original con sus
+                        grises, «se ve bien» no querría decir nada. */}
+                    {vistaLogo && (
+                      <div className="shrink-0 text-center">
+                        <img
+                          src={vistaLogo}
+                          alt="Cómo saldrá en el papel"
+                          className="border-2 border-adm-border rounded-ui bg-white p-1"
+                          style={{ imageRendering: 'pixelated', width: 120 }}
+                        />
+                        <p className="text-[9px] font-black text-adm-muted uppercase tracking-widest mt-1">
+                          Así saldrá en papel
+                        </p>
+                      </div>
                     )}
                   </div>
-                  <p className="text-[10px] font-bold text-adm-muted mt-1">
-                    Aparece en tickets y reportes. Sube a Supabase Storage o usa
-                    un CDN externo.
+
+                  <p className="text-[10px] font-bold text-adm-muted mt-2">
+                    Se guarda la imagen convertida a puntos, no un enlace: la
+                    caja imprime sin internet y el papel tiene que salir igual
+                    aunque la red esté caída.
                   </p>
                 </div>
               </div>
@@ -1405,56 +1517,69 @@ export default function ConfiguracionScreen() {
               </div>
             )}
 
-            {/* ── TURNOS ── */}
+            {/* ── TURNOS: LA FRANJA DEL DÍA ── */}
             {tab === 'turnos' && (
               <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-media">
                 <p className="text-[10px] font-black text-adm-muted uppercase tracking-widest">
-                  Configuración de apertura y cierre de caja
+                  Separar la mañana de la tarde en los reportes
                 </p>
-                <div className="grid grid-cols-2 gap-5">
-                  <Field
-                    label="Hora apertura default"
-                    field="hora_apertura_default"
-                    type="time"
-                    form={form}
-                    setForm={setForm}
-                  />
-                  <Field
-                    label="Hora cierre default"
-                    field="hora_cierre_default"
-                    type="time"
-                    form={form}
-                    setForm={setForm}
-                  />
-                </div>
+
                 <Toggle
-                  field="requiere_fondo_caja"
-                  label="Requerir fondo de caja al abrir turno"
-                  description="El gerente deberá ingresar el monto del fondo inicial"
+                  field="franjas_activas"
+                  label="Separar turnos matutino y vespertino"
+                  description="Cada venta, movimiento de inventario y gasto queda marcado con el turno en que ocurrió. Apagado, el sistema funciona exactamente como hasta ahora."
                   form={form}
                   setForm={setForm}
                 />
-                {form.requiere_fondo_caja && (
-                  <div>
-                    <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest block mb-1.5">
-                      Fondo de caja default (MXN)
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <span className="font-black text-adm-muted">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.fondo_caja_default}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            fondo_caja_default: e.target.value,
-                          })
-                        }
-                        className="w-40 px-4 py-3 bg-adm-bg border-2 border-adm-field rounded-ui font-black text-lg text-adm-ink outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
+
+                {form.franjas_activas && (
+                  <>
+                    <div className="grid grid-cols-2 gap-5">
+                      <Field
+                        label="Hora en que empieza la tarde"
+                        field="franja_corte"
+                        type="time"
+                        form={form}
+                        setForm={setForm}
                       />
                     </div>
-                  </div>
+
+                    {/* Lo que este ajuste NO hace, dicho aquí y no en un
+                        documento que nadie abre. Un letrero que promete de más
+                        es el fallo que se quitó de esta misma pantalla. */}
+                    <div className="text-xs text-adm-muted leading-relaxed border-l-2 border-adm-border pl-4 space-y-2">
+                      <p>
+                        <strong className="text-adm-ink">
+                          Una venta cuenta en el turno en que se COBRÓ
+                        </strong>
+                        , no en el que se abrió la mesa. Si el billete entró en
+                        el cajón de la tarde, cuenta para la tarde: si no, el
+                        arqueo de los dos turnos saldría mal a la vez.
+                      </p>
+                      <p>
+                        <strong className="text-adm-ink">
+                          El inventario sigue siendo uno.
+                        </strong>{' '}
+                        Se puede ver qué consumió cada turno, pero no hay un
+                        almacén de la mañana y otro de la tarde — el
+                        refrigerador es uno solo.
+                      </p>
+                      <p>
+                        Cambiar la hora de corte{' '}
+                        <strong className="text-adm-ink">
+                          no reclasifica lo ya cobrado
+                        </strong>
+                        : el turno se graba en cada venta al guardarla, así que
+                        un mes cerrado sigue diciendo lo mismo dentro de un año.
+                      </p>
+                      <p>
+                        Lo registrado antes de encender esto se queda{' '}
+                        <strong className="text-adm-ink">sin clasificar</strong>
+                        , y en los reportes se dice cuánto es. No se le inventa
+                        un turno a lo que se capturó cuando el turno no existía.
+                      </p>
+                    </div>
+                  </>
                 )}
               </div>
             )}

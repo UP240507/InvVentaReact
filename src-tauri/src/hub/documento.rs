@@ -45,6 +45,32 @@ pub struct Total {
     pub enfasis: bool,
 }
 
+/// El logo del local, ya convertido a puntos de impresora.
+///
+/// ── POR QUÉ VIAJA EL MAPA DE BITS Y NO UNA URL ──────────────────────────────
+/// Porque la caja trabaja sin internet: una URL obligaría a descargar, y un
+/// local con la red caída imprimiría sin logo sin decir por qué. Y porque lo
+/// que se ve tiene que ser lo que sale — convirtiendo al imprimir, la pantalla
+/// enseñaría la imagen bonita y el papel sacaría otra cosa.
+///
+/// El hub sigue siendo tonto: no escala, no recorta, no umbraliza. Recibe
+/// puntos y los manda. Quién decide cómo se ve es `src/lib/LogoTermico.js`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Logo {
+    /// Un bit por punto, 1 = negro, empaquetados de ocho en ocho con el más
+    /// significativo a la izquierda, en base64. Es lo que pide `GS v 0`.
+    #[serde(default)]
+    pub bitmap: String,
+    /// Ancho en PUNTOS, siempre múltiplo de 8: una fila incompleta desplazaría
+    /// todas las siguientes y el logo saldría escalonado.
+    #[serde(default)]
+    pub ancho: u32,
+    /// Alto en puntos.
+    #[serde(default)]
+    pub alto: u32,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Documento {
@@ -61,6 +87,11 @@ pub struct Documento {
     pub titulo: String,
     #[serde(default)]
     pub subtitulo: String,
+    /// Va arriba del todo, antes del título. `None` en las comandas: cocina no
+    /// necesita el logo, y cada punto impreso es tiempo de impresora con un
+    /// mesero esperando la tira.
+    #[serde(default)]
+    pub logo: Option<Logo>,
     /// Datos fiscales del EMISOR, una línea por dato: razón social, RFC,
     /// domicilio y teléfono. Van centrados bajo el título.
     ///

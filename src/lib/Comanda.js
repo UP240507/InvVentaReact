@@ -48,6 +48,7 @@ import { importeDeLinea } from './Fiscal';
 import { etiquetaDescuento } from './Descuentos';
 import { aISOLocal } from './Fechas';
 import { importeEnLetra } from './Letras';
+import { logoDeConfiguracion } from './LogoTermico';
 
 /**
  * Marca que se estampa al pie del ticket de cobro.
@@ -464,6 +465,15 @@ export function construirTicket(
     zona: null,
     titulo: nombreDelLocal(configuracion),
     subtitulo: '',
+    // ── EL LOGO VA EN LO QUE VE EL CLIENTE, NO EN TODO ─────────────────────
+    // Ticket y cuenta lo llevan: son el papel que se lleva quien paga. Las
+    // comandas no —cocina no necesita la marca y cada punto impreso es tiempo
+    // de impresora con un mesero esperando la tira—, y el corte Z y el vale
+    // tampoco: son documentos internos de caja.
+    //
+    // `null` cuando no hay logo configurado o cuando el que hay no cuadra: el
+    // documento no debe cargar con algo que el hub tendría que descartar.
+    logo: logoDeConfiguracion(configuracion),
     emisor: datosDelEmisor(configuracion),
     meta,
     // ── EL TICKET NO LLEVA AVISO DE COPIA, Y ES DELIBERADO ──────────────────
@@ -626,6 +636,15 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
     zona: null,
     titulo: nombreDelLocal(configuracion),
     subtitulo: '',
+    // ── EL LOGO VA EN LO QUE VE EL CLIENTE, NO EN TODO ─────────────────────
+    // Ticket y cuenta lo llevan: son el papel que se lleva quien paga. Las
+    // comandas no —cocina no necesita la marca y cada punto impreso es tiempo
+    // de impresora con un mesero esperando la tira—, y el corte Z y el vale
+    // tampoco: son documentos internos de caja.
+    //
+    // `null` cuando no hay logo configurado o cuando el que hay no cuadra: el
+    // documento no debe cargar con algo que el hub tendría que descartar.
+    logo: logoDeConfiguracion(configuracion),
     emisor: datosDelEmisor(configuracion),
     meta,
     avisos: ['CUENTA — NO ES PAGO'],
@@ -653,6 +672,9 @@ export function documentoDePrueba({ configuracion = {} } = {}) {
     zona: null,
     titulo: nombreDelLocal(configuracion),
     subtitulo: 'Impresión de prueba',
+    // Aquí SÍ, y es el motivo de que exista este documento: comprobar cómo
+    // sale el logo en papel sin tener que cobrar una venta para verlo.
+    logo: logoDeConfiguracion(configuracion),
     meta: [{ etiqueta: 'Hora', valor: horaDe(new Date().toISOString()) }],
     avisos: [],
     cuerpo: [

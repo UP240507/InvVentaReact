@@ -1056,3 +1056,62 @@ describe('construirValePropina — el papel que se firma', () => {
     expect(construirValePropina(null)).toBeNull();
   });
 });
+
+// ── EL LOGO ──────────────────────────────────────────────────────────────────
+// `logo_url` existía desde hacía meses y no lo leía nadie: el documento no lo
+// llevaba, así que la configuración prometía algo que el papel nunca cumplía.
+// Estas pruebas fijan dónde va y dónde NO, para que no vuelva a quedarse a
+// medio camino sin que nada dé error.
+describe('el logo en el documento', () => {
+  // 64 puntos de ancho por 4 de alto = 32 bytes. Todo negro.
+  const bitmap = btoa(String.fromCharCode(...new Uint8Array(32).fill(0xff)));
+  const conLogo = {
+    ...config,
+    logo_bitmap: bitmap,
+    logo_ancho: 64,
+    logo_alto: 4,
+  };
+  const venta = { id: 7, folio: 'POS-7', items: [], total: 0 };
+
+  it('el ticket lo lleva: es el papel que se lleva el cliente', () => {
+    const doc = construirTicket(venta, { configuracion: conLogo });
+    expect(doc.logo).toEqual({ bitmap, ancho: 64, alto: 4 });
+  });
+
+  it('la cuenta también', () => {
+    const doc = construirPreCuenta(
+      { folio: 'AZUL-1', items: [], total: 0 },
+      { configuracion: conLogo },
+    );
+    expect(doc.logo).toEqual({ bitmap, ancho: 64, alto: 4 });
+  });
+
+  it('la impresión de prueba lo lleva, que es para lo que sirve', () => {
+    expect(documentoDePrueba({ configuracion: conLogo }).logo).not.toBeNull();
+  });
+
+  it('la comanda NO: cocina no necesita la marca', () => {
+    const docs = construirComandas(comandaBase, { configuracion: conLogo });
+    for (const d of docs) expect(d.logo).toBeUndefined();
+  });
+
+  it('el corte Z y el vale tampoco: son papeles internos de caja', () => {
+    const z = construirCorteZ(
+      { turno: {}, ventas: [], fondo: 0 },
+      { configuracion: conLogo },
+    );
+    expect(z.logo).toBeUndefined();
+  });
+
+  it('sin logo configurado, el documento lleva null y no un objeto a medias', () => {
+    expect(construirTicket(venta, { configuracion: config }).logo).toBeNull();
+  });
+
+  it('CLAVE: un logo cuyos bytes no cuadran no llega al documento', () => {
+    // El hub lo descartaría igual, pero mandarlo sería confiar en que el
+    // aparato del otro lado sea de esta versión. Y si un día no lo es, la
+    // impresora se queda esperando bytes que no llegan.
+    const roto = { ...conLogo, logo_alto: 5 }; // 64x5 exige 40 bytes, hay 32
+    expect(construirTicket(venta, { configuracion: roto }).logo).toBeNull();
+  });
+});

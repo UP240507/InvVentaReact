@@ -16,7 +16,7 @@
 //! 3. **Nada de aritmética.** Los importes llegan como texto ya formateado.
 //!    Este módulo los alinea a la derecha y nada más.
 
-use crate::hub::documento::Documento;
+use crate::hub::documento::{Documento, Logo};
 
 /// Columnas útiles en fuente A. El papel de 58 mm da 32; el de 80 mm, 48.
 pub const ANCHO_58: usize = 32;
@@ -112,6 +112,24 @@ impl Render {
     /// escalera y el ojo no encuentra dónde empieza lo que hay que pagar.
     fn separador_fuerte(&mut self) -> &mut Self {
         self.linea(&"=".repeat(self.ancho))
+    }
+
+    /// GS v 0 — imagen raster. El único comando de longitud variable que emite
+    /// este renderizador, y por eso el único que puede colgar la impresora.
+    ///
+    /// La cabecera ANUNCIA cuántos bytes vienen detrás. Si se anuncian más de
+    /// los que se mandan, la impresora se queda esperando el resto: no da
+    /// error, no imprime, no corta — se queda muda con un mesero delante y una
+    /// mesa esperando su cuenta. Por eso los bytes se validan ANTES de emitir
+    /// un solo byte de cabecera (ver `logo_valido`), y no aquí dentro.
+    ///
+    /// `ancho_bytes` es el ancho en BYTES (ocho puntos cada uno); `alto` va en
+    /// puntos. Los dos se parten en byte bajo y byte alto, que es como los pide
+    /// el comando.
+    fn raster(&mut self, datos: &[u8], ancho_bytes: u32, alto: u32) -> &mut Self {
+        let (xl, xh) = ((ancho_bytes & 0xFF) as u8, ((ancho_bytes >> 8) & 0xFF) as u8);
+        let (yl, yh) = ((alto & 0xFF) as u8, ((alto >> 8) & 0xFF) as u8);
+        self.raw(&[GS, b'v', b'0', 0, xl, xh, yl, yh]).raw(datos)
     }
 
     /// GS V 1 — corte parcial. Parcial y no total a propósito: deja un punto
@@ -278,12 +296,138 @@ pub fn pulso_cajon() -> Vec<u8> {
 }
 
 /// Convierte un documento en la tira de bytes que se le manda a la impresora.
+/// Base64 a bytes, sin dependencias.
+///
+/// Se escribe a mano —son treinta líneas— en vez de añadir una crate porque
+/// `scripts/pruebas-rust.sh` monta un cajón con serde y nada más: una
+/// dependencia nueva aquí dejaría el renderizador sin poder probarse fuera de
+/// Windows, que es justo lo que ese script existe para evitar.
+///
+/// Devuelve `None` ante cualquier carácter que no sea del alfabeto. Un base64
+/// corrupto no se «arregla» saltándose lo que no se entiende: eso daría un
+/// bitmap más corto que el anunciado, que es exactamente el fallo que cuelga la
+/// impresora.
+fn base64_a_bytes(s: &str) -> Option<Vec<u8>> {
+    let valor = |c: u8| -> Option<u32> {
+        match c {
+            b'A'..=b'Z' => Some((c - b'A') as u32),
+            b'a'..=b'z' => Some((c - b'a') as u32 + 26),
+            b'0'..=b'9' => Some((c - b'0') as u32 + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    };
+
+    let limpio: Vec<u8> = s
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace() && *b != b'=')
+        .collect();
+    let mut out = Vec::with_capacity(limpio.len() * 3 / 4 + 3);
+    let mut acumulador: u32 = 0;
+    let mut bits: u32 = 0;
+    for c in limpio {
+        let v = valor(c)?;
+        acumulador = (acumulador << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push(((acumulador >> bits) & 0xFF) as u8);
+        }
+    }
+    Some(out)
+}
+
+/// Cuántos PUNTOS de ancho tiene el papel. La fuente A ocupa 12 puntos por
+/// columna en toda la familia ESC/POS: 32 columnas son 384 puntos (58 mm) y 48
+/// son 576 (80 mm).
+fn puntos_de_ancho(cols: usize) -> u32 {
+    (cols as u32) * 12
+}
+
+/// Alto máximo que se acepta, en puntos. A 203 ppp son unos 6 cm de tira.
+///
+/// No es una restricción estética: un logo de 4000 puntos de alto son treinta
+/// centímetros de papel por cada ticket, y el rollo se acaba a media comida.
+const ALTO_MAXIMO_LOGO: u32 = 512;
+
+/// Valida el logo y devuelve los bytes listos para `GS v 0`, o `None`.
+///
+/// ── ESTA FUNCIÓN ES EL LOGO ENTERO ──────────────────────────────────────────
+/// Todo lo demás es emitir bytes. Lo que importa es que un logo que no cuadra
+/// **no se imprima a medias**: la cabecera del comando anuncia una longitud, y
+/// si los datos no llegan enteros la impresora se queda esperando el resto.
+/// No es un ticket feo; es la impresora muda hasta que alguien la apaga y la
+/// enciende, con el local abierto.
+///
+/// Por eso se comprueba lo único que no se puede comprobar después: que los
+/// bytes que hay sean **exactamente** los que el tamaño declarado exige.
+fn logo_valido(logo: &Logo, cols: usize) -> Option<(Vec<u8>, u32, u32)> {
+    if logo.bitmap.trim().is_empty() || logo.ancho == 0 || logo.alto == 0 {
+        return None;
+    }
+    if logo.ancho % 8 != 0 {
+        eprintln!(
+            "[hub] logo descartado: ancho {} no es múltiplo de 8",
+            logo.ancho
+        );
+        return None;
+    }
+    if logo.ancho > puntos_de_ancho(cols) {
+        eprintln!(
+            "[hub] logo descartado: {} puntos de ancho no caben en un papel de {} ({} puntos)",
+            logo.ancho,
+            cols,
+            puntos_de_ancho(cols)
+        );
+        return None;
+    }
+    if logo.alto > ALTO_MAXIMO_LOGO {
+        eprintln!(
+            "[hub] logo descartado: {} puntos de alto pasan del máximo ({})",
+            logo.alto, ALTO_MAXIMO_LOGO
+        );
+        return None;
+    }
+    let datos = match base64_a_bytes(&logo.bitmap) {
+        Some(d) => d,
+        None => {
+            eprintln!("[hub] logo descartado: el bitmap no es base64 válido");
+            return None;
+        }
+    };
+    let ancho_bytes = logo.ancho / 8;
+    let esperados = (ancho_bytes as usize) * (logo.alto as usize);
+    if datos.len() != esperados {
+        eprintln!(
+            "[hub] logo descartado: llegaron {} bytes y {}x{} exige {}",
+            datos.len(),
+            logo.ancho,
+            logo.alto,
+            esperados
+        );
+        return None;
+    }
+    Some((datos, ancho_bytes, logo.alto))
+}
+
 pub fn render(doc: &Documento, cols: usize) -> Vec<u8> {
     let mut r = Render::new(cols);
     r.init().codepage_850();
 
     // ── Encabezado ──────────────────────────────────────────────────────────
     r.alinear(1);
+
+    // ── Logo ────────────────────────────────────────────────────────────────
+    // Antes del título y centrado. Si no cuadra, el ticket sale igual pero sin
+    // logo: quedarse sin marca es un papel más pobre; mandar una imagen a
+    // medias es una impresora colgada.
+    if let Some(logo) = &doc.logo {
+        if let Some((datos, ancho_bytes, alto)) = logo_valido(logo, cols) {
+            r.raster(&datos, ancho_bytes, alto);
+            r.raw(b"\n");
+        }
+    }
     if !doc.titulo.is_empty() {
         // La comanda va SIEMPRE a doble tamaño: se lee a un metro, colgada de
         // una pinza, con prisa. Ahí el tamaño es funcional.
@@ -572,6 +716,29 @@ pub fn previsualizar(doc: &Documento, cols: usize) -> String {
                 i += n;
             }
             GS => {
+                // ── GS v 0 — la imagen, que NO mide tres bytes ───────────────
+                // Es el único comando de longitud variable. Si se saltaran tres
+                // bytes como los demás, los puntos del logo se leerían como
+                // texto y la vista previa se llenaría de basura — y peor: sería
+                // basura que no está en el papel, mandando a arreglar algo que
+                // no está roto. Es el mismo fallo que esta función ya tuvo con
+                // `ESC a`, otra vez.
+                //
+                // El logo no se dibuja: se anuncia con una línea que dice qué
+                // es y cuánto ocupa. Una vista previa en texto no puede enseñar
+                // una imagen, y fingir que sí sería mentir sobre el resultado.
+                if bytes.get(i + 1) == Some(&b'v') && bytes.get(i + 2) == Some(&b'0') {
+                    let leer = |p: usize| bytes.get(p).copied().unwrap_or(0) as usize;
+                    let ancho_bytes = leer(i + 4) | (leer(i + 5) << 8);
+                    let alto = leer(i + 6) | (leer(i + 7) << 8);
+                    let datos = ancho_bytes * alto;
+                    volcar(&mut out, &mut linea, alineacion, doble, cols);
+                    let etiqueta = format!("[logo {}x{}]", ancho_bytes * 8, alto);
+                    linea.push_str(&etiqueta);
+                    volcar(&mut out, &mut linea, alineacion, doble, cols);
+                    i += 8 + datos;
+                    continue;
+                }
                 // GS ! n — tamaño. Cualquier n distinto de 0 agranda; sólo se
                 // emite 0x11 (doble alto y ancho), así que basta con mirar si
                 // hay algo encendido.
@@ -625,6 +792,197 @@ fn de_cp850(b: u8) -> char {
 mod tests {
     use super::*;
     use crate::hub::documento::{Linea, Meta, Total};
+
+    // ── EL LOGO ───────────────────────────────────────────────────────────────
+    // Lo que se protege aquí no es que el logo salga bonito: es que un logo que
+    // no cuadra NO llegue a la impresora. La cabecera de `GS v 0` anuncia
+    // cuántos bytes vienen; si faltan, la impresora se queda esperando el resto
+    // y deja de imprimir — sin error, sin papel, con el local abierto.
+
+    /// base64 del alfabeto estándar, escrito a mano para no depender de nada.
+    fn a_base64(bytes: &[u8]) -> String {
+        const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut s = String::new();
+        for trozo in bytes.chunks(3) {
+            let b = [
+                trozo[0],
+                *trozo.get(1).unwrap_or(&0),
+                *trozo.get(2).unwrap_or(&0),
+            ];
+            let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
+            s.push(A[((n >> 18) & 63) as usize] as char);
+            s.push(A[((n >> 12) & 63) as usize] as char);
+            s.push(if trozo.len() > 1 {
+                A[((n >> 6) & 63) as usize] as char
+            } else {
+                '='
+            });
+            s.push(if trozo.len() > 2 {
+                A[(n & 63) as usize] as char
+            } else {
+                '='
+            });
+        }
+        s
+    }
+
+    /// Un logo coherente: `ancho` puntos por `alto`, todo negro.
+    fn logo_de(ancho: u32, alto: u32) -> Logo {
+        let bytes = vec![0xFF_u8; (ancho as usize / 8) * alto as usize];
+        Logo {
+            bitmap: a_base64(&bytes),
+            ancho,
+            alto,
+        }
+    }
+
+    fn con_logo(logo: Logo) -> Documento {
+        Documento {
+            logo: Some(logo),
+            ..doc_ticket()
+        }
+    }
+
+    /// ¿Aparece la cabecera de imagen en los bytes?
+    fn tiene_raster(bytes: &[u8]) -> bool {
+        bytes.windows(3).any(|w| w == [GS, b'v', b'0'])
+    }
+
+    #[test]
+    fn base64_ida_y_vuelta() {
+        for caso in [vec![0u8], vec![1, 2, 3], vec![0xFF; 7], (0..=255).collect()] {
+            assert_eq!(
+                base64_a_bytes(&a_base64(&caso)).expect("debe decodificar"),
+                caso,
+                "el base64 de prueba y el decodificador tienen que coincidir"
+            );
+        }
+    }
+
+    #[test]
+    fn base64_con_basura_no_se_arregla_a_medias() {
+        // Saltarse lo que no se entiende daría menos bytes de los anunciados,
+        // que es justo el fallo que cuelga la impresora. Mejor sin logo.
+        assert!(base64_a_bytes("QUJD!QUJD").is_none());
+        assert!(base64_a_bytes("ñ").is_none());
+    }
+
+    #[test]
+    fn un_logo_que_cuadra_sale_con_su_cabecera() {
+        let bytes = render(&con_logo(logo_de(64, 4)), 32);
+        assert!(tiene_raster(&bytes), "el logo válido tiene que imprimirse");
+        let i = bytes
+            .windows(3)
+            .position(|w| w == [GS, b'v', b'0'])
+            .expect("cabecera");
+        // m=0, ancho en BYTES (64/8 = 8), alto 4.
+        assert_eq!(bytes[i + 3], 0, "m debe ser 0 (raster normal)");
+        assert_eq!((bytes[i + 4], bytes[i + 5]), (8, 0), "ancho en bytes");
+        assert_eq!((bytes[i + 6], bytes[i + 7]), (4, 0), "alto en puntos");
+        assert_eq!(
+            bytes[i + 8..i + 8 + 32].to_vec(),
+            vec![0xFF; 32],
+            "detrás de la cabecera van exactamente los bytes anunciados"
+        );
+    }
+
+    #[test]
+    fn el_logo_va_antes_del_titulo() {
+        let bytes = render(&con_logo(logo_de(64, 4)), 32);
+        let raster = bytes.windows(3).position(|w| w == [GS, b'v', b'0']).unwrap();
+        let titulo = bytes
+            .windows(4)
+            .position(|w| w == b"AZUL")
+            .expect("el título sigue ahí");
+        assert!(raster < titulo, "el logo se imprime arriba del nombre");
+    }
+
+    #[test]
+    fn EL_QUE_IMPORTA_faltan_bytes_y_no_se_imprime_nada_de_imagen() {
+        // Un byte de menos que el tamaño declarado: la impresora se quedaría
+        // esperando ese byte para siempre.
+        let mut logo = logo_de(64, 4);
+        let mut datos = vec![0xFF_u8; 8 * 4];
+        datos.pop();
+        logo.bitmap = a_base64(&datos);
+
+        let bytes = render(&con_logo(logo), 32);
+        assert!(
+            !tiene_raster(&bytes),
+            "con los bytes mal, NO puede salir ni la cabecera"
+        );
+        assert!(
+            bytes.windows(4).any(|w| w == b"AZUL"),
+            "y el ticket tiene que salir igual, sólo que sin logo"
+        );
+    }
+
+    #[test]
+    fn sobran_bytes_tampoco_se_imprime() {
+        let mut logo = logo_de(64, 4);
+        let mut datos = vec![0xFF_u8; 8 * 4];
+        datos.push(0);
+        logo.bitmap = a_base64(&datos);
+        assert!(!tiene_raster(&render(&con_logo(logo), 32)));
+    }
+
+    #[test]
+    fn un_ancho_que_no_es_multiplo_de_ocho_se_rechaza() {
+        // Una fila incompleta desplaza todas las siguientes: el logo saldría
+        // escalonado y el ticket entero parecería roto.
+        let mut logo = logo_de(64, 4);
+        logo.ancho = 60;
+        assert!(!tiene_raster(&render(&con_logo(logo), 32)));
+    }
+
+    #[test]
+    fn un_logo_mas_ancho_que_el_papel_se_rechaza() {
+        // 32 columnas son 384 puntos. 512 no caben.
+        let logo = logo_de(512, 4);
+        assert!(!tiene_raster(&render(&con_logo(logo), 32)));
+        // Y en papel de 48 columnas (576 puntos) el mismo logo sí cabe.
+        assert!(tiene_raster(&render(&con_logo(logo_de(512, 4)), 48)));
+    }
+
+    #[test]
+    fn un_logo_altisimo_se_rechaza() {
+        let logo = logo_de(64, ALTO_MAXIMO_LOGO + 8);
+        assert!(!tiene_raster(&render(&con_logo(logo), 32)));
+    }
+
+    #[test]
+    fn sin_logo_los_bytes_son_los_de_siempre() {
+        // La garantía que protege a todos los locales: quien no configuró logo
+        // tiene que recibir exactamente el mismo papel que ayer, byte a byte.
+        let sin = render(&doc_ticket(), 32);
+        let vacio = render(
+            &Documento {
+                logo: Some(Logo::default()),
+                ..doc_ticket()
+            },
+            32,
+        );
+        assert_eq!(sin, vacio, "un logo vacío no puede cambiar ni un byte");
+    }
+
+    #[test]
+    fn la_vista_previa_no_lee_los_puntos_como_texto() {
+        // Si `previsualizar` saltara tres bytes como en los demás comandos GS,
+        // los puntos del logo se leerían como letras: basura en pantalla que no
+        // está en el papel, mandando a arreglar algo que no está roto.
+        let vista = previsualizar(&con_logo(logo_de(64, 4)), 32);
+        assert!(vista.contains("[logo 64x4]"), "se anuncia el logo: {vista}");
+        // El título va a doble ancho, y la vista previa lo representa con un
+        // espacio entre glifos porque cada uno ocupa dos columnas de papel.
+        assert!(
+            vista.contains("A Z U L"),
+            "y el resto del ticket sigue legible: {vista}"
+        );
+        assert!(
+            !vista.contains('\u{00FF}'),
+            "los 0xFF del bitmap no pueden aparecer como texto: {vista}"
+        );
+    }
 
     fn doc_ticket() -> Documento {
         Documento {
