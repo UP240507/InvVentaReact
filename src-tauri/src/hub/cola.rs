@@ -144,40 +144,40 @@ impl Cola {
 
     /// Encola un documento. Devuelve de inmediato: aquí no se toca la
     /// impresora ni se espera a nadie.
-    pub fn encolar(&self, documento: Documento) -> Recibo {
-        if documento.vacio() {
-            return Recibo::Vacio;
-        }
-
-        let mut interior = self.interior.lock().unwrap();
-
-        if !documento.id.is_empty() {
-            let ya_impreso = interior.impresos.iter().any(|i| *i == documento.id);
-            let ya_en_cola = interior
-                .pendientes
-                .iter()
-                .any(|t| t.documento.id == documento.id);
-            if ya_impreso || ya_en_cola {
-                return Recibo::Duplicado;
+        pub fn encolar(&self, documento: Documento) -> Recibo {
+            if documento.vacio() {
+                return Recibo::Vacio;
             }
-        }
 
-        let copias = documento.copias.max(1);
-        let creado_ms = ahora_ms();
-        for _ in 0..copias {
-            interior.pendientes.push_back(Trabajo {
-                documento: documento.clone(),
-                intentos: 0,
-                ultimo_error: None,
-                creado_ms,
-            });
-        }
+            let mut interior = self.interior.lock().unwrap();
 
-        self.guardar(&interior);
-        drop(interior);
-        self.aviso.notify_all();
-        Recibo::Encolado
-    }
+            if !documento.id.is_empty() {
+                let ya_impreso = interior.impresos.iter().any(|i| *i == documento.id);
+                let ya_en_cola = interior
+                    .pendientes
+                    .iter()
+                    .any(|t| t.documento.id == documento.id);
+                if ya_impreso || ya_en_cola {
+                    return Recibo::Duplicado;
+                }
+            }
+
+            let copias = documento.copias.max(1);
+            let creado_ms = ahora_ms();
+            for _ in 0..copias {
+                interior.pendientes.push_back(Trabajo {
+                    documento: documento.clone(),
+                    intentos: 0,
+                    ultimo_error: None,
+                    creado_ms,
+                });
+            }
+
+            self.guardar(&interior);
+            drop(interior);
+            self.aviso.notify_all();
+            Recibo::Encolado
+        }
 
     pub fn resumen(&self) -> Resumen {
         let interior = self.interior.lock().unwrap();
@@ -482,22 +482,24 @@ mod tests {
     }
 
     #[test]
-    fn una_reimpresion_con_otro_id_si_sale() {
-        let veces = Arc::new(AtomicUsize::new(0));
-        let archivo = archivo_temp("reimp");
-        let cola = Cola::nueva(
-            Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 0 }),
-            escpos::ANCHO_POR_DEFECTO,
-            archivo.clone(),
-        );
+fn una_reimpresion_con_otro_id_si_sale() {
+    let veces = Arc::new(AtomicUsize::new(0));
+    let archivo = archivo_temp("reimp");
+    let cola = Cola::nueva(
+        Box::new(Contador { veces: Arc::clone(&veces), falla_las_primeras: 0 }),
+        escpos::ANCHO_POR_DEFECTO,
+        archivo.clone(),
+    );
 
-        cola.encolar(doc("t::1"));
-        cola.encolar(doc("t::1::c2"));
-        esperar_hasta(&cola, |r| r.pendientes == 0);
+    cola.encolar(doc("t::1"));
+    cola.encolar(doc("t::1::c2"));
+    
+    // CAMBIO AQUI: Esperamos a que ambos se hayan movido a 'impresos'
+    esperar_hasta(&cola, |r| r.impresos == 2); 
 
-        assert_eq!(veces.load(Ordering::SeqCst), 2);
-        let _ = std::fs::remove_file(&archivo);
-    }
+    assert_eq!(veces.load(Ordering::SeqCst), 2);
+    let _ = std::fs::remove_file(&archivo);
+}
 
     #[test]
     fn reintenta_y_acaba_imprimiendo_cuando_vuelve_el_papel() {

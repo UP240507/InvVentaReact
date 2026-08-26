@@ -898,7 +898,7 @@ mod tests {
     }
 
     #[test]
-    fn EL_QUE_IMPORTA_faltan_bytes_y_no_se_imprime_nada_de_imagen() {
+    fn el_que_importa_faltan_bytes_y_no_se_imprime_nada_de_imagen() {
         // Un byte de menos que el tamaño declarado: la impresora se quedaría
         // esperando ese byte para siempre.
         let mut logo = logo_de(64, 4);
