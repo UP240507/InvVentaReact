@@ -1023,7 +1023,19 @@ export default function PosScreen() {
       0,
     );
     if (comensalesCuenta < 1) {
-      setModalComensales({ valor: '' });
+      // ── LA SELECCIÓN VIAJA CON EL CUADRO ────────────────────────────────
+      // Este `return` corta la petición para preguntar cuánta gente hay, y el
+      // cuadro vuelve a llamar a `handlePedirCuenta`. Si la selección no viaja
+      // con él, la segunda llamada llega sin ella, `esParcial` sale `false` y
+      // se imprime **la mesa entera** en vez de las unidades que el mesero
+      // eligió. Sin excepción y sin log: el papel sale perfecto, sólo que con
+      // el total de todos.
+      //
+      // Y pasaba SIEMPRE la primera vez de cada servicio, porque al cobrar la
+      // mesa se libera con `comensales_reales: 0`: el contador vuelve a cero
+      // con cada gente nueva. Encontrado en campo el 31-ago —se separaron dos
+      // pizzas de $376 y el papel salió por los $904 de la mesa—.
+      setModalComensales({ valor: '', seleccion });
       return;
     }
 
@@ -2451,10 +2463,13 @@ export default function PosScreen() {
                 onClick={() => {
                   const n = safeNumber(modalComensales.valor, 0);
                   if (n < 1) return;
+                  const seleccion = modalComensales.seleccion ?? null;
                   setModalComensales(null);
                   // El número viaja como parámetro: el `setState` de la mesa
-                  // que hace `handlePedirCuenta` no ha ocurrido todavía.
-                  handlePedirCuenta({ comensales: n });
+                  // que hace `handlePedirCuenta` no ha ocurrido todavía. Y la
+                  // selección viaja de vuelta por lo mismo: se guardó al abrir
+                  // este cuadro porque sin ella se imprimiría la mesa entera.
+                  handlePedirCuenta({ comensales: n, seleccion });
                 }}
               >
                 Imprimir cuenta
@@ -2473,16 +2488,20 @@ export default function PosScreen() {
             autoFocus
             value={modalComensales.valor}
             onChange={(e) =>
-              setModalComensales({
+              // Se conserva el resto del estado —la selección—: reconstruir el
+              // objeto con sólo `valor` la borraba al teclear el primer dígito.
+              setModalComensales((prev) => ({
+                ...prev,
                 valor: e.target.value.replace(/[^0-9]/g, ''),
-              })
+              }))
             }
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return;
               const n = safeNumber(modalComensales.valor, 0);
               if (n < 1) return;
+              const seleccion = modalComensales.seleccion ?? null;
               setModalComensales(null);
-              handlePedirCuenta({ comensales: n });
+              handlePedirCuenta({ comensales: n, seleccion });
             }}
             className="w-full text-center text-4xl font-black font-syne bg-ops-bg border-2 border-ops-border rounded-ui py-4 text-ops-ink focus:border-ops-accent outline-none"
             placeholder="0"

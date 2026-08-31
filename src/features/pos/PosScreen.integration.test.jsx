@@ -124,8 +124,15 @@ describe('Integración cobro · PosScreen → ModalCobro → venta', () => {
 // La afirmación que importa es esa: la venta lleva EL FOLIO DEL PAPEL y SU
 // total, no el de la mesa entera.
 describe('Integración · cuenta parcial en mesa → cobro', () => {
-  /** Monta una mesa de 4 cervezas ya guardada, en flujo de un solo papel. */
-  const montarMesa = () => {
+  /**
+   * Monta una mesa de 4 cervezas ya guardada, en flujo de un solo papel.
+   *
+   * `comensales` es un parámetro y no una constante **a propósito**: con 4 se
+   * salta el cuadro de «cuánta gente hay», y ese atajo es justo el que hizo que
+   * esta suite no viera el fallo del 31-ago durante ocho días. Con 0 se ejercita
+   * el camino que recorre una mesa recién sentada, que es el de todos los días.
+   */
+  const montarMesa = (comensales = 4) => {
     Object.assign(h.app, {
       recetas: [
         { id: 9, nombre: 'Cerveza', precio_venta: 50, categoria: 'Bebidas' },
@@ -135,7 +142,7 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
           id: 7,
           nombre: 'Mesa 7',
           estado: 'ocupada',
-          comensales_reales: 4,
+          comensales_reales: comensales,
           orden_actual: {
             items: [
               {
@@ -244,5 +251,56 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
     expect(mesa.estado).toBe('ocupada');
     expect(mesa.orden_actual.items).toHaveLength(1);
     expect(mesa.orden_actual.items[0].cantidad).toBe(3);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // EL CASO DE TODOS LOS DÍAS: una mesa recién sentada.
+  //
+  // Los dos de arriba montan la mesa con `comensales_reales: 4`, así que se
+  // saltan el cuadro de «¿cuánta gente hay?». Ese atajo escondió durante ocho
+  // días un fallo que ocurría en la PRIMERA cuenta separada de CADA mesa: el
+  // cuadro cortaba la petición, volvía a llamar sin la selección, y se
+  // imprimía la mesa entera. Y como al cobrar la mesa se libera con
+  // `comensales_reales: 0`, el contador vuelve a cero en cada servicio: no era
+  // un caso raro, era el caso normal.
+  //
+  // Encontrado en campo el 31-ago, no por una prueba. Esta es la prueba que
+  // faltaba.
+  it('mesa recién sentada: el cuadro de comensales NO se traga la selección', async () => {
+    const user = userEvent.setup();
+    montarMesa(0); // sin comensales: como cualquier mesa al empezar
+
+    // Se separan 2 de las 4 cervezas.
+    await user.click(
+      screen.getByRole('button', { name: /Cuenta aparte para unos cuantos/ }),
+    );
+    const mas = await screen.findByRole('button', {
+      name: /Sumar una unidad de Cerveza/,
+    });
+    await user.click(mas);
+    await user.click(mas);
+    await user.click(
+      screen.getByRole('button', { name: /Imprimir su cuenta/ }),
+    );
+
+    // Aquí NO se imprime todavía: aparece el cuadro de comensales.
+    expect(
+      folioReservado(),
+      'no se imprime antes de saber cuánta gente hay',
+    ).toBeUndefined();
+    const cuantos = await screen.findByPlaceholderText('0');
+    await user.type(cuantos, '4');
+    await user.click(screen.getByRole('button', { name: 'Imprimir cuenta' }));
+
+    // ── LA AFIRMACIÓN, Y SU CONTROL NEGATIVO ────────────────────────────
+    // Sin el arreglo esto sale 200: la mesa entera. Ese 200 es el papel con el
+    // total equivocado en la mano del cliente.
+    const reserva = folioReservado();
+    expect(reserva, 'la cuenta parcial reserva su folio').toBeTruthy();
+    expect(reserva.total_impreso).toBe(100); // las 2 cervezas…
+    expect(reserva.total_impreso).not.toBe(200); // …y NO la mesa entera
+
+    // Y la mesa sigue abierta, que es lo que distingue una parcial de un cierre.
+    expect(mesaGuardada().estado).toBe('ocupada');
   });
 });
