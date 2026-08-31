@@ -151,7 +151,9 @@ describe('los dos filtros, que son dos a propósito', () => {
     // Esconder es el fallo caro: una venta real invisible sólo se nota al
     // cuadrar el mes, si alguien lo cuadra.
     expect(filtrarPorFranja(filas, MATUTINO).map((f) => f.id)).toEqual([1, 3]);
-    expect(filtrarPorFranja(filas, VESPERTINO).map((f) => f.id)).toEqual([2, 3]);
+    expect(filtrarPorFranja(filas, VESPERTINO).map((f) => f.id)).toEqual([
+      2, 3,
+    ]);
   });
 
   it('en una CIFRA, lo sin clasificar no cuenta en ninguna', () => {

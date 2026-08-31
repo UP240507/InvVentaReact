@@ -158,7 +158,9 @@ export default function ReportesScreen() {
     // no cuenta en ninguna de las dos, o mañana + tarde daría más que el día.
     // Lo que queda fuera no se calla — se dice arriba, con `sinClasificar`.
     const franjaActiva = !!configuracion?.franjas_activas && franja !== 'todos';
-    const vPeriodo = franjaActiva ? soloDeFranja(vDelPeriodo, franja) : vDelPeriodo;
+    const vPeriodo = franjaActiva
+      ? soloDeFranja(vDelPeriodo, franja)
+      : vDelPeriodo;
     const sinClasificar = franjaActiva ? cuantasSinFranja(vDelPeriodo) : 0;
     const cPeriodo = (ordenesCompra || []).filter((c) => {
       const f = parseUTC(c.fecha || c.created_at);
