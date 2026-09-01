@@ -9,6 +9,7 @@ import {
   SegmentedControl,
   IconButton,
   DataTable,
+  ConfirmModal,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
@@ -44,6 +45,7 @@ export default function ComprasScreen() {
 
   // ─── ESTADOS DE NAVEGACIÓN Y FILTROS ──────────────────────────────────
   const [activeTab, setActiveTab] = useState('historial');
+  const [ordenACancelar, setOrdenACancelar] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
 
@@ -194,9 +196,19 @@ export default function ComprasScreen() {
     }
   };
 
-  const cancelarOrden = (orden) => {
-    if (!window.confirm(`¿Estás seguro de cancelar la orden ${orden.numero}?`))
-      return;
+  // Pregunta con el modal del proyecto, no con `window.confirm`.
+  //
+  // Era el ÚNICO `confirm` nativo que quedaba en todo `src`, y el propio
+  // componente de modal lo tiene vetado por escrito (`ui/Ops.jsx`: «rompe la
+  // experiencia y en Tauri se ve como un cuadro del sistema»). En la caja se
+  // veía como una alerta de Windows encima de la app — reportado en campo el
+  // 28-ago como «la alerta de cancelación está a nivel del sistema».
+  const cancelarOrden = (orden) => setOrdenACancelar(orden);
+
+  const confirmarCancelacion = () => {
+    const orden = ordenACancelar;
+    setOrdenACancelar(null);
+    if (!orden) return;
 
     const payload = { ...orden, estado: 'cancelada' };
 
@@ -705,6 +717,26 @@ export default function ComprasScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cancelar una orden es destructivo: se pregunta con el modal del
+          proyecto. Escape cancela —lo hereda de `ConfirmModal`—, que en un
+          cuadro destructivo es la salida segura. */}
+      {ordenACancelar && (
+        <ConfirmModal
+          titulo="Cancelar la orden"
+          icono={Trash2}
+          mensaje={
+            <>
+              La orden <strong>{ordenACancelar.numero}</strong> quedara marcada
+              como cancelada. El proveedor no se entera solo: si ya se la
+              mandaste, avisale.
+            </>
+          }
+          textoConfirmar="Si, cancelarla"
+          onConfirmar={confirmarCancelacion}
+          onCancelar={() => setOrdenACancelar(null)}
+        />
       )}
     </PageShell>
   );
