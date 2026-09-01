@@ -423,13 +423,24 @@ export default function HubScreen() {
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <Dato etiqueta="Dirección" valor={info.url} mono />
                     <Dato etiqueta="Transporte" valor={resumen.transporte} />
-                    {/* La dirección por nombre existía y no se veía en ninguna
-                        pantalla: la sabía un mensaje de consola que en la caja
-                        instalada no lee nadie. `Dato` se oculta solo si viene
-                        vacía, que es lo que pasa cuando la red no permite el
-                        anuncio — y entonces es correcto no enseñarla. */}
+                    {/* ── ESTA DIRECCIÓN ES UN «QUIZÁ», Y HAY QUE DECIRLO ──
+                        `Dato` se oculta solo si viene vacía, que es lo que pasa
+                        cuando el anuncio no salió. Pero que SALGA no significa
+                        que funcione: el hub sólo comprueba que `mdns-sd` acepto
+                        el registro **en local**, y lo guarda en un `OnceLock`
+                        que no se revisa nunca más.
+
+                        En AZUL (28-ago) la línea aparecía y no la resolvía
+                        ningún teléfono: el punto de acceso del local filtra
+                        multicast entre clientes inalámbricos. La propia caja sí
+                        resuelve su nombre, así que ni siquiera comprobar desde
+                        el hub serviría — daría verde y seguiría mintiendo.
+
+                        Por eso aquí no se «arregla la comprobación»: se deja de
+                        afirmar. Ver
+                        `claude/HALLAZGO_28-AGO_LA_DIRECCION_POR_NOMBRE.md`. */}
                     <Dato
-                      etiqueta="Dirección por nombre"
+                      etiqueta="Dirección por nombre (según la red)"
                       valor={info.url_nombre}
                       mono
                     />
@@ -437,8 +448,14 @@ export default function HubScreen() {
                   {info.url_nombre && (
                     <p className="text-xs text-adm-muted mt-2">
                       La dirección de arriba lleva un número que el módem puede
-                      cambiar al reiniciarse. Si un día los teléfonos dejan de
-                      encontrar la caja, esta segunda dirección sigue valiendo.
+                      cambiar al reiniciarse. La segunda no lo lleva, pero
+                      <strong> depende de la red del local</strong>: hay módems
+                      y repetidores que no la dejan funcionar.{' '}
+                      <strong>
+                        Pruébala desde un teléfono antes de confiar
+                      </strong>
+                      ; si no abre, usa la de arriba —es la que lleva el QR— y
+                      pide que se le fije la IP a esta caja en el módem.
                     </p>
                   )}
                 </>

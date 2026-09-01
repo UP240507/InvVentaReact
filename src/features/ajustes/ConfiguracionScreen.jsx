@@ -370,6 +370,14 @@ export default function ConfiguracionScreen() {
     ),
   );
   const [errorLogo, setErrorLogo] = useState('');
+  // El nombre del archivo elegido, para poder ENSEÑARLO.
+  //
+  // El control nativo pinta su propia etiqueta desde `input.files`, y como
+  // abajo se limpia el input con `e.target.value = ''`, esa etiqueta volvia
+  // SIEMPRE a «No se eligió ningún archivo» aunque la imagen se hubiera
+  // guardado bien. Reportado en campo el 28-ago: el dueño elige su logo, lee
+  // que no eligió nada y concluye que el programa no sirve.
+  const [nombreLogo, setNombreLogo] = useState('');
 
   const alElegirLogo = async (e) => {
     const archivo = e.target.files?.[0];
@@ -379,10 +387,12 @@ export default function ConfiguracionScreen() {
     e.target.value = '';
     if (!archivo) return;
     setErrorLogo('');
+    setNombreLogo(archivo.name);
 
     const logo = await desdeArchivo(archivo, { cols: 32 });
     if (!logo) {
       setErrorLogo('No se pudo leer esa imagen. Prueba con un PNG o un JPG.');
+      setNombreLogo('');
       return;
     }
     setForm((f) => ({
@@ -398,6 +408,7 @@ export default function ConfiguracionScreen() {
     setForm((f) => ({ ...f, logo_bitmap: '', logo_ancho: 0, logo_alto: 0 }));
     setVistaLogo(null);
     setErrorLogo('');
+    setNombreLogo('');
   };
 
   const parseJsonb = (val) => {
@@ -704,12 +715,30 @@ export default function ConfiguracionScreen() {
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1 space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={alElegirLogo}
-                        className="block w-full text-xs font-bold text-adm-ink file:mr-3 file:px-4 file:py-2 file:rounded-ui file:border-0 file:bg-adm-chip file:text-adm-chip-fg file:font-black file:text-xs file:cursor-pointer"
-                      />
+                      {/* Etiqueta propia y el input escondido: la del control
+                          nativo no se puede cambiar y contradecia a la
+                          pantalla. Sigue siendo un `label` con el input dentro,
+                          asi que el clic y el lector de pantalla funcionan
+                          igual que antes. */}
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <span className="px-4 py-2 rounded-ui bg-adm-chip text-adm-chip-fg font-black text-xs shrink-0">
+                          {form.logo_bitmap
+                            ? 'Cambiar imagen'
+                            : 'Elegir imagen'}
+                        </span>
+                        <span className="text-xs font-bold text-adm-muted truncate min-w-0">
+                          {nombreLogo ||
+                            (form.logo_bitmap
+                              ? 'Logo guardado'
+                              : 'Ningun archivo elegido')}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={alElegirLogo}
+                          className="sr-only"
+                        />
+                      </label>
                       {form.logo_bitmap ? (
                         <div className="flex items-center gap-3">
                           <p className="text-[10px] font-bold text-adm-muted">
