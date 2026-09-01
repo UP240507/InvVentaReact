@@ -69,13 +69,14 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 - [ ] Aparece «Cuenta aparte para unos cuantos»
 - [ ] Con flujo `precuenta_y_ticket` NO aparece
 - [ ] Se eligen unidades: de 4 cervezas se llevan 2
+- [ ] **En una mesa RECIÉN SENTADA, la PRIMERA cuenta: sale sólo lo separado**
 - [ ] Sale un papel con su propio folio y sólo lo de ese grupo
 - [ ] Subtotal + IVA del papel cuadran con las líneas impresas
 - [ ] La mesa sigue abierta
 - [ ] Pedir otra cerveza crea un renglón NUEVO
 - [ ] Cambiar la cantidad de la línea facturada: la pantalla lo frena y dice en qué cuenta salió
 - [ ] Al cobrar esa cuenta no hay división por platillos
-- [ ] Sí hay división por personas y pago en partes
+- [ ] Sí hay «Personas», y abajo «Añadir Pago» y «Pagar Restante»
 - [ ] La venta lleva el folio del papel (`public.ventas`)
 - [ ] No aparece en «Cuentas impresas sin cobrar»
 - [ ] Segunda cuenta de la misma mesa: folio distinto, las dos conviven
@@ -86,14 +87,14 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 
 ## 9d · Folio reservado
 
-- [ ] Migración `20260822120000_folios_reservados.sql` aplicada
+- [ ] Migración de `folios_reservados` aplicada — **buscar por NOMBRE, no por número**
 - [ ] Pedir cuenta → fila en `folios_reservados` con el folio como `id`, mesa, usuario y total
 - [ ] Reimprimir esa cuenta NO crea una segunda fila
 - [ ] Cobrarla → no aparece en «Cuentas impresas sin cobrar»
 - [ ] Pedir cuenta de otra mesa y NO cobrarla → aparece en la lista, con folio e importe
 - [ ] Con `precuenta_y_ticket` no se reserva nada
-- [ ] `Ajustes → Hub`: el contador de respaldo sube al pedir una cuenta
-- [ ] Borrar una fila de `folios_reservados` desde el cliente falla
+- [ ] ~~Contador de respaldo al pedir cuenta~~ → **diferido al §3** (sin internet)
+- [ ] Borrar una fila desde el cliente falla — **por privilegios, NO en el editor SQL**
 
 ## 5 · Reimprimir ticket
 
@@ -110,7 +111,7 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 - [ ] «Imprimir Z» → sale por la térmica, no un diálogo de Windows
 - [ ] Las cifras del papel cuadran con las de la pantalla
 - [ ] `TOTAL EN CAJA` = fondo inicial + efectivo
-- [ ] Contarlo una vez contra el dinero real del cajón
+- [ ] ~~Contarlo contra el dinero real del cajón~~ → **movido a la sombra**: hoy el cajón tiene el dinero de Soft
 - [ ] Pulsarlo dos veces → salen DOS papeles
 - [ ] El cajón NO se abre al imprimir el corte
 - [ ] Con un turno sin cerrar, el papel dice «En curso»
@@ -140,9 +141,9 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 
 ## 4 · Dirección por nombre
 
-- [ ] En la pantalla del hub aparece `http://invventa-caja.local:3000`
-- [ ] Se abre desde un teléfono
-- [ ] Se abre desde otra PC del local
+- [ ] En la pantalla del hub aparece `http://invventa-caja.local:3000` (sólo dice que el anuncio se registró)
+- [ ] **Tecleada** en un teléfono, entra — con guion: `invventa-caja`
+- [ ] **Tecleada** en otra PC del local, entra
 - [ ] Con la caja en el wifi de AZUL, no en un hotspot
 
 ## 6 · Interfaz
@@ -182,7 +183,7 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 
 ## 9e · Gastos en dos escalas
 
-- [ ] Migración `20260822130000_gastos_escala.sql` aplicada
+- [ ] Migración de `gastos_escala` aplicada — **buscar por NOMBRE, no por número**
 - [ ] Gastos abre en «Del turno»
 - [ ] El formulario viene en «del turno» y dice que no lleva saldo ni reposiciones
 - [ ] Un gasto «fuerte» aparece sólo en su pestaña

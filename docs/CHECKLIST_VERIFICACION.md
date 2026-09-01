@@ -240,18 +240,34 @@ está en duda. Lo que se prueba aquí es lo que **no** tiene freno.
 
 **Sin red debajo:** `HubScreen.jsx` no tiene suite. Esto es todo lo que hay.
 
-- [ ] En la pantalla del hub aparece **«Dirección por nombre»** junto a la de
-      IP, con `http://invventa-caja.local:3000`.
-- [ ] Abrirla **desde un teléfono** y **desde otra PC** del local.
-- [ ] Con la caja en el wifi de AZUL, no en un hotspot: el descubrimiento por
-      nombre depende de la red, y un extensor que cree su propia subred lo rompe.
+> **⚠️ ESTE BLOQUE FALLÓ EL 28-AGO, Y ANTES ESTABA EN VERDE POR MIRAR LA
+> PANTALLA.** La línea aparecía y nadie había tecleado la dirección desde un
+> teléfono. Ver `claude/HALLAZGO_28-AGO_LA_DIRECCION_POR_NOMBRE.md`. Los dos
+> puntos de abajo están separados a propósito: **que la pantalla la enseñe y que
+> alguien entre por ella son cosas distintas**, y la primera no implica la
+> segunda.
 
-  > **Si la línea NO aparece, no es un fallo de la pantalla:** significa que el
-  > anuncio no salió, y entonces es correcto no enseñarla. Enseñar una dirección
-  > que la red no resuelve manda a teclear algo que no funciona y a concluir que
-  > el hub está roto. Si no aparece y quieres saber por qué, el hub lo dice al
-  > arrancar por consola —que en release no se ve—, así que el diagnóstico real
-  > es probar si otro equipo resuelve `.local` en esa red.
+- [ ] En la pantalla del hub aparece **«Dirección por nombre»** junto a la de
+      IP, con `http://invventa-caja.local:3000`. **Esto sólo dice que el anuncio
+      se registró al arrancar** — es un `OnceLock` que no se revisa nunca más.
+- [ ] **Tecleada en un teléfono, entra.** Con el guion: `invventa-caja`, no
+      `invventa`.
+- [ ] **Tecleada en otra PC del local, entra.**
+- [ ] Con la caja en el wifi de AZUL, no en un hotspot. **Y anotar en cuál se
+      probó**: en hotspot funciona aunque en el local no, porque son dos
+      aparatos en una red diminuta.
+
+  > **Si la línea NO aparece**, el anuncio no salió y es correcto no enseñarla.
+  >
+  > **Si aparece pero nadie resuelve**, el fallo no está en el anuncio: en AZUL
+  > se comprobó que la propia caja resuelve su nombre en su navegador y ningún
+  > teléfono lo hace. Eso es el punto de acceso **filtrando multicast** entre
+  > clientes inalámbricos — no es aislamiento de clientes, porque el TCP al 3000
+  > sí pasa. No tiene arreglo desde InvVenta.
+  >
+  > **Recordar que Android es irregular con `.local` por diseño** (ver
+  > `anuncio.rs`): dos Android fallando no prueban nada. El dato que cuenta es
+  > iOS, que lleva Bonjour nativo.
 
 ---
 
@@ -317,8 +333,15 @@ misma cola del hub que los tickets. **Sin red debajo en la pantalla**
 - [ ] Las cifras del papel **cuadran con las de la pantalla**: tickets,
       efectivo, tarjeta, propinas, fondo, total.
 - [ ] **`TOTAL EN CAJA` = fondo inicial + efectivo.** Sin tarjeta y sin
-      propinas: es lo que tiene que haber físicamente en el cajón. Contarlo una
-      vez contra el dinero real.
+      propinas: es lo que tiene que haber físicamente en el cajón. Esto es
+      pantalla contra papel y **sí se comprueba hoy**.
+
+  > **Contarlo contra el dinero real del cajón se movió al §12 (la sombra), y no
+  > es pereza.** Hoy el cajón tiene el dinero de AZUL, que salió de Soft
+  > Restaurant, e InvVenta sólo tiene ventas de prueba: **no pueden cuadrar**, y
+  > no porque nada esté mal. Es el único punto de todo el checklist que compara
+  > contra dinero físico, y en la fase equivocada sólo puede dar un rojo que no
+  > significa nada. Cuando los dos sistemas registren el mismo servicio, ahí sí.
 - [ ] **Pulsarlo dos veces seguidas → salen DOS papeles.** Es el paso que
       importa: el corte se reimprime a propósito (uno para la libreta, otro para
       el dueño) y `cola.rs` descarta por id repetido sin dar error.
@@ -435,9 +458,20 @@ sólo queda lo que un navegador no puede tener: IPC, Supabase y realtime.
 
 ## 9d · El folio reservado sobrevive al aparato — nuevo el 22-ago
 
-**Antes de nada, aplicar la migración `20260822120000_folios_reservados.sql`.**
-Sin ella el POS encola filas para una tabla que no existe y la cola se llena de
-fallos — ruidosos, eso sí, no callados.
+**Antes de nada, comprobar que la migración de `folios_reservados` está
+aplicada.** Sin ella el POS encola filas para una tabla que no existe y la cola
+se llena de fallos — ruidosos, eso sí, no callados.
+
+> **BÚSCALA POR NOMBRE, NO POR NÚMERO.** En AZUL está aplicada bajo otro sello
+> (`20260822022834`, no `20260822120000`): nueve migraciones se aplicaron por MCP,
+> que estampa la hora de aplicación en vez del nombre del archivo. Buscar por el
+> número del repo da un rojo falso. Ver
+> `claude/HALLAZGO_24-AGO_REPO_Y_BASE_DESALINEADOS.md`.
+>
+> ```sql
+> select version, name from supabase_migrations.schema_migrations
+> where name like '%folios_reservados%';
+> ```
 
 - [ ] Con el flujo en **`ticket_final`**, pedir la cuenta de una mesa. En
       Supabase aparece una fila en `folios_reservados` con **el folio como
@@ -451,17 +485,35 @@ fallos — ruidosos, eso sí, no callados.
       documentado; antes era un hueco invisible.
 - [ ] Con el flujo en **`precuenta_y_ticket`** no se reserva nada, y es
       correcto: ese papel no lleva número, así que no hay nada que conciliar.
-- [ ] **En la caja, `Ajustes → Hub`:** después de pedir una cuenta, el contador
-      de respaldo sube. La reserva viaja con las ventas.
+- [ ] **DIFERIDO AL §3** — «en `Ajustes → Hub` el contador de respaldo sube al
+      pedir una cuenta». **Con internet no se puede ver**: la copia se escribe,
+      sube, se confirma y se borra; vas de 0 a 1 a 0 más rápido de lo que tardas
+      en mirar. Se ve quieto sólo con la caja sin internet, que es el estado que
+      el §3 crea a propósito en su primer paso. Comprobarlo allí.
 - [ ] Intentar **borrar** una fila de `folios_reservados` desde el cliente:
       **tiene que fallar.** Sólo hay `select` e `insert`. Una tabla que existe
       para que no falten números no puede dejar que le quiten números.
+
+  > **NO se prueba en el editor SQL de Supabase.** Ahí corres con rol
+  > privilegiado y el `delete` **te va a funcionar**: marcarías rojo algo que
+  > está bien. La forma rigurosa es mirar los privilegios, que es lo que este
+  > proyecto hace en vez de fiarse de un `success: true`:
+  >
+  > ```sql
+  > select grantee, privilege_type
+  > from information_schema.role_table_grants
+  > where table_schema='public' and table_name='folios_reservados';
+  > ```
+  >
+  > Tiene que salir `authenticated` con **sólo INSERT y SELECT**, `anon` sin
+  > aparecer, y dos políticas (`_lee` y `_inserta`). Comprobado así el 31-ago.
 
 ---
 
 ## 9e · Gastos en dos pestañas — nuevo el 22-ago
 
-Necesita la migración `20260822130000_gastos_escala.sql`.
+Necesita la migración de `gastos_escala`. **Búscala por nombre, no por número**
+—en AZUL está bajo el sello `20260822024034`— por lo mismo que en el §9d.
 
 - [ ] `Gastos` abre en **«Del turno»**, no en «Todos». Es la que se usa con
       prisa.
@@ -638,6 +690,21 @@ pruebas. **Sólo con el flujo `ticket_final`**, que es el de AZUL.
       Con el flujo en `precuenta_y_ticket` **no aparece**, y es correcto: ese
       papel no lleva número, así que no habría nada que conciliar.
 - [ ] Elegir **unidades, no renglones**: de «4 cervezas» se pueden llevar 2.
+- [ ] **HACERLO EN UNA MESA RECIÉN SENTADA, la PRIMERA cuenta de esa mesa.**
+      Tiene que salir **sólo lo separado**.
+
+  > **Aquí falló en campo el 31-ago y por eso este punto existe.** Los
+  > comensales se piden al pedir la primera cuenta; ese cuadro cortaba la
+  > petición y **tiraba la selección**, así que se imprimía **la mesa entera**
+  > —$904 en vez de $376— sin excepción y sin log: el papel salía perfecto, sólo
+  > que con el total de todos. Y como al cobrar la mesa se libera con
+  > `comensales_reales = 0`, pasaba **en la primera cuenta separada de cada
+  > mesa, cada servicio**. Al segundo intento funciona, que es lo que lo
+  > escondió durante ocho días.
+  >
+  > Arreglado en `c8202fc`, con prueba y control negativo. **Este punto verifica
+  > el arreglo en papel**, que es donde se descubrió que fallaba.
+
 - [ ] Sale **un papel con su propio folio**, con sólo lo de ese grupo y su
       total. **Ese total NO es una fracción del total de la mesa**: comprueba
       que subtotal + IVA cuadran con las líneas que salen impresas.
@@ -648,8 +715,15 @@ pruebas. **Sólo con el flujo `ticket_final`**, que es el de AZUL.
 - [ ] Intentar cambiar la cantidad de la línea ya facturada: **la pantalla lo
       frena** y dice en qué cuenta salió.
 - [ ] **Cobrar esa cuenta**: en el modal de cobro **no hay división por
-      platillos** —ya se decidió en el papel— y sí siguen la división por
-      personas y el pago en partes.
+      platillos** —ya se decidió en el papel—. Sí siguen: el botón **«Personas»**
+      (parte el total en N iguales y cobra una por pulsación) y, abajo en el
+      panel de método de pago, **«Añadir Pago»** y **«Pagar Restante»**, que son
+      los pagos parciales.
+
+  > La redacción vieja decía «pago en partes», que **no es lenguaje de ninguna
+  > pantalla** y se marcó como fallo el 31-ago buscando un botón que no existe
+  > con ese nombre. Lo que hay está repartido entre «Cobrar Parte (1/N)» y
+  > «Añadir Pago».
 - [ ] En `public.ventas`, la venta lleva **el folio del papel**, no uno nuevo.
       Es la comprobación de fondo de todo el bloque.
 - [ ] En `Reportes → Corte de Caja`, esa cuenta **no** aparece en «Cuentas
