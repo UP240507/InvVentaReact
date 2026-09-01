@@ -15,6 +15,7 @@
 
 import { X } from 'lucide-react';
 import HintsAtajos from '../HintsAtajos';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 
 const unir = (...cls) => cls.filter(Boolean).join(' ');
 
@@ -414,8 +415,11 @@ export function Modal({
   pie,
   as: Elemento = 'div',
   ancho = 'max-w-lg',
+  cerrarConEscape = true,
   ...props
 }) {
+  useCierreConEscape(onClose, cerrarConEscape);
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-sidebar/70 backdrop-blur-sm animate-in fade-in duration-media">
       <Elemento
@@ -460,6 +464,10 @@ export function ConfirmModal({
   onConfirmar,
   onCancelar,
 }) {
+  // Escape CANCELA, nunca confirma. En un cuadro destructivo la tecla de
+  // escape tiene que ser siempre la salida segura.
+  useCierreConEscape(onCancelar);
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-adm-sidebar/70 backdrop-blur-sm animate-in fade-in duration-media">
       <div className="bg-adm-panel border border-adm-border rounded-ui shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 duration-media font-figtree">

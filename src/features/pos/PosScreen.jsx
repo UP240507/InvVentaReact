@@ -86,6 +86,7 @@ import {
   CAMPO_FOLIO,
 } from '../../lib/CuentasParciales';
 import { useAtajos } from '../../hooks/useAtajos';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import {
   useConectividad,
   motivoSinImpresion,
@@ -266,6 +267,11 @@ export default function PosScreen() {
   // dice el papel que el cliente tiene delante.
   const [modalParcial, setModalParcial] = useState(null);
   const [cuentaACobrar, setCuentaACobrar] = useState(null);
+  // Este cuadro se pinta con un `div` suelto y no con `OpsModal`, así que no
+  // hereda el Escape de los componentes base: se le pone aquí. Sin esto, la
+  // tecla llegaba a los atajos del POS y te SACABA de la pantalla con la
+  // selección a medias.
+  useCierreConEscape(() => setModalParcial(null), modalParcial !== null);
   const [pinReapertura, setPinReapertura] = useState('');
   const [pinReaperturaError, setPinReaperturaError] = useState('');
   const [pidiendoReapertura, setPidiendoReapertura] = useState(false);
@@ -1878,6 +1884,11 @@ export default function PosScreen() {
     !!modalElecciones ||
     !!modalMods ||
     !!lineaDescuento ||
+    // `modalParcial` faltaba, y no era sólo cosa de Escape: sin estar aquí,
+    // TODOS los atajos del POS seguían vivos con el cuadro abierto. Elegir
+    // unidades mientras `+` y `−` mueven el carrito de debajo es un descuadre
+    // esperando a pasar. Encontrado el 31-ago.
+    modalParcial !== null ||
     !!ticketGenerado;
 
   const puedeCobrarAqui = !(isMesa && esMesero);

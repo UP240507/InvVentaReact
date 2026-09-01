@@ -22,6 +22,7 @@
 
 import { WifiOff, X } from 'lucide-react';
 import HintsAtajos from '../HintsAtajos';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 
 const unir = (...cls) => cls.filter(Boolean).join(' ');
 
@@ -345,8 +346,14 @@ export function OpsModal({
   pie,
   ancho = 'max-w-lg',
   as: Elemento = 'div',
+  // Para el cuadro raro que NO deba cerrarse con Escape (uno a mitad de una
+  // operación que no se puede dejar a medias). Por defecto sí cierra: es lo que
+  // todo el mundo espera y lo que no hacer costó el hallazgo del 28-ago.
+  cerrarConEscape = true,
   ...props
 }) {
+  useCierreConEscape(onClose, cerrarConEscape);
+
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-ops-ink/50 backdrop-blur-md animate-in fade-in">
       <Elemento
