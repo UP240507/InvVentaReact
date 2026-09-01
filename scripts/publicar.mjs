@@ -255,10 +255,52 @@ if (sinHumo) {
   );
 } else {
   console.log('\nPrueba de humo (compila y abre el build)…');
-  const humo = spawnSync(bin('npx'), ['playwright', 'test', '--project=humo'], {
-    cwd: RAIZ,
-    stdio: 'inherit',
-  });
+
+  // ── POR QUÉ NO SE LLAMA A `npx` ─────────────────────────────────────────
+  // Porque en Windows NO EXISTE `npx.exe`: npm y npx se instalan como `.cmd`.
+  // `bin()` añade `.exe` —correcto para `gh`, que sí es un ejecutable— y aquí
+  // hacía que `spawnSync` fallara con ENOENT **sin ejecutar nada**. Como el
+  // proceso no arranca, `status` viene `null`, y el `!== 0` lo daba por
+  // «prueba fallida»: el guion acusaba al build de estar roto cuando lo roto
+  // era su propia llamada. Cero salida de Playwright y un mensaje que manda a
+  // mirar el sitio equivocado. Encontrado el 31-ago al ir a publicar la 0.2.9.
+  //
+  // Se invoca el CLI con el MISMO node que corre este guion, igual que se hace
+  // con `latest-json.mjs` más abajo: sin shims, sin shell y sin PATH de por
+  // medio, funciona igual en Windows que en Linux.
+  const cliPlaywright = path.join(
+    RAIZ,
+    'node_modules',
+    '@playwright',
+    'test',
+    'cli.js',
+  );
+  if (!fs.existsSync(cliPlaywright)) {
+    morir(
+      'No encuentro el CLI de Playwright.',
+      `Falta: ${cliPlaywright}`,
+      '',
+      'npm install',
+    );
+  }
+
+  const humo = spawnSync(
+    process.execPath,
+    [cliPlaywright, 'test', '--project=humo'],
+    { cwd: RAIZ, stdio: 'inherit' },
+  );
+
+  // Se distingue «no pude ejecutarla» de «la prueba falló». Son dos problemas
+  // distintos y mandan a mirar sitios distintos; confundirlos fue exactamente
+  // el fallo de arriba.
+  if (humo.error) {
+    morir(
+      'No pude EJECUTAR la prueba de humo (no es que fallara).',
+      `El sistema respondió: ${humo.error.message}`,
+      '',
+      'El build no se ha comprobado y el release NO se ha publicado.',
+    );
+  }
   if (humo.status !== 0) {
     morir(
       'La prueba de humo falló. El release NO se ha publicado.',
@@ -266,8 +308,7 @@ if (sinHumo) {
       'Las dos cosas dejan la caja del cliente a medias sin dar un error',
       'visible, que es justo lo que esta puerta existe para evitar.',
       '',
-      'Para verlo con detalle:',
-      '  npm run e2e:humo',
+      'El detalle está arriba, en la salida de Playwright.',
       '',
       'Y si de verdad hace falta publicar sin ella:',
       '  npm run publicar -- --sin-humo "la nota"',
