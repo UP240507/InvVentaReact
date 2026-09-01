@@ -20,7 +20,7 @@ import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
 import { buscarAutorizador } from '../../../lib/Autorizacion';
-import { importeDeLinea } from '../../../lib/Fiscal';
+import { importeDeLinea, parteDeCuenta } from '../../../lib/Fiscal';
 import { useAcoplado } from '../../../hooks/useAcoplado';
 
 // HELPERS ORIGINALES (Intactos)
@@ -423,7 +423,14 @@ export default function ModalCobro({
     setMontoInput(round2(actual + valorBillete).toString());
   };
 
-  const montoPorPersona = round2(granTotal / safeNumber(divisorPersonas, 1));
+  // Lo que toca ESTA parte, no `granTotal / N` a secas. La división a secas
+  // dejaba un centavo colgando —tres de 33.33 son 99.99— y la venta no cerraba;
+  // el porqué entero está en `parteDeCuenta`. Se acota al saldo para que, si
+  // alguien metió un pago suelto por en medio, la parte no cobre de más.
+  const montoPorPersona = Math.min(
+    parteDeCuenta(granTotal, divisorPersonas, pagos.length),
+    round2(saldoPendiente),
+  );
 
   // ─── EL PIE DEL COBRO, EXTRAÍDO ──────────────────────────────────────────
   // Saldo, cambio y el botón de confirmar. Se saca a una constante porque las

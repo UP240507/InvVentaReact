@@ -1,6 +1,6 @@
 // src/lib/Fiscal.test.js — TDD del motor fiscal (Sprint 2)
 import { describe, it, expect } from 'vitest';
-import { calcularVenta, importeDeLinea } from './Fiscal';
+import { calcularVenta, importeDeLinea, parteDeCuenta } from './Fiscal';
 
 describe('calcularVenta · motor fiscal', () => {
   it('MX precio con IVA incluido: $116 → base 100, IVA 16, total 116', () => {
@@ -378,5 +378,74 @@ describe('calcularVenta · el desglose suma exactamente el total', () => {
     const bruto = 80;
     const esperadoTrigger = Math.round((bruto / 1.16) * 1.16 * 100) / 100;
     expect(r.total).toBe(esperadoTrigger);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARTES IGUALES
+//
+// La afirmación de todo el bloque es una sola: **las N partes suman el total,
+// exacto, para cualquier total**. Antes no era cierto y el síntoma era
+// intermitente —según el total, sobraba o faltaba un centavo—, que es la peor
+// forma de fallar: parece que funciona hasta que un día la venta no cierra.
+describe('parteDeCuenta', () => {
+  const reparto = (total, n) =>
+    Array.from({ length: n }, (_, k) => parteDeCuenta(total, n, k));
+  const suma = (xs) => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
+
+  it('EL CASO: $100 entre 3 suma 100, no 99.99', () => {
+    const partes = reparto(100, 3);
+    expect(suma(partes)).toBe(100);
+    expect(suma(partes)).not.toBe(99.99);
+    expect(partes).toEqual([33.34, 33.33, 33.33]);
+  });
+
+  it('suma exacto también cuando el redondeo cae hacia arriba ($80 entre 3)', () => {
+    // Este caso SÍ cerraba antes, por sobrepago de un centavo. Que pasara a
+    // veces es lo que escondió el fallo.
+    expect(suma(reparto(80, 3))).toBe(80);
+    expect(reparto(80, 3)).toEqual([26.67, 26.67, 26.66]);
+  });
+
+  it('suma exacto en un barrido de totales y divisores', () => {
+    for (let centavos = 1; centavos <= 2000; centavos += 7) {
+      const total = centavos / 100;
+      for (let n = 1; n <= 8; n++) {
+        expect(suma(reparto(total, n)), `${total} entre ${n}`).toBe(total);
+      }
+    }
+  });
+
+  it('ninguna parte difiere de otra en más de un centavo', () => {
+    for (const [total, n] of [
+      [100, 3],
+      [10, 7],
+      [1084.8, 7],
+      [0.05, 3],
+    ]) {
+      const partes = reparto(total, n);
+      expect(Math.max(...partes) - Math.min(...partes)).toBeLessThanOrEqual(
+        0.010000001,
+      );
+    }
+  });
+
+  it('el centavo sobrante va a las PRIMERAS partes', () => {
+    // Para que quien paga primero no tenga que esperar a saber cuánto le toca.
+    const [p1, p2, p3] = reparto(100, 3);
+    expect(p1).toBeGreaterThanOrEqual(p2);
+    expect(p2).toEqual(p3);
+  });
+
+  it('no reparte de más: pedida la parte N+1, da 0', () => {
+    expect(parteDeCuenta(100, 3, 3)).toBe(0);
+    expect(parteDeCuenta(100, 3, 9)).toBe(0);
+  });
+
+  it('aguanta basura sin inventar dinero', () => {
+    expect(parteDeCuenta(0, 3, 0)).toBe(0);
+    expect(parteDeCuenta(-50, 3, 0)).toBe(0);
+    expect(parteDeCuenta(100, 0, 0)).toBe(100); // divisor 0 → una sola parte
+    expect(parteDeCuenta(100, 1, 0)).toBe(100);
   });
 });

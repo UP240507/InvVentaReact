@@ -160,3 +160,42 @@ export function calcularVenta({
     total,
   };
 }
+
+/**
+ * El importe de la parte `yaCobradas + 1` al dividir una cuenta en `partes`
+ * iguales. Trabaja en CENTAVOS ENTEROS, y por eso las N partes suman exacto.
+ *
+ * ── EL FALLO QUE ARREGLA ────────────────────────────────────────────────────
+ * Antes se cobraba `round2(total / N)` siempre. `round2(100 / 3)` es 33.33, y
+ * tres veces 33.33 son 99.99: al pulsar las tres partes quedaba **un centavo
+ * pendiente**, la venta no se daba por pagada y había que rematar con «Pagar
+ * Restante» — lo contrario de repartir en partes iguales. Y era intermitente:
+ * con $80 entre 3 el redondeo cae hacia arriba, sobra un centavo, el saldo
+ * queda negativo y sí cerraba. **Funcionaba o no según el total.**
+ *
+ * ── POR QUÉ EN CENTAVOS Y NO CON UNA TOLERANCIA ─────────────────────────────
+ * El primer intento comparaba `saldo - parte <= 0.01` para detectar la última.
+ * En coma flotante `33.34 - 33.33` es `0.010000000000005`, que **no** es
+ * `<= 0.01`, así que el arreglo no arreglaba nada y encima sólo fallaba en
+ * algunos totales. Con enteros no hay tolerancia que ajustar: el reparto es
+ * exacto por construcción.
+ *
+ * El centavo sobrante va a las PRIMERAS partes, no a la última: así ninguna
+ * difiere de otra en más de un centavo y el que paga primero no espera a ver
+ * cuánto le toca. $100 entre 3 → 33.34, 33.33, 33.33.
+ *
+ * @param {number} total       Lo que se reparte (con propina incluida si la hay).
+ * @param {number} partes      En cuántas se divide.
+ * @param {number} yaCobradas  Cuántas se han registrado ya.
+ * @returns {number} Importe de esta parte. 0 si ya no quedan.
+ */
+export function parteDeCuenta(total, partes, yaCobradas = 0) {
+  const centavos = Math.round(round2(total) * 100);
+  const n = Math.max(1, Math.trunc(num(partes)));
+  const k = Math.max(0, Math.trunc(num(yaCobradas)));
+  if (centavos <= 0 || k >= n) return 0;
+
+  const base = Math.floor(centavos / n);
+  const sobrante = centavos - base * n;
+  return (base + (k < sobrante ? 1 : 0)) / 100;
+}
