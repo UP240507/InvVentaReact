@@ -6,6 +6,12 @@ import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
 import { usePlan } from '../../hooks/usePlan';
 import { desdeArchivo, aVistaPrevia } from '../../lib/LogoTermico';
+import {
+  listaDeTextos,
+  unidadesDisponibles,
+  categoriasDeInsumo,
+  categoriasDeMenu,
+} from '../../lib/Catalogo';
 import { cargarCatalogo, precioMXN } from '../suscripciones/checkout';
 import { supabase } from '../../api/supabase';
 import {
@@ -421,11 +427,38 @@ export default function ConfiguracionScreen() {
     }
   };
 
-  const [categorias, setCategorias] = useState(parseJsonb(conf.categorias));
-  const [unidades, setUnidades] = useState(parseJsonb(conf.unidades));
+  // ── LAS TRES LISTAS ──────────────────────────────────────────────────────
+  //
+  // Arrancan con lo que la aplicación OFRECE de verdad, no con lo que hay
+  // guardado. No es lo mismo: los cinco locales tienen hoy `unidades` en `[]`
+  // o en `null`, y pintar eso a secas enseñaría cero unidades en esta pantalla
+  // mientras la de insumos ofrece ocho. Una pantalla afirmando lo que no es,
+  // que es el fallo que más veces ha salido en este proyecto.
+  //
+  // Se piden sin catálogo (`null`) a propósito: aquí se edita LA LISTA, no lo
+  // que ya se usa. Lo que está en uso y fuera de la lista lo enseña la pantalla
+  // de insumos, que es donde se arregla.
+  const [categorias, setCategorias] = useState(
+    () => categoriasDeMenu(conf, null).lista,
+  );
+  const [categoriasInsumo, setCategoriasInsumo] = useState(
+    () => categoriasDeInsumo(conf, null).lista,
+  );
+  const [unidades, setUnidades] = useState(
+    () => unidadesDisponibles(conf, null).lista,
+  );
   const [impresoras, setImpresoras] = useState(parseJsonb(cfdiConf.impresoras));
   const [nuevaCat, setNuevaCat] = useState('');
+  const [nuevaCatInsumo, setNuevaCatInsumo] = useState('');
   const [nuevaUni, setNuevaUni] = useState('');
+
+  // Si el local todavía no ha fijado una lista, se está viendo la de fábrica.
+  // Se dice, porque al guardar dejará de serlo.
+  const deFabrica = {
+    categorias: listaDeTextos(conf.categorias).length === 0,
+    categoriasInsumo: listaDeTextos(conf.categorias_insumo).length === 0,
+    unidades: listaDeTextos(conf.unidades).length === 0,
+  };
 
   // ── Nueva impresora ─────────────────────────────────────────────────────────
   const [nuevaImp, setNuevaImp] = useState({
@@ -461,7 +494,11 @@ export default function ConfiguracionScreen() {
       logo_bitmap: form.logo_bitmap || null,
       logo_ancho: form.logo_bitmap ? form.logo_ancho : null,
       logo_alto: form.logo_bitmap ? form.logo_alto : null,
+      // Dos listas y no una: `categorias` es el MENÚ —lo que agrupa platillos
+      // en el POS y lo que enruta la pantalla de zonas— y `categorias_insumo`
+      // es el ALMACÉN. Ver la migración del 01-sep.
       categorias: categorias,
+      categorias_insumo: categoriasInsumo,
       unidades: unidades,
       printer_baud: nuevaImp.puerto || conf.printer_baud || '9100',
       // Campos que no existen en BD → cfdi_config jsonb como contenedor
@@ -500,6 +537,15 @@ export default function ConfiguracionScreen() {
     setNuevaCat('');
   };
   const quitarCat = (c) => setCategorias(categorias.filter((x) => x !== c));
+
+  const agregarCatInsumo = () => {
+    const t = nuevaCatInsumo.trim();
+    if (!t || categoriasInsumo.includes(t)) return;
+    setCategoriasInsumo([...categoriasInsumo, t]);
+    setNuevaCatInsumo('');
+  };
+  const quitarCatInsumo = (c) =>
+    setCategoriasInsumo(categoriasInsumo.filter((x) => x !== c));
 
   const agregarUni = () => {
     if (!nuevaUni.trim() || unidades.includes(nuevaUni.trim())) return;
@@ -1000,6 +1046,17 @@ export default function ConfiguracionScreen() {
                   <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest block mb-3">
                     Categorías del menú POS
                   </label>
+                  <p className="text-xs font-bold text-adm-muted mb-3">
+                    Agrupan los platillos en el POS y son las que la pantalla de
+                    zonas de impresión manda a cocina o a barra.{' '}
+                    <strong>No son las del almacén</strong>: ésas están abajo.
+                  </p>
+                  {deFabrica.categorias && (
+                    <p className="text-xs font-bold text-adm-muted mb-4 -mt-1">
+                      Ésta es la lista de fábrica: este local todavía no ha
+                      fijado la suya. Al guardar queda fijada.
+                    </p>
+                  )}
                   <div className="flex gap-3 mb-4">
                     <input
                       value={nuevaCat}
@@ -1037,10 +1094,80 @@ export default function ConfiguracionScreen() {
                   </div>
                 </div>
 
+                {/* ── EL ALMACÉN, QUE NO ES EL MENÚ ──────────────────────
+                    Hasta el 01-sep las dos vivían en la misma columna: la
+                    plantilla sembraba «Abarrotes» y «Limpieza» en la lista del
+                    menú, que es la que enruta la pantalla de zonas. Dos listas
+                    con dueños distintos. */}
+                <div className="border-t-2 border-adm-border pt-8">
+                  <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest block mb-3">
+                    Categorías de insumos (Almacén)
+                  </label>
+                  <p className="text-xs font-bold text-adm-muted mb-3">
+                    Las que ofrece la pantalla de insumos. Decidirlas ANTES de
+                    capturar es lo que evita acabar con «Frutería» y «Verduras»
+                    como si fueran dos cosas.
+                  </p>
+                  {deFabrica.categoriasInsumo && (
+                    <p className="text-xs font-bold text-adm-muted mb-4 -mt-1">
+                      Ésta es la lista de fábrica: este local todavía no ha
+                      fijado la suya. Al guardar queda fijada.
+                    </p>
+                  )}
+                  <div className="flex gap-3 mb-4">
+                    <input
+                      value={nuevaCatInsumo}
+                      onChange={(e) => setNuevaCatInsumo(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' &&
+                        (e.preventDefault(), agregarCatInsumo())
+                      }
+                      placeholder="Ej. Abarrotes, Carnes, Limpieza..."
+                      className="flex-1 px-4 py-3 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-sm text-adm-ink placeholder:text-adm-muted dark:placeholder:text-adm-muted/50 outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={agregarCatInsumo}
+                      className="px-5 py-3 bg-adm-info hover:bg-adm-info text-adm-info-fg rounded-ui font-black shadow-md transition-all active:scale-95"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {categoriasInsumo.map((c) => (
+                      <span
+                        key={c}
+                        className="bg-adm-chip dark:bg-adm-border text-adm-ink font-bold text-sm px-4 py-2 rounded-ui flex items-center gap-2 border-2 border-adm-border"
+                      >
+                        {c}
+                        <button
+                          type="button"
+                          onClick={() => quitarCatInsumo(c)}
+                          className="text-adm-muted hover:text-adm-danger dark:hover:text-adm-danger transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="border-t-2 border-adm-border pt-8">
                   <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest block mb-3">
                     Unidades de medida (Inventario)
                   </label>
+                  <p className="text-xs font-bold text-adm-muted mb-3">
+                    La unidad con la que se inventaría un insumo{' '}
+                    <strong>es la unidad con la que se consume</strong>. Sin
+                    sinónimos: o <code>L</code> o <code>lt</code>, no las dos, o
+                    serán dos insumos que no se pueden sumar.
+                  </p>
+                  {deFabrica.unidades && (
+                    <p className="text-xs font-bold text-adm-muted mb-4 -mt-1">
+                      Ésta es la lista de fábrica: este local todavía no ha
+                      fijado la suya. Al guardar queda fijada.
+                    </p>
+                  )}
                   <div className="flex gap-3 mb-4">
                     <input
                       value={nuevaUni}
@@ -1048,7 +1175,7 @@ export default function ConfiguracionScreen() {
                       onKeyDown={(e) =>
                         e.key === 'Enter' && (e.preventDefault(), agregarUni())
                       }
-                      placeholder="Ej. Kgs, Lts, Pzas..."
+                      placeholder="Ej. kg, L, pz..."
                       className="flex-1 px-4 py-3 bg-adm-bg border-2 border-adm-field rounded-ui font-bold text-sm text-adm-ink placeholder:text-adm-muted dark:placeholder:text-adm-muted/50 outline-none focus:border-adm-info dark:focus:border-adm-info transition-all"
                     />
                     <button
