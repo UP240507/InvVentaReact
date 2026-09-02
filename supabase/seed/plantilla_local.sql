@@ -97,10 +97,28 @@ insert into public.roles_permisos (restaurante_id, rol, capacidades) values
 --
 -- Si hace falta una unidad nueva, se anade AQUI y se piensa una vez, en vez de
 -- teclearla distinta cada vez que alguien captura un insumo.
+--
+-- LAS CATEGORIAS SON DOS LISTAS, NO UNA
+--
+-- `categorias` son las del MENU: las que agrupan los platillos en el POS y las
+-- que `ZonasImpresionScreen` enruta a cocina o a barra. `categorias_insumo` son
+-- las del ALMACEN: las que ofrece la pantalla de insumos.
+--
+-- Hasta el 01-sep esta plantilla sembraba las de ALMACEN en la columna del
+-- MENU, que es la que lee la pantalla de zonas: un local nuevo habria abierto
+-- zonas de impresion y habria visto «Abarrotes» y «Limpieza» como cosas que
+-- enrutar a la plancha. Ver la migracion
+-- 20260901233300_configuracion_categorias_insumo.sql.
+--
+-- Las del almacen valen para cualquier local y por eso vienen decididas. Las
+-- del menu son la identidad del negocio -una taqueria no tiene «Desayunos»-,
+-- asi que las cuatro de abajo son un PUNTO DE PARTIDA para editar en Ajustes,
+-- no una lista cerrada. Lo que importa no es cuales sean, sino que se decidan
+-- ANTES de capturar doscientas recetas.
 
 insert into public.configuracion (
   restaurante_id, nombre_empresa, iva, mensaje_ticket,
-  unidades, categorias,
+  unidades, categorias, categorias_insumo,
   flujo_cuenta, precios_incluyen_iva,
   franjas_activas, franja_corte
 ) values (
@@ -109,6 +127,9 @@ insert into public.configuracion (
   0.16,
   '¡Gracias por su preferencia!',
   '["kg","g","L","ml","pz","paq","caja","bolsa"]'::jsonb,
+  -- Menu (POS y zonas de impresion): punto de partida, se edita en Ajustes.
+  '["Desayunos","Platos fuertes","Bebidas","Postres"]'::jsonb,
+  -- Almacen (pantalla de insumos): valen para cualquier local.
   '["Abarrotes","Carnes","Lácteos","Frutas y verduras","Bebidas","Limpieza"]'::jsonb,
   -- Un solo papel: la cuenta que se lleva el cliente ES el comprobante y lleva
   -- folio. El otro flujo (`precuenta_y_ticket`) existe para quien ya trabaja
