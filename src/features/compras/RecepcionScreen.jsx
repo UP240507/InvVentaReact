@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { nombreDeProveedorDeLaOrden } from '../../lib/Compras';
 import {
   PageShell,
   PageHeader,
@@ -26,7 +27,8 @@ import {
 } from 'lucide-react';
 
 export default function RecepcionScreen() {
-  const { ordenesCompra, productos, configuracion, showToast } = useAppStore();
+  const { ordenesCompra, productos, proveedores, configuracion, showToast } =
+    useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
 
@@ -160,7 +162,7 @@ export default function RecepcionScreen() {
         <>
           <p className="font-bold text-adm-ink">{o.numero || o.folio}</p>
           <p className="text-xs text-adm-muted mt-0.5">
-            {o.proveedor_nombre || o.proveedor}
+            {nombreDeProveedorDeLaOrden(o, proveedores)}
           </p>
         </>
       ),
@@ -261,7 +263,7 @@ export default function RecepcionScreen() {
                           )}
                         </h3>
                         <p className="text-sm text-adm-muted">
-                          {orden.proveedor_nombre || orden.proveedor}
+                          {nombreDeProveedorDeLaOrden(orden, proveedores)}
                         </p>
                         <div className="flex items-center gap-4 mt-2 text-xs text-adm-muted">
                           <span className="flex items-center gap-1">

@@ -12,7 +12,11 @@ import {
   ConfirmModal,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
-import { proveedorDeLaOrden, telefonoParaWhatsApp } from '../../lib/Compras';
+import {
+  proveedorDeLaOrden,
+  telefonoParaWhatsApp,
+  nombreDeProveedorDeLaOrden,
+} from '../../lib/Compras';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   ShoppingCart,
@@ -327,7 +331,8 @@ export default function ComprasScreen() {
         <>
           <p className="font-bold text-adm-accent">{o.numero}</p>
           <p className="text-xs text-adm-muted flex items-center gap-1 mt-0.5">
-            <Truck className="w-3 h-3" /> {o.proveedor}
+            <Truck className="w-3 h-3" />{' '}
+            {nombreDeProveedorDeLaOrden(o, proveedores)}
           </p>
         </>
       ),

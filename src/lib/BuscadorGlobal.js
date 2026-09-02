@@ -116,9 +116,13 @@ export const RECURSOS = [
     ruta: '/compras',
     icono: ShoppingCart,
     titulo: (o) => `Orden ${o.numero || o.folio || o.id}`,
-    subtitulo: (o) =>
-      [o.proveedor_nombre || o.proveedor, o.estado].filter(Boolean).join(' · '),
-    campos: ['numero', 'folio', 'proveedor_nombre', 'proveedor', 'estado'],
+    // `proveedor_nombre` no existe: no es una columna de `ordenes_compra` y no
+    // lo escribe nadie. Estaba aquí y en `RecepcionScreen` como si fuera un
+    // respaldo, y llevaba desde siempre devolviendo `undefined` — un campo de
+    // búsqueda que nunca encontró nada. Se busca por el nombre que quedó
+    // escrito en la orden.
+    subtitulo: (o) => [o.proveedor, o.estado].filter(Boolean).join(' · '),
+    campos: ['numero', 'folio', 'proveedor', 'estado'],
   },
 ];
 
