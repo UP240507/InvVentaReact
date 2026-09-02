@@ -33,7 +33,7 @@
 // Las categorías son DOS listas y no una: `categorias` es el MENÚ (lo que
 // agrupa platillos en el POS y lo que `ZonasImpresionScreen` enruta a cocina o
 // barra) y `categorias_insumo` es el ALMACÉN. Ver la migración
-// `20260901233300_configuracion_categorias_insumo.sql`.
+// `20260902030723_configuracion_categorias_insumo.sql`.
 
 /**
  * Las unidades que vienen decididas de fábrica, y las mismas que siembra

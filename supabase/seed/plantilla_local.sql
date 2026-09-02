@@ -108,7 +108,7 @@ insert into public.roles_permisos (restaurante_id, rol, capacidades) values
 -- MENU, que es la que lee la pantalla de zonas: un local nuevo habria abierto
 -- zonas de impresion y habria visto «Abarrotes» y «Limpieza» como cosas que
 -- enrutar a la plancha. Ver la migracion
--- 20260901233300_configuracion_categorias_insumo.sql.
+-- 20260902030723_configuracion_categorias_insumo.sql.
 --
 -- Las del almacen valen para cualquier local y por eso vienen decididas. Las
 -- del menu son la identidad del negocio -una taqueria no tiene «Desayunos»-,
