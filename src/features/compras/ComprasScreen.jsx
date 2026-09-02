@@ -12,6 +12,7 @@ import {
   ConfirmModal,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
+import { proveedorDeLaOrden, telefonoParaWhatsApp } from '../../lib/Compras';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   ShoppingCart,
@@ -159,6 +160,16 @@ export default function ComprasScreen() {
     const nuevaOrden = {
       id: Date.now(),
       numero: folio,
+      // ── LOS DOS, Y CADA UNO PARA LO SUYO ──────────────────────────────
+      // `proveedor_id` es la identidad: es por donde se busca. `proveedor` es
+      // el nombre que tenía el día de la orden, y se guarda como historia para
+      // que renombrar el catálogo no reescriba lo que decía el papel.
+      //
+      // Hasta el 01-sep sólo se guardaba el nombre, y con él se buscaba de
+      // vuelta al proveedor para mandarle la orden: corregir un nombre en el
+      // catálogo dejaba sin destinatario a todas sus órdenes anteriores, y sin
+      // dar error. El porqué entero está en `lib/Compras.js`.
+      proveedor_id: proveedorSeleccionado.id,
       proveedor: proveedorSeleccionado.nombre,
       fecha: date.toISOString(),
       estado: 'pendiente',
@@ -255,15 +266,33 @@ export default function ComprasScreen() {
   };
 
   const enviarPorWhatsApp = (orden, desdeModal = false) => {
-    const prov = (proveedores || []).find((p) => p.nombre === orden.proveedor);
-    const telefono = prov?.telefono ? prov.telefono.replace(/\D/g, '') : '';
+    const telefono = telefonoParaWhatsApp(orden, proveedores);
+    // Sin número NO se abre nada. `wa.me/?text=…` sin destinatario abre un
+    // WhatsApp vacío: en la pantalla parece que funcionó y al proveedor no le
+    // llega nada. Y sobre todo NO se cierra el flujo: cerrarlo vaciaría el
+    // carrito como si la orden se hubiera enviado.
+    if (!telefono) {
+      showToast(
+        'Ese proveedor no tiene teléfono guardado. Agrégalo en Proveedores.',
+        'error',
+      );
+      return;
+    }
     const mensaje = encodeURIComponent(crearCuerpoMensaje(orden));
     window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
     if (desdeModal) finalizarFlujoOrden();
   };
 
   const enviarPorCorreo = (orden, desdeModal = false) => {
-    const prov = (proveedores || []).find((p) => p.nombre === orden.proveedor);
+    const prov = proveedorDeLaOrden(orden, proveedores);
+    // Mismo motivo que arriba: un `mailto` sin destinatario no es un envío.
+    if (!prov?.email) {
+      showToast(
+        'Ese proveedor no tiene correo guardado. Agrégalo en Proveedores.',
+        'error',
+      );
+      return;
+    }
     const asunto = encodeURIComponent(
       `OC ${orden.numero} - ${configuracion?.nombre_empresa || 'Restaurante'}`,
     );
@@ -271,7 +300,7 @@ export default function ComprasScreen() {
       crearCuerpoMensaje(orden).replace(/\*/g, ''),
     );
     window.open(
-      `https://mail.google.com/mail/?view=cm&fs=1&to=${prov?.email || ''}&su=${asunto}&body=${cuerpo}`,
+      `https://mail.google.com/mail/?view=cm&fs=1&to=${prov.email}&su=${asunto}&body=${cuerpo}`,
       '_blank',
     );
     if (desdeModal) finalizarFlujoOrden();
@@ -498,6 +527,7 @@ export default function ComprasScreen() {
                         Insumo
                       </label>
                       <select
+                        aria-label="Insumo"
                         value={itemSeleccionado}
                         onChange={handleSelectProducto}
                         className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-bold text-sm text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok transition-colors cursor-pointer"
@@ -521,6 +551,7 @@ export default function ComprasScreen() {
                         step="0.01"
                         min="0.01"
                         required
+                        aria-label="Cantidad"
                         value={cantidadItem}
                         onChange={(e) => setCantidadItem(e.target.value)}
                         className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors"
@@ -535,6 +566,7 @@ export default function ComprasScreen() {
                         step="0.01"
                         min="0"
                         required
+                        aria-label="Costo unitario"
                         value={costoItem}
                         onChange={(e) => setCostoItem(e.target.value)}
                         className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ok outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors"
@@ -542,6 +574,7 @@ export default function ComprasScreen() {
                     </div>
                     <button
                       type="submit"
+                      aria-label="Agregar a la orden"
                       className="md:col-span-2 w-full bg-adm-ink dark:bg-adm-danger text-adm-danger-fg p-4 rounded-ui font-black hover:bg-adm-ink dark:hover:bg-adm-warn transition-all active:scale-95 flex items-center justify-center shadow-lg"
                     >
                       <PlusCircle className="w-6 h-6" />
