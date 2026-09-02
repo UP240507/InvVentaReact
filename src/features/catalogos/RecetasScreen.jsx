@@ -1,5 +1,6 @@
 import { useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { categoriasDeMenu } from '../../lib/Catalogo';
 import {
   PageShell,
   PageHeader,
@@ -40,7 +41,8 @@ import {
 } from 'lucide-react';
 
 export default function RecetasScreen() {
-  const { recetas, productos, modificadores, showToast } = useAppStore();
+  const { recetas, productos, modificadores, configuracion, showToast } =
+    useAppStore();
   const { enqueueAction } = useSyncStore();
 
   const [busqueda, setBusqueda] = useState('');
@@ -87,13 +89,21 @@ export default function RecetasScreen() {
   const [grupoOpciones, setGrupoOpciones] = useState([]); // [{recetaId, nombre}]
   const [grupoOpcionSel, setGrupoOpcionSel] = useState('');
 
-  const categoriasExistentes = useMemo(() => {
-    const cats = (recetas || [])
-      .filter((r) => r.activo !== false)
-      .map((r) => r.categoria)
-      .filter(Boolean);
-    return [...new Set(cats)];
-  }, [recetas]);
+  // ── LAS CATEGORÍAS DEL MENÚ SALEN DE LA CONFIGURACIÓN ────────────────────
+  //
+  // `configuracion.categorias` es la lista del MENÚ —la que agrupa platillos en
+  // el POS y la que `ZonasImpresionScreen` enruta a cocina o a barra—, y hasta
+  // el 01-sep esta pantalla no la miraba: ofrecía sólo las categorías que ya
+  // tuvieran recetas. Con el catálogo vacío eso deja UNA opción inventada, y
+  // quien carga doscientos platillos se las teclea a mano: así aparecieron
+  // «Platos Fuertes» y «Platillos» a la vez en AZUL.
+  //
+  // `sueltas` son las que ya usan recetas y no están en la lista del local. Ver
+  // el porqué entero en `lib/Catalogo.js`.
+  const { lista: categoriasMenu, sueltas: categoriasSueltas } = useMemo(
+    () => categoriasDeMenu(configuracion, recetas),
+    [configuracion, recetas],
+  );
 
   const recetasFiltradas = useMemo(() => {
     return (recetas || [])
@@ -537,7 +547,10 @@ export default function RecetasScreen() {
     setForm({
       nombre: '',
       codigo_pos: '',
-      categoria: categoriasExistentes[0] || 'Platos Fuertes',
+      // Vacía a propósito: la elige quien captura. Antes era la primera
+      // categoría que existiera, y un desplegable sin estado vacío hace que
+      // nadie la toque.
+      categoria: '',
       precio_venta: '',
       insumos: [],
       grupos_modificadores: [],
@@ -865,21 +878,31 @@ export default function RecetasScreen() {
                           Categoría Menú *
                         </label>
                         <select
+                          required
+                          aria-label="Categoría del menú"
                           value={form.categoria}
                           onChange={(e) =>
                             setForm({ ...form, categoria: e.target.value })
                           }
                           className="w-full px-6 py-4 bg-adm-bg border-2 border-adm-field rounded-ui font-black text-adm-ink focus:border-adm-danger outline-none"
                         >
-                          {categoriasExistentes.map((cat) => (
+                          <option value="">— Elige una —</option>
+                          {categoriasMenu.map((cat) => (
                             <option key={cat} value={cat}>
                               {cat}
                             </option>
                           ))}
-                          {!categoriasExistentes.includes('Platos Fuertes') && (
-                            <option value="Platos Fuertes">
-                              Platos Fuertes
-                            </option>
+                          {categoriasSueltas.length > 0 && (
+                            // Ya en uso por alguna receta y fuera de la lista
+                            // del local: se enseñan para que se vean, no para
+                            // esconderlas.
+                            <optgroup label="Ya en uso, fuera de la lista">
+                              {categoriasSueltas.map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                            </optgroup>
                           )}
                           <option value="__nueva__">
                             ✏️ Nueva categoría...
