@@ -14,6 +14,7 @@ import {
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { franjaAlEscribir } from '../../lib/Franjas';
+import { unidadesDisponibles, categoriasDeInsumo } from '../../lib/Catalogo';
 import {
   Package,
   Plus,
@@ -39,15 +40,35 @@ export default function IngredientesScreen() {
   const [formData, setFormData] = useState({
     codigo: '',
     nombre: '',
-    categoria: 'Abarrotes',
-    unidad: 'kg',
+    // Vacías a propósito: ver EL DEFECTO QUE SE QUITA, más abajo.
+    categoria: '',
+    unidad: '',
     precio: 0,
     stock: 0,
     min: 0,
   });
   const [inputNuevaCat, setInputNuevaCat] = useState('');
 
-  const unidades = ['kg', 'g', 'lt', 'ml', 'pza', 'caja', 'lata', 'paquete'];
+  // ── DE DÓNDE SALEN LAS UNIDADES Y LAS CATEGORÍAS ────────────────────────
+  //
+  // De la configuración del local, con respaldo a la lista de fábrica. Aquí
+  // vivía una lista DURA que además no coincidía con la que siembra
+  // `supabase/seed/plantilla_local.sql` —`lt` contra `L`, `pza` contra `pz`—,
+  // así que el insumo capturado en la caja y el sembrado por la plantilla eran
+  // dos cosas que no se pueden sumar. Todo el porqué está en `lib/Catalogo.js`.
+  //
+  // `sueltas` son los valores que ya llevan escritos los insumos y que no están
+  // en la lista buena. Salen igual, y aparte: si no salieran, abrir uno de esos
+  // insumos y guardarlo le cambiaría la unidad SIN AVISAR, porque un `select`
+  // cuyo `value` no está entre sus `option` enseña la primera.
+  const { lista: unidades, sueltas: unidadesSueltas } = useMemo(
+    () => unidadesDisponibles(configuracion, productos),
+    [configuracion, productos],
+  );
+  const { lista: categoriasCatalogo, sueltas: categoriasSueltas } = useMemo(
+    () => categoriasDeInsumo(configuracion, productos),
+    [configuracion, productos],
+  );
 
   const categoriasExistentes = useMemo(() => {
     const cats = (productos || [])
@@ -78,7 +99,9 @@ export default function IngredientesScreen() {
         codigo: item.codigo || '',
         nombre: item.nombre || '',
         categoria: item.categoria || '',
-        unidad: item.unidad || 'kg',
+        // Sin `|| 'kg'`: un insumo viejo sin unidad tiene que pararse a
+        // elegirla, no heredar la primera de la lista al guardarlo.
+        unidad: item.unidad || '',
         precio: item.precio || 0,
         stock: item.stock || 0,
         min: item.min ?? 0,
@@ -88,8 +111,17 @@ export default function IngredientesScreen() {
       setFormData({
         codigo: '',
         nombre: '',
-        categoria: categoriasExistentes[0] || 'Abarrotes',
-        unidad: 'kg',
+        // ── EL DEFECTO QUE SE QUITA ──────────────────────────────────────
+        // Antes esto era `categoriasExistentes[0] || 'Abarrotes'`: la PRIMERA
+        // categoría que existiera, elegida por el programa. Como el desplegable
+        // no tenía estado vacío, quien capturaba deprisa no la tocaba nunca. En
+        // AZUL acabaron de «Lácteos» la Arrachera, la cebolla y el nopal: seis
+        // de diez insumos en la primera categoría de la lista.
+        //
+        // Vacío obliga a elegir. Es un clic más por insumo y doscientas filas
+        // bien clasificadas.
+        categoria: '',
+        unidad: '',
         precio: '',
         stock: '',
         min: '',
@@ -115,6 +147,12 @@ export default function IngredientesScreen() {
         : formData.categoria;
     if (formData.categoria === '__nueva__' && !categoriaFinal)
       return showToast('Escribe el nombre de la nueva categoría.', 'error');
+    if (!categoriaFinal)
+      return showToast('Elige una categoría para el insumo.', 'error');
+    // La unidad no se deja adivinar: es la unidad con la que se CONSUME, y
+    // equivocarla parte el inventario sin dar error (DISENO_ALCANCE_INVENTARIO).
+    if (!formData.unidad)
+      return showToast('Elige la unidad de medida del insumo.', 'error');
 
     // CRÍTICO (RLS tenant_productos): sin restaurante_id, el insert se rechaza en silencio.
     const restauranteId = useAuthStore.getState().restauranteId;
@@ -432,19 +470,33 @@ export default function IngredientesScreen() {
                       Categoría
                     </label>
                     <select
+                      required
+                      aria-label="Categoría del insumo"
                       value={formData.categoria}
                       onChange={(e) =>
                         setFormData({ ...formData, categoria: e.target.value })
                       }
                       className="w-full bg-adm-bg border-2 border-adm-field text-adm-ink font-bold px-4 py-4 rounded-ui outline-none focus:border-adm-info"
                     >
-                      {categoriasExistentes.map((cat) => (
+                      {/* Sin opción elegida de salida: la elige quien captura,
+                          no el programa. */}
+                      <option value="">— Elige una —</option>
+                      {categoriasCatalogo.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
                         </option>
                       ))}
-                      {!categoriasExistentes.includes('Abarrotes') && (
-                        <option value="Abarrotes">Abarrotes</option>
+                      {categoriasSueltas.length > 0 && (
+                        // Las que ya usan insumos y NO están en la lista del
+                        // local. Se enseñan aparte para que se vean y se
+                        // arreglen, en vez de desaparecer y cambiar el dato.
+                        <optgroup label="Ya en uso, fuera de la lista">
+                          {categoriasSueltas.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </optgroup>
                       )}
                       <option value="__nueva__">✏️ Nueva categoría...</option>
                     </select>
@@ -474,17 +526,29 @@ export default function IngredientesScreen() {
                         Unidad M. *
                       </label>
                       <select
+                        required
+                        aria-label="Unidad de medida"
                         value={formData.unidad}
                         onChange={(e) =>
                           setFormData({ ...formData, unidad: e.target.value })
                         }
                         className="w-full bg-white dark:bg-adm-panel border-2 border-adm-field text-adm-ink font-black px-4 py-4 rounded-ui outline-none focus:border-adm-info"
                       >
+                        <option value="">— Elige —</option>
                         {unidades.map((u) => (
                           <option key={u} value={u}>
                             {u}
                           </option>
                         ))}
+                        {unidadesSueltas.length > 0 && (
+                          <optgroup label="Ya en uso, fuera de la lista">
+                            {unidadesSueltas.map((u) => (
+                              <option key={u} value={u}>
+                                {u}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                     <div>
