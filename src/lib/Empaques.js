@@ -127,3 +127,72 @@ export function lineaSinEmpaque({ cantidad, precioUnitario } = {}) {
   if (c <= 0 || pu < 0) return { cantidad: 0, precio_unitario: 0, total: 0 };
   return { cantidad: c, precio_unitario: pu, total: aCentavos(c * pu) };
 }
+
+/**
+ * La fila que hay que guardar al dar de alta un empaque.
+ *
+ * ── POR QUÉ ESTO NO ES UN `insert` A SECAS ───────────────────────────────────
+ *
+ * En la base, un empaque es único por (local, proveedor, insumo, nombre). Si la
+ * pantalla mandara siempre una fila nueva, volver a dar de alta «arpilla» para
+ * el mismo insumo violaría ese índice — y el fallo NO se vería: `enqueueAction`
+ * ya guardó la fila en Dexie, la cola reintenta sola y acaba en `sync_dead`.
+ * Local diría una cosa y la nube otra.
+ *
+ * Así que aquí se decide: si ya existe ese nombre para esa pareja, se REUSA su
+ * id (y se enciende si estaba apagado). Volver a darlo de alta es corregir el
+ * factor, que es lo que de verdad quiere hacer quien lo teclea.
+ *
+ * @returns {{ok: true, fila: object} | {ok: false, error: string}}
+ */
+export function prepararEmpaque({
+  existentes,
+  proveedorId,
+  productoId,
+  nombre,
+  factor,
+} = {}) {
+  const limpio = typeof nombre === 'string' ? nombre.trim() : '';
+  if (!limpio) return { ok: false, error: 'Ponle nombre al empaque.' };
+
+  if (proveedorId === null || proveedorId === undefined)
+    return { ok: false, error: 'Falta el proveedor.' };
+  if (productoId === null || productoId === undefined)
+    return { ok: false, error: 'Elige el insumo.' };
+
+  const f = num(factor);
+  if (f <= 0)
+    return {
+      ok: false,
+      error: 'Di cuántas unidades trae el empaque. No puede ser cero.',
+    };
+
+  // Se compara sin distinguir mayúsculas ni acentos sobrantes de espacios:
+  // «Arpilla» y «arpilla» son el mismo empaque, y dejar las dos sería el mismo
+  // mal que `pz` contra `pza` en las unidades.
+  const igual = (a, b) =>
+    String(a).trim().toLocaleLowerCase('es') ===
+    String(b).trim().toLocaleLowerCase('es');
+
+  const previo = (Array.isArray(existentes) ? existentes : []).find(
+    (e) =>
+      e &&
+      String(e.proveedor_id) === String(proveedorId) &&
+      String(e.producto_id) === String(productoId) &&
+      igual(e.nombre, limpio),
+  );
+
+  return {
+    ok: true,
+    fila: {
+      // Reusar el id es lo que convierte «darlo de alta otra vez» en
+      // «corregirlo», en vez de en una violación del índice único que nadie ve.
+      id: previo?.id ?? Date.now(),
+      proveedor_id: proveedorId,
+      producto_id: productoId,
+      nombre: previo ? previo.nombre : limpio,
+      factor: f,
+      activo: true,
+    },
+  };
+}

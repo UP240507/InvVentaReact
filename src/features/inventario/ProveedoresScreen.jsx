@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   ShoppingCart,
   ArchiveRestore,
+  Package,
 } from 'lucide-react';
 import {
   PageShell,
@@ -42,6 +43,7 @@ import {
   Modal,
   ConfirmModal,
 } from '../../components/ui';
+import EmpaquesProveedor from './components/EmpaquesProveedor';
 
 const EMPTY = {
   nombre: '',
@@ -74,6 +76,10 @@ export default function ProveedoresScreen() {
   const [editId, setEditId] = useState(null);
 
   const [proveedorAEliminar, setProveedorAEliminar] = useState(null);
+  // Los empaques de compra viven aquí porque es el proveedor quien ofrece las
+  // presentaciones: la misma naranja es arpilla de 30 kg en uno y reja de 20
+  // en otro. Ver `lib/Empaques.js`.
+  const [proveedorDeEmpaques, setProveedorDeEmpaques] = useState(null);
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
 
@@ -246,6 +252,11 @@ export default function ProveedoresScreen() {
                         ) : (
                           <>
                             <IconButton
+                              icono={Package}
+                              titulo="Empaques de compra"
+                              onClick={() => setProveedorDeEmpaques(p)}
+                            />
+                            <IconButton
                               icono={ShoppingCart}
                               titulo="Crear orden de compra"
                               onClick={() =>
@@ -298,6 +309,13 @@ export default function ProveedoresScreen() {
           </div>
         )}
       </div>
+
+      {proveedorDeEmpaques && (
+        <EmpaquesProveedor
+          proveedor={proveedorDeEmpaques}
+          onCerrar={() => setProveedorDeEmpaques(null)}
+        />
+      )}
 
       {/* MODAL FORMULARIO */}
       {showModal && (

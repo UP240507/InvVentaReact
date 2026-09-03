@@ -10,6 +10,7 @@ import {
   describirEmpaque,
   derivarLinea,
   lineaSinEmpaque,
+  prepararEmpaque,
 } from './Empaques';
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -245,5 +246,135 @@ describe('describirEmpaque', () => {
 
   it('sin empaque, cadena vacía', () => {
     expect(describirEmpaque(null, 'kg')).toBe('');
+  });
+});
+
+describe('prepararEmpaque · dar de alta sin romper el indice unico', () => {
+  const EXISTENTES = [
+    {
+      id: 555,
+      proveedor_id: 1,
+      producto_id: 10,
+      nombre: 'arpilla',
+      factor: 30,
+      activo: true,
+    },
+  ];
+
+  it('uno nuevo estrena id', () => {
+    const r = prepararEmpaque({
+      existentes: EXISTENTES,
+      proveedorId: 1,
+      productoId: 10,
+      nombre: 'reja',
+      factor: 20,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.fila.id).not.toBe(555);
+    expect(r.fila).toMatchObject({
+      proveedor_id: 1,
+      producto_id: 10,
+      nombre: 'reja',
+      factor: 20,
+      activo: true,
+    });
+  });
+
+  it('LA QUE IMPORTA: repetir un nombre REUSA su id, no crea una fila nueva', () => {
+    // Sin esto, el upsert viola el indice unico (local, proveedor, insumo,
+    // nombre). Y ese fallo no se ve: Dexie ya guardo la fila, la cola
+    // reintenta sola y acaba en `sync_dead`. Local diria una cosa y la nube
+    // otra.
+    const r = prepararEmpaque({
+      existentes: EXISTENTES,
+      proveedorId: 1,
+      productoId: 10,
+      nombre: 'arpilla',
+      factor: 25, // el proveedor cambio el empaque
+    });
+    expect(r.fila.id).toBe(555);
+    expect(r.fila.factor).toBe(25);
+  });
+
+  it('«Arpilla» y «arpilla» son el mismo empaque', () => {
+    // Dejar las dos seria `pz` contra `pza` otra vez, en otra columna.
+    const r = prepararEmpaque({
+      existentes: EXISTENTES,
+      proveedorId: 1,
+      productoId: 10,
+      nombre: '  ARPILLA ',
+      factor: 30,
+    });
+    expect(r.fila.id).toBe(555);
+    expect(r.fila.nombre).toBe('arpilla'); // se conserva como estaba escrito
+  });
+
+  it('el mismo nombre en OTRO proveedor u OTRO insumo si es fila nueva', () => {
+    const otroProv = prepararEmpaque({
+      existentes: EXISTENTES,
+      proveedorId: 2,
+      productoId: 10,
+      nombre: 'arpilla',
+      factor: 30,
+    });
+    const otroProd = prepararEmpaque({
+      existentes: EXISTENTES,
+      proveedorId: 1,
+      productoId: 99,
+      nombre: 'arpilla',
+      factor: 30,
+    });
+    expect(otroProv.fila.id).not.toBe(555);
+    expect(otroProd.fila.id).not.toBe(555);
+  });
+
+  it('volver a darlo de alta lo enciende', () => {
+    const apagado = [{ ...EXISTENTES[0], activo: false }];
+    const r = prepararEmpaque({
+      existentes: apagado,
+      proveedorId: 1,
+      productoId: 10,
+      nombre: 'arpilla',
+      factor: 30,
+    });
+    expect(r.fila.id).toBe(555);
+    expect(r.fila.activo).toBe(true);
+  });
+
+  it('lo que falta se dice, no se rellena', () => {
+    expect(
+      prepararEmpaque({ proveedorId: 1, productoId: 10, factor: 30 }).ok,
+    ).toBe(false);
+    expect(
+      prepararEmpaque({
+        proveedorId: 1,
+        productoId: 10,
+        nombre: '  ',
+        factor: 30,
+      }).error,
+    ).toMatch(/nombre/i);
+    expect(
+      prepararEmpaque({ proveedorId: 1, nombre: 'caja', factor: 30 }).error,
+    ).toMatch(/insumo/i);
+    expect(
+      prepararEmpaque({ productoId: 10, nombre: 'caja', factor: 30 }).error,
+    ).toMatch(/proveedor/i);
+    // Cero NO se convierte en uno: eso inventaria una equivalencia.
+    expect(
+      prepararEmpaque({
+        proveedorId: 1,
+        productoId: 10,
+        nombre: 'caja',
+        factor: 0,
+      }).ok,
+    ).toBe(false);
+    expect(
+      prepararEmpaque({
+        proveedorId: 1,
+        productoId: 10,
+        nombre: 'caja',
+        factor: -3,
+      }).ok,
+    ).toBe(false);
   });
 });
