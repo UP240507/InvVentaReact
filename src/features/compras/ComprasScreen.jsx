@@ -17,6 +17,12 @@ import {
   telefonoParaWhatsApp,
   nombreDeProveedorDeLaOrden,
 } from '../../lib/Compras';
+import {
+  empaquesDe,
+  describirEmpaque,
+  derivarLinea,
+  lineaSinEmpaque,
+} from '../../lib/Empaques';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
   ShoppingCart,
@@ -39,6 +45,7 @@ export default function ComprasScreen() {
     ordenesCompra,
     productos,
     proveedores,
+    proveedorProducto,
     showToast,
     configuracion,
     registrarAuditoria,
@@ -61,6 +68,9 @@ export default function ComprasScreen() {
   const [itemSeleccionado, setItemSeleccionado] = useState('');
   const [cantidadItem, setCantidadItem] = useState('');
   const [costoItem, setCostoItem] = useState('');
+  // Qué empaque se está comprando. '' = la unidad de siempre, que es lo que
+  // pasa cuando este proveedor no tiene empaques dados de alta para el insumo.
+  const [empaqueId, setEmpaqueId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ordenExitosa, setOrdenExitosa] = useState(null);
 
@@ -91,13 +101,38 @@ export default function ComprasScreen() {
   }, [ordenesCompra, busqueda, filtroEstado]);
 
   const { subtotal, ivaMonto, total } = useMemo(() => {
+    // `total` lo calculó `lib/Empaques` al armar la línea, en centavos enteros.
+    // Multiplicar aquí otra vez `cantidad x precio_unitario` volvería a abrir la
+    // puerta del centavo: 30 kg a 3.333… no da 100 exacto en coma flotante.
+    // Las líneas viejas —sin `total`— siguen sumándose como antes.
     const sub = carrito.reduce(
-      (acc, item) => acc + Number(item.cantidad) * Number(item.precio_unitario),
+      (acc, item) =>
+        acc +
+        (item.total != null
+          ? Number(item.total)
+          : Number(item.cantidad) * Number(item.precio_unitario)),
       0,
     );
     const imp = sub * tasaIva;
     return { subtotal: sub, ivaMonto: imp, total: sub + imp };
   }, [carrito, tasaIva]);
+
+  // ── LOS EMPAQUES DE ESTE PROVEEDOR PARA ESTE INSUMO ─────────────────────
+  // Si no hay ninguno, la línea se teclea en la unidad de siempre: un insumo
+  // sin empaques no es un caso especial, es el caso por defecto.
+  const empaquesDisponibles = useMemo(
+    () =>
+      empaquesDe(proveedorProducto, {
+        proveedorId: proveedorSeleccionado?.id,
+        productoId: itemSeleccionado,
+      }),
+    [proveedorProducto, proveedorSeleccionado, itemSeleccionado],
+  );
+  const empaqueElegido =
+    empaquesDisponibles.find((e) => String(e.id) === String(empaqueId)) || null;
+  const insumoElegido = (productos || []).find(
+    (p) => String(p.id) === String(itemSeleccionado),
+  );
 
   // ─── MANEJADORES DE CARRITO ──────────────────────────────────────────
   const handleSelectProducto = (e) => {
@@ -105,6 +140,10 @@ export default function ComprasScreen() {
     setItemSeleccionado(idProd);
     const prod = (productos || []).find((p) => String(p.id) === String(idProd));
     if (prod) setCostoItem(prod.precio || '');
+    // El empaque elegido era del insumo anterior. Dejarlo puesto haría que «2
+    // arpillas» se aplicaran al queso, y el factor entraría al costo sin que
+    // nadie lo viera.
+    setEmpaqueId('');
   };
 
   const agregarAlCarrito = (e) => {
@@ -113,27 +152,82 @@ export default function ComprasScreen() {
       return showToast('Selecciona un producto y cantidad válida', 'error');
     }
 
+    // ── LA DIVISIÓN QUE YA NO SE HACE A MANO ────────────────────────────
+    // Con empaque, lo tecleado es «cuántas arpillas» y «cuánto cuesta una»;
+    // `lib/Empaques` deriva la cantidad en la unidad del insumo y el precio
+    // unitario que entra al costo promedio ponderado. Sin empaque, la misma
+    // librería hace la cuenta de siempre: una sola calculadora, no dos.
+    const cuantos = Number(cantidadItem);
+    const precioTecleado = Number(costoItem) || 0;
+    const derivada = empaqueElegido
+      ? derivarLinea({
+          factor: empaqueElegido.factor,
+          empaques: cuantos,
+          precioPorEmpaque: precioTecleado,
+        })
+      : lineaSinEmpaque({ cantidad: cuantos, precioUnitario: precioTecleado });
+
+    if (derivada.cantidad <= 0) {
+      return showToast('Revisa la cantidad y el empaque.', 'error');
+    }
+
+    // Se guarda lo DERIVADO y también lo TECLEADO. La orden tiene que poder
+    // decir lo que decía el papel —«2 arpillas a $900»—, no sólo el resultado.
+    const nueva = {
+      id_producto: itemSeleccionado,
+      cantidad: derivada.cantidad,
+      precio_unitario: derivada.precio_unitario,
+      total: derivada.total,
+      ...(empaqueElegido
+        ? {
+            empaque: empaqueElegido.nombre,
+            empaques: cuantos,
+            precio_empaque: precioTecleado,
+            factor: Number(empaqueElegido.factor),
+          }
+        : {}),
+    };
+
     setCarrito((prev) => {
-      const itemsClone = [...prev];
-      const index = itemsClone.findIndex(
-        (i) => String(i.id_producto) === String(itemSeleccionado),
+      // La misma línea es el mismo insumo COMPRADO IGUAL: dos arpillas y tres
+      // kilos sueltos de la misma naranja son dos renglones, porque se
+      // pidieron distinto y el papel del proveedor los lista distinto.
+      const idx = prev.findIndex(
+        (i) =>
+          String(i.id_producto) === String(nueva.id_producto) &&
+          (i.empaque || '') === (nueva.empaque || ''),
       );
-      if (index !== -1) {
-        itemsClone[index].cantidad += Number(cantidadItem);
-        itemsClone[index].precio_unitario = Number(costoItem) || 0;
+      if (idx === -1) return [...prev, nueva];
+
+      const copia = [...prev];
+      const vieja = copia[idx];
+      if (empaqueElegido) {
+        const empaques = Number(vieja.empaques || 0) + cuantos;
+        copia[idx] = {
+          ...vieja,
+          ...nueva,
+          empaques,
+          ...derivarLinea({
+            factor: empaqueElegido.factor,
+            empaques,
+            precioPorEmpaque: precioTecleado,
+          }),
+        };
       } else {
-        itemsClone.push({
-          id_producto: itemSeleccionado,
-          cantidad: Number(cantidadItem),
-          precio_unitario: Number(costoItem) || 0,
-        });
+        const cantidad = Number(vieja.cantidad || 0) + derivada.cantidad;
+        copia[idx] = {
+          ...vieja,
+          ...nueva,
+          ...lineaSinEmpaque({ cantidad, precioUnitario: precioTecleado }),
+        };
       }
-      return itemsClone;
+      return copia;
     });
 
     setItemSeleccionado('');
     setCantidadItem('');
     setCostoItem('');
+    setEmpaqueId('');
   };
 
   const removerDelCarrito = (id) => {
@@ -527,7 +621,13 @@ export default function ComprasScreen() {
                     onSubmit={agregarAlCarrito}
                     className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
                   >
-                    <div className="md:col-span-6">
+                    <div
+                      className={
+                        empaquesDisponibles.length > 0
+                          ? 'md:col-span-4'
+                          : 'md:col-span-6'
+                      }
+                    >
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest pl-2 mb-1 block">
                         Insumo
                       </label>
@@ -547,9 +647,38 @@ export default function ComprasScreen() {
                           ))}
                       </select>
                     </div>
-                    <div className="md:col-span-2 text-center">
+                    {/* ── EL EMPAQUE, SI ESTE PROVEEDOR TIENE ALGUNO ─────
+                        Sólo aparece cuando hay empaques dados de alta para
+                        esta pareja proveedor-insumo. Sin ellos la línea se
+                        teclea como toda la vida: un insumo sin empaques no es
+                        un caso especial, es el caso por defecto. */}
+                    {empaquesDisponibles.length > 0 && (
+                      <div className="md:col-span-3">
+                        <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
+                          Se compra por
+                        </label>
+                        <select
+                          aria-label="Empaque de compra"
+                          value={empaqueId}
+                          onChange={(e) => setEmpaqueId(e.target.value)}
+                          className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-bold text-sm text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok transition-colors cursor-pointer"
+                        >
+                          <option value="">
+                            {insumoElegido?.unidad
+                              ? `Por ${insumoElegido.unidad}`
+                              : 'Por unidad'}
+                          </option>
+                          {empaquesDisponibles.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {describirEmpaque(emp, insumoElegido?.unidad)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="md:col-span-1 text-center">
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
-                        Cant.
+                        {empaqueElegido ? 'Cuántas' : 'Cant.'}
                       </label>
                       <input
                         type="number"
@@ -564,7 +693,11 @@ export default function ComprasScreen() {
                     </div>
                     <div className="md:col-span-2">
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
-                        Costo U.
+                        {/* Con empaque, lo que se teclea es lo que cuesta UNO,
+                            que es el número que viene en la factura. */}
+                        {empaqueElegido
+                          ? `Precio · ${empaqueElegido.nombre}`
+                          : 'Costo U.'}
                       </label>
                       <input
                         type="number"
@@ -584,6 +717,36 @@ export default function ComprasScreen() {
                     >
                       <PlusCircle className="w-6 h-6" />
                     </button>
+
+                    {/* La cuenta, ENSEÑADA antes de agregar. Es la división que
+                        antes se hacía con la calculadora del teléfono delante
+                        del repartidor, y la que entra al costo promedio
+                        ponderado del insumo. */}
+                    {empaqueElegido && Number(cantidadItem) > 0 && (
+                      <p className="md:col-span-12 text-xs font-bold text-adm-muted -mt-1">
+                        Entran{' '}
+                        <strong className="text-adm-ink">
+                          {
+                            derivarLinea({
+                              factor: empaqueElegido.factor,
+                              empaques: Number(cantidadItem),
+                              precioPorEmpaque: Number(costoItem) || 0,
+                            }).cantidad
+                          }{' '}
+                          {insumoElegido?.unidad}
+                        </strong>{' '}
+                        al inventario, a{' '}
+                        <strong className="text-adm-ink">
+                          $
+                          {derivarLinea({
+                            factor: empaqueElegido.factor,
+                            empaques: Number(cantidadItem),
+                            precioPorEmpaque: Number(costoItem) || 0,
+                          }).precio_unitario.toFixed(4)}
+                        </strong>{' '}
+                        por {insumoElegido?.unidad}.
+                      </p>
+                    )}
                   </form>
                 </div>
 
@@ -622,10 +785,24 @@ export default function ComprasScreen() {
                                 {prodBd?.nombre}
                               </td>
                               <td className="p-4 text-center font-black text-adm-ink">
-                                {item.cantidad}{' '}
-                                <span className="text-[10px] text-adm-muted uppercase">
-                                  {prodBd?.unidad}
-                                </span>
+                                {/* Cómo se PIDIÓ arriba, y qué entra debajo: el
+                                    papel del proveedor habla de arpillas, el
+                                    inventario habla de kilos. */}
+                                {item.empaque ? (
+                                  <>
+                                    {item.empaques} × {item.empaque}
+                                    <span className="block text-[10px] font-bold text-adm-muted normal-case">
+                                      {item.cantidad} {prodBd?.unidad}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {item.cantidad}{' '}
+                                    <span className="text-[10px] text-adm-muted uppercase">
+                                      {prodBd?.unidad}
+                                    </span>
+                                  </>
+                                )}
                               </td>
                               <td className="p-4 text-right font-black text-adm-ink">
                                 $
