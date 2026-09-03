@@ -776,7 +776,7 @@ export default function ConfiguracionScreen() {
                           {nombreLogo ||
                             (form.logo_bitmap
                               ? 'Logo guardado'
-                              : 'Ningun archivo elegido')}
+                              : 'Ningún archivo elegido')}
                         </span>
                         <input
                           type="file"

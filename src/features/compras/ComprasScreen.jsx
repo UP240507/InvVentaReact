@@ -943,12 +943,12 @@ export default function ComprasScreen() {
           icono={Trash2}
           mensaje={
             <>
-              La orden <strong>{ordenACancelar.numero}</strong> quedara marcada
+              La orden <strong>{ordenACancelar.numero}</strong> quedará marcada
               como cancelada. El proveedor no se entera solo: si ya se la
-              mandaste, avisale.
+              mandaste, avísale.
             </>
           }
-          textoConfirmar="Si, cancelarla"
+          textoConfirmar="Sí, cancelarla"
           onConfirmar={confirmarCancelacion}
           onCancelar={() => setOrdenACancelar(null)}
         />
