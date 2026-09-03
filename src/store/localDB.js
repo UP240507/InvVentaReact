@@ -346,6 +346,50 @@ localDB
     console.log('🔄 [DB v15] Gastos, categorías y recurrentes');
   });
 
+// ── 0.3.0 — v16: los empaques de compra por proveedor ───────────────────────
+// «1 arpilla = 30 kg». Offline-first como el resto: dar de alta un empaque
+// mientras se recibe mercancía no puede depender de que haya internet en ese
+// momento. Sin esta tabla local, `enqueueAction` haría
+// `localDB.proveedor_producto.put(...)`, reventaría, y su `catch` sólo escribe
+// en consola: la pantalla diría que guardó.
+//
+// El nombre es el de Postgres, con guion bajo y no en camelCase, porque
+// `enqueueAction` hace `localDB[tabla]` con el nombre de la tabla real.
+localDB
+  .version(16)
+  .stores({
+    configuracion: 'id',
+    productos: 'id',
+    recetas: 'id',
+    mesas: 'id',
+    ventas: 'id, turno_id, fecha, [restaurante_id+fecha]',
+    movimientos: 'id, producto_id, fecha, [restaurante_id+fecha]',
+    ordenes_compra: 'id',
+    proveedores: 'id',
+    usuarios: 'id',
+    turnos: 'id',
+    sync_queue:
+      '++id, tabla, metodo, estado, fecha, createdAt, nextAttemptAt, intentos',
+    facturas: '++id, folio_venta, rfc_receptor, fecha_emision, estado',
+    sync_dead: '++id, tabla, metodo, estado, createdAt',
+    modificadores: 'id',
+    staff: 'id',
+    nominas: 'id',
+    roles_permisos: 'id, rol',
+    clientes: 'id',
+    auditoria: 'id, fecha',
+    asistencias: 'id',
+    comandas: 'id',
+    gastos: 'id, fecha, categoria_id, [restaurante_id+fecha]',
+    categorias_gasto: 'id',
+    gastos_recurrentes: 'id',
+    // El acceso real es «qué empaques tiene este proveedor para este insumo».
+    proveedor_producto: 'id, proveedor_id, producto_id',
+  })
+  .upgrade(() => {
+    console.log('🔄 [DB v16] Empaques de compra por proveedor');
+  });
+
 // ── Defensa multipestaña: evita que un upgrade quede bloqueado a medias ──
 localDB.on('blocked', () => {
   console.warn(

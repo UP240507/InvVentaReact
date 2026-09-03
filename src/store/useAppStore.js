@@ -46,6 +46,8 @@ export const useAppStore = create((set, get) => ({
   mesas: [],
   ventas: [],
   proveedores: [],
+  // Empaques de compra por pareja proveedor-producto («1 arpilla = 30 kg»).
+  proveedorProducto: [],
   usuarios: [],
   movimientos: [],
   turnos: [],
@@ -126,6 +128,7 @@ export const useAppStore = create((set, get) => ({
           mesas: await localDB.mesas.toArray(),
           ventas: await localDB.ventas.toArray(),
           proveedores: await localDB.proveedores.toArray(),
+          proveedorProducto: await localDB.proveedor_producto.toArray(),
           usuarios: await localDB.usuarios.toArray(),
           movimientos: await localDB.movimientos.toArray(),
           turnos: await localDB.turnos.toArray(),
@@ -203,6 +206,7 @@ export const useAppStore = create((set, get) => ({
         { data: gastosData },
         { data: categoriasGastoData },
         { data: recurrentesData },
+        { data: empaquesData },
       ] = await conTimeout(
         Promise.all([
           supabase
@@ -311,6 +315,12 @@ export const useAppStore = create((set, get) => ({
             .from('gastos_recurrentes')
             .select('*')
             .eq('restaurante_id', restauranteId),
+          // Los empaques de compra. Sin `activo` en el filtro: la pantalla que
+          // los administra tiene que poder volver a encender uno apagado.
+          supabase
+            .from('proveedor_producto')
+            .select('*')
+            .eq('restaurante_id', restauranteId),
         ]),
       );
 
@@ -339,6 +349,7 @@ export const useAppStore = create((set, get) => ({
         mesas: mesasData || [],
         ventas: ventasData || [],
         proveedores: provData || [],
+        proveedorProducto: empaquesData || [],
         usuarios: usersData || [],
         movimientos: movData || [],
         turnos: turnosData || [],
@@ -373,6 +384,7 @@ export const useAppStore = create((set, get) => ({
           localDB.mesas,
           localDB.ventas,
           localDB.proveedores,
+          localDB.proveedor_producto,
           localDB.usuarios,
           localDB.movimientos,
           localDB.turnos,
@@ -396,6 +408,7 @@ export const useAppStore = create((set, get) => ({
             await localDB.mesas.bulkPut(safe(mesasData));
             await localDB.ventas.bulkPut(safe(ventasData));
             await localDB.proveedores.bulkPut(safe(provData));
+            await localDB.proveedor_producto.bulkPut(safe(empaquesData));
             await localDB.usuarios.bulkPut(safe(usersData));
             await localDB.movimientos.bulkPut(safe(movData));
             await localDB.turnos.bulkPut(safe(turnosData));
