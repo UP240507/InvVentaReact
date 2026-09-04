@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import {
   PageShell,
   PageHeader,
@@ -107,6 +108,12 @@ export default function EmpleadosScreen() {
     setShowModal(false);
     setFormData(initialState);
   };
+
+  // Escape cierra el cuadro. Va por `handleCloseModal` y no por `setShowModal`
+  // a propósito: ese `if (saving) return` es lo que impide cerrarlo a media
+  // creación de cuenta, y Escape es justo la tecla que alguien pulsa cuando
+  // cree que se colgó.
+  useCierreConEscape(handleCloseModal, showModal);
 
   // ─── LÓGICA DE GUARDADO (CON SYNC, AUTH Y AUDITORÍA) ─────────────────────
   const handleSubmit = async (e) => {

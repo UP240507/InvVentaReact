@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { useSessionStore } from '../../store/useSessionStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import { Play, DollarSign, X, Wallet } from 'lucide-react';
 
 export default function AbrirTurnoModal({ onClose }) {
+  // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
+  // el cierre de los componentes base.
+  useCierreConEscape(onClose);
+
   const { empleadoActivo } = useSessionStore();
   const { abrirTurno } = useAppStore();
   const { user } = useAuthStore();

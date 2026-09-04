@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { calcularTotalesTurno } from '../../lib/Arqueo';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
@@ -15,6 +16,10 @@ import {
 } from 'lucide-react';
 
 export default function CierreTurnoModal({ onClose }) {
+  // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
+  // el cierre de los componentes base.
+  useCierreConEscape(onClose);
+
   const { mesas, ventas, turnos, configuracion, cerrarTurno, showToast } =
     useAppStore();
   const { empleadoActivo } = useSessionStore();

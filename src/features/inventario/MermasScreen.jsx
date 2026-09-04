@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import {
   PageShell,
   PageHeader,
@@ -151,6 +152,11 @@ export default function MermasScreen() {
     setMotivoAjuste('');
     setTipoAjuste('Merma');
   };
+
+  // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
+  // el cierre de los componentes base.
+  // `cerrarModal` además limpia el borrador del ajuste.
+  useCierreConEscape(cerrarModal, isModalOpen);
 
   const formatNum = (num) =>
     Number(num).toLocaleString('es-MX', { maximumFractionDigits: 3 });

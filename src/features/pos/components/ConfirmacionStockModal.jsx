@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { verificarStock } from '../../../lib/Inventario';
+import { useCierreConEscape } from '../../../hooks/useCierreConEscape';
 
 // Gate de inventario antes de cobrar: lista insumos agotados / bajo mínimo,
 // permite sustituir por otro producto con stock, o continuar de todas formas
@@ -17,6 +18,10 @@ export default function ConfirmacionStockModal({
   onConfirmar,
   onCancel,
 }) {
+  // Escape CANCELA, nunca confirma: este cuadro avisa de que falta stock, y la
+  // tecla de escape tiene que ser siempre la salida segura.
+  useCierreConEscape(onCancel);
+
   const [subs, setSubs] = useState({});
 
   const problemas = useMemo(
