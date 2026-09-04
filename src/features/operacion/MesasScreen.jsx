@@ -6,6 +6,7 @@ import { useAuthStore } from '../auth/useAuthStore';
 import { calcularVenta } from '../../lib/Fiscal';
 import { useAtajos } from '../../hooks/useAtajos';
 import { useAcoplado } from '../../hooks/useAcoplado';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import PanelAcoplable from '../../components/PanelAcoplable';
 import InspectorMesa from './components/InspectorMesa';
 import { OpsHeader, OpsTabs, OpsButton, OpsEmpty } from '../../components/ui';
@@ -535,6 +536,33 @@ export default function MesasScreen() {
     setModalReserva(null);
     navigate(`/pos?mesa=${mesa.id}`);
   };
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  //
+  // Los seis cuadros de esta pantalla se pintan con un `div` suelto y no con
+  // `OpsModal`, así que no heredan nada: el hook se les pone a mano. Sin esto,
+  // Escape con un cuadro abierto llegaba a los atajos de la pantalla —que lo
+  // usan para SALIR—, así que en vez de cerrar el cuadro te sacaba del mapa de
+  // mesas con la operación a medias.
+  //
+  // Cada uno cierra EXACTAMENTE como cierra su propio botón de cancelar. El de
+  // juntar mesas además vacía la selección: si Escape no la vaciara, volver a
+  // abrirlo enseñaría mesas marcadas de la vez anterior.
+  useCierreConEscape(() => {
+    setModalJuntar(false);
+    setSeleccionJuntar([]);
+  }, modalJuntar);
+  useCierreConEscape(() => setModalMeseros(false), modalMeseros);
+  useCierreConEscape(
+    () => setModalTraspaso({ show: false, mesaOrigen: null }),
+    modalTraspaso.show,
+  );
+  useCierreConEscape(
+    () => setModalMesa({ show: false, mesa: null }),
+    modalMesa.show,
+  );
+  useCierreConEscape(() => setModalReservar(null), !!modalReservar);
+  useCierreConEscape(() => setModalReserva(null), !!modalReserva);
 
   // ─── SELECCIÓN POR TECLADO (Proyecto D · tanda 3) ────────────────────────
   // El mapa no tenía "mesa seleccionada": el clic mandaba directo al POS. Sin

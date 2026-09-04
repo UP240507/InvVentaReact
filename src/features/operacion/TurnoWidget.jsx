@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useAuthStore } from '../auth/useAuthStore';
 import { parseUTC } from '../../utils/parseUTC';
 
@@ -18,6 +19,13 @@ export default function TurnoWidget() {
 
   const [modalApertura, setModalApertura] = useState(false);
   const [modalCierre, setModalCierre] = useState(false);
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  // Cuadros pintados con un `div` suelto: no heredan el cierre con Escape de
+  // los componentes base, así que se les pone a mano. Cada uno cierra igual que
+  // su propio botón de cancelar.
+  useCierreConEscape(() => setModalApertura(false), modalApertura);
+  useCierreConEscape(() => setModalCierre(false), modalCierre);
   const [fondoCaja, setFondoCaja] = useState('');
 
   // ✅ FIX: guardar Date.now() en estado en lugar de llamarlo en render (impure function)

@@ -10,6 +10,7 @@ import { PageShell } from '../../components/ui';
 import { useAuthStore } from './useAuthStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useSyncStore } from '../../store/useSyncStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { supabase } from '../../api/supabase';
 import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import {
@@ -179,6 +180,14 @@ export default function PerfilScreen() {
   // ── Logout con el MISMO candado de jornada del sidebar ─────────────────────
   const [modalJornada, setModalJornada] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  // Estos cuadros se pintan con un `div` suelto y no con los componentes base,
+  // así que no heredan el cierre con Escape: se les pone a mano. Cada uno
+  // cierra igual que su propio botón de cancelar.
+  useCierreConEscape(() => setModalPass(false), modalPass);
+  useCierreConEscape(() => setModalJornada(false), modalJornada);
+  useCierreConEscape(() => setConfirmLogout(false), confirmLogout);
 
   const intentarLogout = () => {
     const rolEmp = empleadoActivo?.rol || empleadoActivo?.puesto;

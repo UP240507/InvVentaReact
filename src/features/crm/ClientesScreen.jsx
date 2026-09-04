@@ -12,6 +12,7 @@ import {
   DataTable,
 } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { localDB } from '../../store/localDB';
 import {
   Users,
@@ -83,6 +84,16 @@ export default function CrmScreen() {
       ) || detalleCliente
     );
   }, [clientes, detalleCliente]);
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  // Estos cuadros se pintan con un `div` suelto y no con los componentes base,
+  // así que no heredan el cierre con Escape: se les pone a mano. Cada uno
+  // cierra igual que su propio botón de cancelar.
+  // El panel de detalle se cierra por `detalleCliente`, que es su estado; se
+  // activa por `clienteVivo`, que es lo que de verdad se está pintando.
+  useCierreConEscape(() => setShowModal(false), showModal);
+  useCierreConEscape(() => setDetalleCliente(null), !!clienteVivo);
+  useCierreConEscape(() => setItemAEliminar(null), !!itemAEliminar);
 
   // 🌟 FIX: FUNCIÓN DESTRUCTORA DE DUPLICADOS (Asegura unicidad por ID)
   const upsertClienteLocal = (payload) => {

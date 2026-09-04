@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { PageShell, PageHeader, Button } from '../../components/ui';
 import { useSyncStore } from '../../store/useSyncStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useAuthStore } from '../auth/useAuthStore';
 import { CAPACIDADES_BASE } from '../../lib/Permisos';
 import {
@@ -222,6 +223,14 @@ export default function PermisosScreen() {
   const [modalNuevo, setModalNuevo] = useState(null); // {nombre, copiarDeId}
   const [modalRenombrar, setModalRenombrar] = useState(null); // {nombre}
   const [modalEliminar, setModalEliminar] = useState(false);
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  // Estos cuadros se pintan con un `div` suelto y no con los componentes base,
+  // así que no heredan el cierre con Escape: se les pone a mano. Cada uno
+  // cierra igual que su propio botón de cancelar.
+  useCierreConEscape(() => setModalNuevo(null), !!modalNuevo);
+  useCierreConEscape(() => setModalRenombrar(null), !!modalRenombrar);
+  useCierreConEscape(() => setModalEliminar(false), modalEliminar);
 
   const nombreDuplicado = (nombre, exceptoId = null) =>
     (roles_permisos || []).some(

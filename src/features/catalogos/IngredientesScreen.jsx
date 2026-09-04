@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import {
   PageShell,
   PageHeader,
@@ -131,10 +132,20 @@ export default function IngredientesScreen() {
     setIsModalOpen(true);
   };
 
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA ────────────────────────────────────
+  // Cuadros pintados con un `div` suelto: no heredan el cierre con Escape de
+  // los componentes base, así que se les pone a mano. Cada uno cierra igual que
+  // su propio botón de cancelar.
+  // El del formulario cierra con `cerrarModal`, que además olvida qué insumo
+  // se estaba editando. Los `useCierreConEscape` van DESPUÉS de declararlo:
+  // arriba serían un uso antes de la declaración, y eslint lo caza.
   const cerrarModal = () => {
     setIsModalOpen(false);
     setItemEditando(null);
   };
+
+  useCierreConEscape(cerrarModal, isModalOpen);
+  useCierreConEscape(() => setConfirmDelete(null), !!confirmDelete);
 
   const handleSubmit = (e) => {
     e.preventDefault();
