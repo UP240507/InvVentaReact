@@ -87,10 +87,15 @@ function ModuloRoute({ modulo }) {
 }
 
 function EmpleadoRoute() {
-  const { empleadoActivo, puedeAcceder, getRutaInicial } = useSessionStore();
+  const { empleadoActivo, sesionVigente, puedeAcceder, getRutaInicial } =
+    useSessionStore();
   const { user } = useAuthStore();
   const rolesPermisos = useAppStore((s) => s.roles_permisos);
   const location = useLocation();
+
+  // Reactividad: al cerrar el turno, los aparatos vuelven al PIN en el momento,
+  // sin esperar a que alguien navegue.
+  useAppStore((s) => s.turnos);
 
   // (Proyecto L) shell de administración por FLAG, no por nombre de rol
   const rolAdmin = tieneFlag(
@@ -99,7 +104,12 @@ function EmpleadoRoute() {
   );
   if (rolAdmin) return <Outlet />;
 
-  if (!empleadoActivo) return <Navigate to="/checador" replace />;
+  // Sin sesión, o con una que caducó al cerrarse su turno, se vuelve al PIN.
+  // No hace falta limpiar el estado viejo aquí: `/checador` está fuera del
+  // layout —no hay Topbar que enseñe un nombre rancio— y el siguiente PIN lo
+  // pisa entero. Limpiarlo desde el render sería un `setState` en cascada.
+  if (!empleadoActivo || !sesionVigente())
+    return <Navigate to="/checador" replace />;
 
   // Si no tiene permiso, lo mandamos a SU ruta principal, no al perfil general
   if (!puedeAcceder(location.pathname)) {
