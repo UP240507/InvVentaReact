@@ -53,6 +53,7 @@ import {
   nombreDeEsteDispositivo,
 } from '../../lib/Hub';
 import { debeImprimirComanda } from '../../lib/Comanda';
+import { abrirCajonConRegistro, MOTIVOS } from '../../lib/Cajon';
 import {
   gruposDeProducto,
   necesitaEleccion,
@@ -1618,7 +1619,28 @@ export default function PosScreen() {
       (nuevaVentaBD.metodo_pago === 'efectivo' ||
         nuevaVentaBD.metodo_pago === 'mixto')
     ) {
-      void abrirCajon();
+      // ── Y QUEDA REGISTRADO ────────────────────────────────────────────
+      // Hasta el 04-sep esto era `void abrirCajon()` a secas: el cajón se
+      // abría en cada venta en efectivo y NO se escribía nada en Auditoría.
+      // Ninguna apertura dejaba nombre, ni con llave ni sin ella — y mientras
+      // eso fuera cierto, quitar la llave de la caja no era una decisión que
+      // se pudiera tomar. Ver `docs/DISENO_ARQUEO_Y_CAJON.md`.
+      //
+      // El pulso sigue fuera de la cola y el registro va por ella: son las dos
+      // piezas que tiran en direcciones opuestas, y `lib/Cajon.js` las
+      // mantiene separadas.
+      void abrirCajonConRegistro({
+        motivo: MOTIVOS.VENTA,
+        // Quien está en el turno de este aparato, igual que el resto de la
+        // pantalla: se lee del store, no de una variable que aquí no existe.
+        usuario:
+          useSessionStore.getState().empleadoActivo?.nombre ||
+          user?.nombre ||
+          'Cajero',
+        folio: nuevaVentaBD.folio,
+        abrir: abrirCajon,
+        registrar: registrarAuditoria,
+      });
     }
 
     if (!yaSeImprimioLaCuenta)
