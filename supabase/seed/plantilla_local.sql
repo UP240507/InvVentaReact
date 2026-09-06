@@ -118,7 +118,7 @@ insert into public.roles_permisos (restaurante_id, rol, capacidades) values
 
 insert into public.configuracion (
   restaurante_id, nombre_empresa, iva, mensaje_ticket,
-  unidades, categorias, categorias_insumo,
+  unidades, categorias, categorias_insumo, denominaciones,
   flujo_cuenta, precios_incluyen_iva,
   franjas_activas, franja_corte
 ) values (
@@ -131,6 +131,10 @@ insert into public.configuracion (
   '["Desayunos","Platos fuertes","Bebidas","Postres"]'::jsonb,
   -- Almacen (pantalla de insumos): valen para cualquier local.
   '["Abarrotes","Carnes","Lácteos","Frutas y verduras","Bebidas","Limpieza"]'::jsonb,
+  -- Con que se cuenta el efectivo en apertura y cierre. Dos grupos porque asi
+  -- los agrupa quien cuenta. Que el 20 este en los dos no es un error: hay
+  -- billete de 20 y moneda de 20.
+  '{"billetes":[1000,500,200,100,50,20],"monedas":[20,10,5,2,1,0.5]}'::jsonb,
   -- Un solo papel: la cuenta que se lleva el cliente ES el comprobante y lleva
   -- folio. El otro flujo (`precuenta_y_ticket`) existe para quien ya trabaja
   -- asi, pero para un local nuevo dos papeles es papel de mas.
