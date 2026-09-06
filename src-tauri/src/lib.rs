@@ -333,6 +333,10 @@ pub fn run() {
         // actualización silenciosa se convertiría en una llamada de soporte a
         // media comida. Ver `lib/Actualizacion.js`.
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Abrir WhatsApp y el correo del proveedor en las apps del sistema.
+        // `window.open` no devuelve una ventana usable dentro de WebView2, y el
+        // front lo daba por bueno: ver `lib/Abrir.js`.
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             hub_estado,
             hub_imprimir,

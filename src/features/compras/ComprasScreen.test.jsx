@@ -10,7 +10,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
-const h = vi.hoisted(() => ({ enqueued: [], app: {}, avisos: [] }));
+const h = vi.hoisted(() => ({
+  enqueued: [],
+  app: {},
+  avisos: [],
+  abrir: async () => ({ ok: true }),
+}));
 
 vi.mock('../../store/useAppStore', () => ({
   useAppStore: Object.assign(() => h.app, {
@@ -27,6 +32,13 @@ vi.mock('../auth/useAuthStore', () => ({
   }),
 }));
 vi.mock('../../lib/Auditoria', () => ({ registrarAuditoria: () => {} }));
+
+// `abrirFuera` se controla desde la prueba: lo que se afirma abajo es qué hace
+// la pantalla CUANDO ABRE y cuándo NO, no cómo abre (eso es `Abrir.test.js`).
+vi.mock('../../lib/Abrir', () => ({
+  abrirFuera: (...a) => h.abrir(...a),
+  motivoLegible: () => 'no se pudo abrir',
+}));
 
 import ComprasScreen from './ComprasScreen';
 
@@ -64,6 +76,9 @@ const montar = (proveedorProducto = []) => {
     ordenesCompra: [],
     configuracion: { nombre_empresa: 'AZUL' },
     showToast: (m) => h.avisos.push(m),
+    // La pantalla lo saca del STORE, no de `lib/Auditoria`: sin esto,
+    // `generarOrden` revienta dentro de su try y el cuadro de exito no sale.
+    registrarAuditoria: () => {},
   });
   return render(
     <MemoryRouter>
@@ -75,6 +90,7 @@ const montar = (proveedorProducto = []) => {
 beforeEach(() => {
   h.enqueued.length = 0;
   h.avisos.length = 0;
+  h.abrir = async () => ({ ok: true });
   for (const k of Object.keys(h.app)) delete h.app[k];
 });
 
@@ -193,5 +209,56 @@ describe('ComprasScreen · el empaque de compra', () => {
     await user.selectOptions(await screen.findByLabelText('Insumo'), '10');
 
     expect(screen.queryByLabelText('Empaque de compra')).toBeNull();
+  });
+});
+
+/** Emite una orden y deja la pantalla en el cuadro de «¡Emitida!». */
+const emitirOrden = async (user) => {
+  await user.click(screen.getByRole('tab', { name: 'Generar orden' }));
+  await user.click(await screen.findByRole('button', { name: /Quesos/ }));
+  await user.selectOptions(await screen.findByLabelText('Insumo'), '10');
+  await user.clear(screen.getByLabelText('Cantidad'));
+  await user.type(screen.getByLabelText('Cantidad'), '2');
+  await user.clear(screen.getByLabelText('Costo unitario'));
+  await user.type(screen.getByLabelText('Costo unitario'), '50');
+  await user.click(screen.getByRole('button', { name: 'Agregar a la orden' }));
+  await user.click(await screen.findByRole('button', { name: /Emitir Orden/ }));
+  return screen.findByText('¡Emitida!');
+};
+
+describe('ComprasScreen · mandar la orden al proveedor', () => {
+  it('LA QUE IMPORTA: si no se abrio nada, el flujo NO se cierra', async () => {
+    // Este es el fallo entero. Dentro de la caja `window.open` no abria nada y
+    // la linea siguiente vaciaba el carrito igual: el encargado veia
+    // desaparecer la orden y concluia que se habia enviado.
+    const user = userEvent.setup();
+    h.abrir = async () => ({ ok: false, motivo: 'tauri' });
+    montar();
+    await emitirOrden(user);
+
+    await user.click(screen.getByRole('button', { name: /WhatsApp/ }));
+
+    // El cuadro sigue ahi: nada se dio por enviado.
+    expect(screen.getByText('¡Emitida!')).toBeTruthy();
+    expect(h.avisos.join(' ')).toMatch(/no se pudo abrir/);
+  });
+
+  it('si se abrio, el flujo se cierra como siempre', async () => {
+    const user = userEvent.setup();
+    montar();
+    await emitirOrden(user);
+
+    await user.click(screen.getByRole('button', { name: /WhatsApp/ }));
+    expect(screen.queryByText('¡Emitida!')).toBeNull();
+  });
+
+  it('el correo recibe el mismo trato', async () => {
+    const user = userEvent.setup();
+    h.abrir = async () => ({ ok: false, motivo: 'bloqueado' });
+    montar();
+    await emitirOrden(user);
+
+    await user.click(screen.getByRole('button', { name: /Correo|Mail/i }));
+    expect(screen.getByText('¡Emitida!')).toBeTruthy();
   });
 });

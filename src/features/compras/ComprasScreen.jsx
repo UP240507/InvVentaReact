@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
+import { abrirFuera, motivoLegible } from '../../lib/Abrir';
 
 export default function ComprasScreen() {
   const {
@@ -364,7 +365,7 @@ export default function ComprasScreen() {
     return texto;
   };
 
-  const enviarPorWhatsApp = (orden, desdeModal = false) => {
+  const enviarPorWhatsApp = async (orden, desdeModal = false) => {
     const telefono = telefonoParaWhatsApp(orden, proveedores);
     // Sin número NO se abre nada. `wa.me/?text=…` sin destinatario abre un
     // WhatsApp vacío: en la pantalla parece que funcionó y al proveedor no le
@@ -378,11 +379,18 @@ export default function ComprasScreen() {
       return;
     }
     const mensaje = encodeURIComponent(crearCuerpoMensaje(orden));
-    window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
+
+    // ── EL FLUJO SE CIERRA SÓLO SI SE ABRIÓ ─────────────────────────────
+    // Antes esto era `window.open` y la línea siguiente cerraba el flujo pase
+    // lo que pasase. Dentro de la caja —WebView2— `window.open` no abre nada,
+    // así que el carrito se vaciaba sin haber mandado la orden: el encargado
+    // veía desaparecer la orden y concluía que se había enviado.
+    const r = await abrirFuera(`https://wa.me/${telefono}?text=${mensaje}`);
+    if (!r.ok) return showToast(motivoLegible(r.motivo), 'error');
     if (desdeModal) finalizarFlujoOrden();
   };
 
-  const enviarPorCorreo = (orden, desdeModal = false) => {
+  const enviarPorCorreo = async (orden, desdeModal = false) => {
     const prov = proveedorDeLaOrden(orden, proveedores);
     // Mismo motivo que arriba: un `mailto` sin destinatario no es un envío.
     if (!prov?.email) {
@@ -398,10 +406,11 @@ export default function ComprasScreen() {
     const cuerpo = encodeURIComponent(
       crearCuerpoMensaje(orden).replace(/\*/g, ''),
     );
-    window.open(
+    // Mismo trato que WhatsApp: si no abrió, el carrito no se toca.
+    const r = await abrirFuera(
       `https://mail.google.com/mail/?view=cm&fs=1&to=${prov.email}&su=${asunto}&body=${cuerpo}`,
-      '_blank',
     );
+    if (!r.ok) return showToast(motivoLegible(r.motivo), 'error');
     if (desdeModal) finalizarFlujoOrden();
   };
 
