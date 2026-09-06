@@ -882,6 +882,10 @@ export const useAppStore = create((set, get) => ({
       usuario: datosApertura.usuario,
       fecha_apertura: new Date().toISOString(),
       fondo_inicial: Number(datosApertura.fondoCaja) || 0,
+      // El conteo del que sale ese `fondo_inicial`. `undefined` cuando quien
+      // llama no contó: no se guarda `{}` por defecto, porque `{}` significa
+      // «conté y no había nada» y eso sería inventar el dato.
+      fondo_desglose: datosApertura.fondoDesglose ?? null,
       estado: 'abierto',
       restaurante_id: restauranteId,
     };

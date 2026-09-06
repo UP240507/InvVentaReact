@@ -3,7 +3,9 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
-import { Play, DollarSign, X, Wallet } from 'lucide-react';
+import { Play, X, Wallet } from 'lucide-react';
+import DesgloseEfectivo from './DesgloseEfectivo';
+import { denominacionesDe, arqueoDeDesglose } from '../../lib/Arqueo';
 
 export default function AbrirTurnoModal({ onClose }) {
   // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
@@ -11,10 +13,23 @@ export default function AbrirTurnoModal({ onClose }) {
   useCierreConEscape(onClose);
 
   const { empleadoActivo } = useSessionStore();
-  const { abrirTurno } = useAppStore();
+  const { abrirTurno, configuracion } = useAppStore();
   const { user } = useAuthStore();
 
-  const [fondo, setFondo] = useState('');
+  // ── EL DESGLOSE SUSTITUYE AL CAMPO DEL TOTAL ────────────────────────────
+  // Antes esto era un `fondo` que alguien tecleaba: una afirmación sin nada
+  // detrás. Ahora el total se DERIVA de un conteo que queda guardado. La regla
+  // del diseño es que el desglose sustituye al campo, no se pone al lado: con
+  // los dos, la gente teclea el total e inventa el desglose.
+  const [desglose, setDesglose] = useState({});
+
+  // `{}` es «conté y no había nada»; no haber contado es otra cosa. Sin esto,
+  // abrir el cuadro y pulsar sin tocar nada guardaría un conteo de cero que
+  // nadie hizo — justo el dato inventado que esto viene a quitar.
+  const [conto, setConto] = useState(false);
+
+  const denominaciones = denominacionesDe(configuracion);
+  const { contado } = arqueoDeDesglose(desglose);
 
   // Responsable del turno, en cascada:
   //   1) empleadoActivo (futuro: cajero identificado por PIN)
@@ -24,11 +39,14 @@ export default function AbrirTurnoModal({ onClose }) {
     empleadoActivo?.nombre || user?.nombre || 'Sin identificar';
 
   const handleConfirmarApertura = async () => {
-    if (fondo === '') return;
+    if (!conto) return;
 
     await abrirTurno({
       usuario: responsable,
-      fondoCaja: parseFloat(fondo),
+      // `fondo_inicial` se queda y pasa a ser CALCULADO: lo leen el corte Z,
+      // los reportes y el cálculo de la diferencia.
+      fondoCaja: contado,
+      fondoDesglose: desglose,
     });
 
     onClose();
@@ -68,22 +86,21 @@ export default function AbrirTurnoModal({ onClose }) {
           </div>
 
           <div>
-            <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
+            <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-1 block">
               Fondo inicial de caja (Efectivo para cambios)
             </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-adm-muted" />
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={fondo}
-                onChange={(e) => setFondo(e.target.value)}
-                placeholder="0.00"
-                autoFocus
-                className="w-full pl-10 pr-4 py-4 bg-adm-bg border-2 border-adm-field focus:border-adm-ok rounded-ui text-2xl font-black font-syne text-adm-ink outline-none transition-colors"
-              />
-            </div>
+            <p className="text-xs font-bold text-adm-muted mb-4">
+              Cuenta lo que hay. Un fondo de $1,000 en un solo billete no puede
+              dar cambio, y eso sólo se ve contando.
+            </p>
+            <DesgloseEfectivo
+              denominaciones={denominaciones}
+              valor={desglose}
+              onChange={(d) => {
+                setDesglose(d);
+                setConto(true);
+              }}
+            />
           </div>
         </div>
 
@@ -96,7 +113,7 @@ export default function AbrirTurnoModal({ onClose }) {
           </button>
           <button
             onClick={handleConfirmarApertura}
-            disabled={fondo === ''}
+            disabled={!conto}
             className="flex-1 py-4 rounded-ui font-black text-adm-ok-fg bg-adm-ok dark:text-adm-bg shadow-lg shadow-adm-ok/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Play className="w-5 h-5 fill-current" /> Iniciar Turno
