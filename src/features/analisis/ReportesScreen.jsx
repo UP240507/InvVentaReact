@@ -516,6 +516,11 @@ export default function ReportesScreen() {
           propinas,
           fondo,
           total,
+          // El conteo del cierre y quién lo firmó. `desglose` en NULL cuando el
+          // turno se cerró antes de que esto existiera: el papel dirá «SIN
+          // CONTAR» en vez de imprimir ceros que nadie contó.
+          desglose: t.efectivo_desglose ?? null,
+          firmadoPor: t.arqueo_autorizado_por || null,
           // Fondo + efectivo, sin tarjeta y sin propinas. Es lo que tiene que
           // haber físicamente en el cajón; las tarjetas no pasaron por ahí y
           // las propinas se pagan aparte. Misma cuenta que la versión de papel

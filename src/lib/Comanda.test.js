@@ -1115,3 +1115,97 @@ describe('el logo en el documento', () => {
     expect(construirTicket(venta, { configuracion: roto }).logo).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL CORTE Z LLEVA EL CONTEO
+//
+// Es el papel que se pega en la libreta. Dentro de tres meses, cuando alguien
+// pregunte por qué faltaban 500, la respuesta está aquí o no está en ninguna
+// parte.
+describe('construirCorteZ · el desglose en el papel', () => {
+  const base = {
+    turno: '12345',
+    apertura: '2026-09-06T14:00:00.000Z',
+    cierre: '2026-09-06T23:00:00.000Z',
+    usuario: 'Sairi',
+    tickets: 20,
+    efectivo: 4000,
+    tarjeta: 1000,
+    propinas: 300,
+    fondo: 1000,
+    total: 5000,
+    enCaja: 5000,
+    impreso: '2026-09-06T23:05:00.000Z',
+  };
+  const etiquetas = (doc) => doc.totales.map((t) => t.etiqueta);
+  const valorDe = (doc, etiqueta) =>
+    doc.totales.find((t) => t.etiqueta === etiqueta)?.valor;
+
+  it('LA QUE MAS IMPORTA: sin conteo, el papel dice SIN CONTAR', () => {
+    // Imprimir ceros donde no hubo conteo seria un dato inventado con cara de
+    // dato medido, y encima archivado en la libreta.
+    const doc = construirCorteZ({ ...base, desglose: null });
+    expect(valorDe(doc, 'Efectivo contado')).toBe('SIN CONTAR');
+    expect(etiquetas(doc)).not.toContain('Diferencia');
+  });
+
+  it('con conteo, una linea por denominacion de mayor a menor', () => {
+    const doc = construirCorteZ({
+      ...base,
+      desglose: { 100: 5, 500: 9, 0.5: 2 },
+    });
+    const lineas = etiquetas(doc).filter((e) => e.trim().includes(' x '));
+    expect(lineas).toEqual(['  9 x $500.00', '  5 x $100.00', '  2 x $0.50']);
+  });
+
+  it('el contado y la diferencia salen del conteo', () => {
+    const doc = construirCorteZ({ ...base, desglose: { 500: 9 } });
+    expect(valorDe(doc, 'Efectivo contado')).toBe('$4,500.00');
+    expect(valorDe(doc, 'Diferencia')).toBe('Faltan $500.00');
+  });
+
+  it('conte y no habia nada NO es lo mismo que no contar', () => {
+    const doc = construirCorteZ({ ...base, desglose: {} });
+    expect(valorDe(doc, 'Efectivo contado')).toBe('$0.00');
+    expect(valorDe(doc, 'Diferencia')).toBe('Faltan $5,000.00');
+  });
+
+  it('la diferencia va EN PALABRAS, no con signo', () => {
+    // `money(-500)` sale «$-500.00»: en una tira de 58 mm se lee mal, y este
+    // papel se archiva. Es ademas el vocabulario de la pantalla de cierre.
+    const con = (desglose) =>
+      valorDe(construirCorteZ({ ...base, desglose }), 'Diferencia');
+    expect(con({ 500: 10 })).toBe('Cuadra');
+    expect(con({ 500: 11 })).toBe('Sobran $500.00');
+    expect(con({ 500: 9 })).toBe('Faltan $500.00');
+  });
+
+  it('quien firmo va en la cabecera', () => {
+    const doc = construirCorteZ({ ...base, firmadoPor: 'Diego' });
+    expect(doc.meta.find((m) => m.etiqueta === 'Autorizo')).toBeUndefined();
+    expect(doc.meta.find((m) => m.etiqueta === 'Autorizó')?.valor).toBe(
+      'Diego',
+    );
+  });
+
+  it('un corte sin firma no inventa una', () => {
+    const doc = construirCorteZ(base);
+    expect(doc.meta.map((m) => m.etiqueta)).not.toContain('Autorizó');
+  });
+
+  it('sigue habiendo UNA sola cifra enfatizada', () => {
+    // `escpos.rs` y el ticket buscan el enfasis para maquetar: dos romperian
+    // el papel de formas que no se ven hasta imprimirlo.
+    const doc = construirCorteZ({ ...base, desglose: { 500: 9 } });
+    expect(doc.totales.filter((t) => t.enfasis)).toHaveLength(1);
+    expect(doc.totales.find((t) => t.enfasis).etiqueta).toBe('TOTAL EN CAJA');
+  });
+
+  it('el corte sigue sin abrir el cajon', () => {
+    // Se cuenta el dinero que ya esta; al cerrar, el cajon lo abre quien
+    // cuenta, no el papel.
+    expect(construirCorteZ({ ...base, desglose: { 500: 9 } }).abrirCajon).toBe(
+      false,
+    );
+  });
+});

@@ -49,6 +49,7 @@ import { etiquetaDescuento } from './Descuentos';
 import { aISOLocal } from './Fechas';
 import { importeEnLetra } from './Letras';
 import { logoDeConfiguracion } from './LogoTermico';
+import { arqueoDelTurno } from './Arqueo';
 
 /**
  * Marca que se estampa al pie del ticket de cobro.
@@ -782,6 +783,13 @@ export function construirCorteZ(corte, { configuracion = {} } = {}) {
     { etiqueta: 'Responsable', valor: corte.usuario || '—' },
   ];
 
+  // Quién ATESTIGUÓ la cifra. Va en la cabecera y no al pie porque es un dato
+  // del corte, no una firma manuscrita: el vale de propinas lleva raya para
+  // firmar; éste lleva el nombre de quien ya firmó con su PIN.
+  if (corte.firmadoPor) {
+    meta.push({ etiqueta: 'Autorizó', valor: String(corte.firmadoPor) });
+  }
+
   const totales = [
     { etiqueta: 'Tickets', valor: String(num(corte.tickets)), enfasis: false },
     { etiqueta: 'Efectivo', valor: money(corte.efectivo), enfasis: false },
@@ -793,6 +801,63 @@ export function construirCorteZ(corte, { configuracion = {} } = {}) {
     // se busca en este papel; las demás son el desglose de cómo se llegó a ella.
     { etiqueta: 'TOTAL EN CAJA', valor: money(corte.enCaja), enfasis: true },
   ];
+
+  // ── EL CONTEO, EN EL PAPEL QUE SE ARCHIVA ─────────────────────────────────
+  //
+  // Éste es el documento que se pega en la libreta, así que es donde el
+  // desglose sirve de verdad: dentro de tres meses, cuando alguien pregunte por
+  // qué faltaban 500, la respuesta está aquí o no está en ninguna parte. Y no
+  // es lo mismo que faltara UN BILLETE de 500 a que fueran 500 EN MONEDAS DE
+  // DIEZ: uno huele a robo y el otro a cambio mal dado durante seis horas.
+  //
+  // Si NO se contó, el papel lo dice. Imprimir ceros donde no hubo conteo sería
+  // un dato inventado con cara de dato medido, y encima archivado.
+  const arqueo = arqueoDelTurno({
+    esperado: num(corte.enCaja),
+    desglose: corte.desglose,
+  });
+
+  if (!arqueo.conto) {
+    totales.push({
+      etiqueta: 'Efectivo contado',
+      valor: 'SIN CONTAR',
+      enfasis: false,
+    });
+  } else {
+    // Una línea por denominación, de mayor a menor, que es como se cuenta.
+    const piezas = Object.entries(corte.desglose || {})
+      .map(([den, n]) => [Number(den), Number(n)])
+      .filter(([den, n]) => den > 0 && n > 0)
+      .sort((a, b) => b[0] - a[0]);
+
+    for (const [den, n] of piezas) {
+      totales.push({
+        etiqueta: `  ${n} x ${money(den)}`,
+        valor: money(den * n),
+        enfasis: false,
+      });
+    }
+
+    totales.push({
+      etiqueta: 'Efectivo contado',
+      valor: money(arqueo.contado),
+      enfasis: false,
+    });
+    // En palabras y no con signo. `money(-500)` sale «$-500.00», que en una
+    // tira de 58 mm se lee mal y en un papel que se archiva peor. Además es el
+    // vocabulario que la persona acaba de ver en la pantalla del cierre.
+    const d = arqueo.diferencia;
+    totales.push({
+      etiqueta: 'Diferencia',
+      valor:
+        d === 0
+          ? 'Cuadra'
+          : d > 0
+            ? `Sobran ${money(d)}`
+            : `Faltan ${money(-d)}`,
+      enfasis: false,
+    });
+  }
 
   return {
     id: `corte::${corte.turno ?? 's-n'}::${Date.now()}-${++secuenciaImpresion}`,

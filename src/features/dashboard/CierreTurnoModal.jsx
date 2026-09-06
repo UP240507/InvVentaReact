@@ -1,13 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useAppStore, parseUTC } from '../../store/useAppStore';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
-import { calcularTotalesTurno } from '../../lib/Arqueo';
+import {
+  calcularTotalesTurno,
+  denominacionesDe,
+  arqueoDelTurno,
+} from '../../lib/Arqueo';
+import DesgloseEfectivo from './DesgloseEfectivo';
+import { buscarAutorizador } from '../../lib/Autorizacion';
+import { abrirCajonConRegistro, MOTIVOS } from '../../lib/Cajon';
+import { abrirCajon } from '../../lib/Hub';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import {
   X,
   AlertTriangle,
-  DollarSign,
   CreditCard,
   Landmark,
   Coins,
@@ -20,13 +27,34 @@ export default function CierreTurnoModal({ onClose }) {
   // el cierre de los componentes base.
   useCierreConEscape(onClose);
 
-  const { mesas, ventas, turnos, configuracion, cerrarTurno, showToast } =
-    useAppStore();
+  const {
+    mesas,
+    ventas,
+    turnos,
+    configuracion,
+    cerrarTurno,
+    showToast,
+    staff,
+    roles_permisos,
+    registrarAuditoria,
+  } = useAppStore();
   const { empleadoActivo } = useSessionStore();
   const { user } = useAuthStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [efectivoContado, setEfectivoContado] = useState('');
+
+  // ── EL CONTEO, NO LA CIFRA ──────────────────────────────────────────────
+  // Antes esto era un `efectivoContado` que alguien tecleaba. Ver
+  // `DesgloseEfectivo` y `docs/DISENO_ARQUEO_Y_CAJON.md` §4.
+  const [desglose, setDesglose] = useState({});
+  const [conto, setConto] = useState(false);
+
+  // ── LA FIRMA VA AL FINAL, SOBRE LA CIFRA YA CONTADA ─────────────────────
+  // Podría pedirse al empezar el cierre, y sería más cómodo. Pero entonces lo
+  // que se autoriza es UNA CAJA ABIERTA: si el gerente se va mientras el cajero
+  // cuenta, esa firma no dice nada del número. Cuando la caja no cuadre, el
+  // documento que hace falta es una firma sobre UNA CANTIDAD.
+  const [pin, setPin] = useState('');
 
   // ✅ FIX: turnoActivo viene de useAppStore (fuente única de verdad)
   const turnoActivo =
@@ -44,12 +72,46 @@ export default function CierreTurnoModal({ onClose }) {
 
   const esperadoEnCaja =
     (turnoActivo?.fondo_inicial || 0) + (metricas?.efectivo || 0);
-  const contado = parseFloat(efectivoContado) || 0;
-  const diferencia = efectivoContado !== '' ? contado - esperadoEnCaja : 0;
+
+  // La diferencia sale del DESGLOSE, nunca de un número tecleado. Y mientras no
+  // se haya contado es `null`, no cero: un cero diría que la caja cuadra, que
+  // es justo lo que no se sabe.
+  const arqueo = arqueoDelTurno({
+    esperado: esperadoEnCaja,
+    desglose: conto ? desglose : null,
+  });
+  const contado = arqueo.contado;
+  const diferencia = arqueo.diferencia ?? 0;
+  const denominaciones = denominacionesDe(configuracion);
 
   const handleConfirmarCierre = async () => {
-    if (!turnoActivo) return;
+    if (!turnoActivo || !conto) return;
+
+    const firmante = buscarAutorizador({
+      staff,
+      roles_permisos,
+      pin,
+      flag: 'autoriza_arqueo',
+    });
+    if (!firmante) {
+      setPin('');
+      return showToast('Ese PIN no puede firmar el cierre.', 'error');
+    }
+
     setIsSubmitting(true);
+
+    // ── EL CAJÓN NO PUEDE BLOQUEAR EL CIERRE ────────────────────────────
+    // `abrirCajon` no reintenta y puede fallar: hub apagado, impresora sin
+    // corriente. Si el cierre dependiera de él, un hub caído dejaría al local
+    // sin poder cerrar la caja, y la solución de todos sería volver a dejar la
+    // llave a mano — deshaciendo el diseño entero. Se registra que falló y se
+    // sigue. Por eso NO se mira el resultado.
+    await abrirCajonConRegistro({
+      motivo: MOTIVOS.CIERRE_TURNO,
+      usuario: firmante.nombre,
+      abrir: abrirCajon,
+      registrar: registrarAuditoria,
+    });
 
     // ✅ Mandamos TODOS los datos financieros a tu store.
     // Responsable en cascada: PIN → logueado → 'Sin identificar' (nunca genérico).
@@ -58,14 +120,30 @@ export default function CierreTurnoModal({ onClose }) {
       ventasTotales: metricas?.totalVentas || 0,
       efectivo_esperado: esperadoEnCaja,
       efectivo_declarado: contado,
-      diferencia: diferencia,
+      diferencia: arqueo.diferencia,
+      // El conteo del que sale ese declarado, y quién lo atestiguó.
+      efectivo_desglose: desglose,
+      arqueo_autorizado_por: firmante.nombre,
       // Sprint 4: desglose completo para que el corte quede en la BD.
       tarjeta_total: metricas?.tarjeta || 0,
       transferencia_total: metricas?.transferencia || 0,
       propinas_total: metricas?.propinas || 0,
     });
 
-    showToast('Turno cerrado exitosamente', 'success');
+    registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: empleadoActivo?.nombre || user?.nombre || 'Sin identificar',
+      accion: 'ARQUEO_DECLARADO',
+      modulo: 'CAJA',
+      nivel: arqueo.diferencia === 0 ? 'info' : 'warning',
+      detalles:
+        `Turno ${turnoActivo.id}: esperado $${esperadoEnCaja.toFixed(2)}, ` +
+        `contado $${contado.toFixed(2)} (${arqueo.piezas} piezas), ` +
+        `diferencia $${(arqueo.diferencia ?? 0).toFixed(2)}. ` +
+        `Firma: ${firmante.nombre}.`,
+    });
+
+    showToast(`Turno cerrado. Firmó ${firmante.nombre}.`, 'success');
     setIsSubmitting(false);
     onClose();
   };
@@ -153,20 +231,17 @@ export default function CierreTurnoModal({ onClose }) {
 
               <div className="pt-4 border-t border-adm-border">
                 <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
-                  ¿Cuánto efectivo hay en cajón?
+                  Cuenta el efectivo del cajón
                 </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-adm-muted" />
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={efectivoContado}
-                    onChange={(e) => setEfectivoContado(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-info/30 focus:border-adm-info rounded-ui text-xl font-black font-syne text-adm-ink outline-none transition-colors"
-                  />
-                </div>
-                {efectivoContado !== '' && (
+                <DesgloseEfectivo
+                  denominaciones={denominaciones}
+                  valor={desglose}
+                  onChange={(d) => {
+                    setDesglose(d);
+                    setConto(true);
+                  }}
+                />
+                {conto && (
                   <div
                     className={`mt-3 p-3 rounded-ui flex items-center justify-between border ${
                       diferencia === 0
@@ -248,6 +323,34 @@ export default function CierreTurnoModal({ onClose }) {
           </div>
         </div>
 
+        {/* ── LA FIRMA, SOBRE LA CIFRA YA CONTADA ──────────────────────────
+            Aparece cuando hay conteo, y no antes: lo que se firma es una
+            CANTIDAD. Firmar al empezar autorizaría una caja abierta, y si el
+            gerente se va mientras el cajero cuenta, esa firma no dice nada del
+            número. */}
+        {conto && (
+          <div className="px-8 py-5 border-t border-adm-border bg-adm-info/5">
+            <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
+              PIN de quien autoriza el arqueo
+            </label>
+            <p className="text-xs font-bold text-adm-muted mb-3">
+              Firma los <strong>${contado.toFixed(2)}</strong> contados y la
+              diferencia de{' '}
+              <strong>${(arqueo.diferencia ?? 0).toFixed(2)}</strong>. Queda
+              guardado quién firmó.
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              aria-label="PIN de quien autoriza el arqueo"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="••••"
+              className="w-full px-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-info/30 focus:border-adm-info rounded-ui text-xl font-black text-adm-ink outline-none transition-colors"
+            />
+          </div>
+        )}
+
         <div className="px-8 py-6 border-t border-adm-border bg-adm-bg flex gap-4">
           <button
             onClick={onClose}
@@ -257,7 +360,7 @@ export default function CierreTurnoModal({ onClose }) {
           </button>
           <button
             onClick={handleConfirmarCierre}
-            disabled={isSubmitting || efectivoContado === ''}
+            disabled={isSubmitting || !conto || pin === ''}
             className="flex-1 py-4 rounded-ui font-black text-adm-danger-fg bg-adm-danger shadow-lg shadow-adm-danger/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <CheckCircle2 className="w-5 h-5" />

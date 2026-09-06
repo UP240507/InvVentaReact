@@ -936,6 +936,11 @@ export const useAppStore = create((set, get) => ({
       efectivo_esperado: datosCierre.efectivo_esperado ?? null,
       efectivo_declarado: datosCierre.efectivo_declarado ?? null,
       diferencia: datosCierre.diferencia ?? null,
+      // El conteo del que sale `efectivo_declarado`, y quién lo atestiguó. Van
+      // como `?? null` y no `?? {}`: `{}` significaría «se contó y no había
+      // nada», y un cierre sin desglose no es una caja vacía.
+      efectivo_desglose: datosCierre.efectivo_desglose ?? null,
+      arqueo_autorizado_por: datosCierre.arqueo_autorizado_por ?? null,
       // Sprint 4: desglose completo del corte (antes se perdía).
       tarjeta_total: datosCierre.tarjeta_total ?? 0,
       transferencia_total: datosCierre.transferencia_total ?? 0,
