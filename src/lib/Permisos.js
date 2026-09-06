@@ -12,6 +12,8 @@
 //   gestion             bool     — shell de administración (App.jsx / secciones sidebar)
 //   autoriza_descuentos bool     — puede autorizar descuentos en cobro
 //   abre_caja           bool     — puede abrir caja/turno
+//   abre_cajon          bool     — puede abrir el CAJÓN desde el botón
+//   autoriza_arqueo     bool     — su PIN firma el cierre de turno
 //   autoriza_salidas    bool     — su PIN autoriza salidas anticipadas del checador
 //   exento_jornada      bool     — sin candado de horas_jornada al salir
 //   exento_turno        bool     — navega sin turno de caja abierto
@@ -42,6 +44,7 @@ export const CAPACIDADES_BASE = {
     gestion: true,
     autoriza_descuentos: true,
     abre_caja: true,
+    abre_cajon: true,
     autoriza_salidas: true,
     exento_jornada: true,
     exento_turno: true,
@@ -79,6 +82,7 @@ export const CAPACIDADES_BASE = {
     gestion: true,
     autoriza_descuentos: true,
     abre_caja: true,
+    abre_cajon: true,
     autoriza_salidas: false,
     exento_jornada: false,
     exento_turno: true,
@@ -92,6 +96,7 @@ export const CAPACIDADES_BASE = {
     gestion: false,
     autoriza_descuentos: false,
     abre_caja: true,
+    abre_cajon: true,
     autoriza_salidas: false,
     exento_jornada: false,
     exento_turno: false,
@@ -105,6 +110,7 @@ export const CAPACIDADES_BASE = {
     gestion: false,
     autoriza_descuentos: false,
     abre_caja: false,
+    abre_cajon: false,
     autoriza_salidas: false,
     exento_jornada: false,
     exento_turno: false,
@@ -118,6 +124,7 @@ export const CAPACIDADES_BASE = {
     gestion: false,
     autoriza_descuentos: false,
     abre_caja: false,
+    abre_cajon: false,
     autoriza_salidas: false,
     exento_jornada: false,
     exento_turno: false,
@@ -131,6 +138,7 @@ export const CAPACIDADES_BASE = {
     gestion: false,
     autoriza_descuentos: false,
     abre_caja: false,
+    abre_cajon: false,
     autoriza_salidas: false,
     exento_jornada: false,
     exento_turno: false,

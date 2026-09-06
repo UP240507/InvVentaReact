@@ -31,6 +31,7 @@ import {
   Info,
 } from 'lucide-react';
 import AbrirTurnoModal from './AbrirTurnoModal';
+import BotonAbrirCajon from './BotonAbrirCajon';
 import CierreTurnoModal from './CierreTurnoModal';
 import { PERIODOS, resumenDelPeriodo } from '../../lib/Metricas';
 import { calcularAlertas } from '../../lib/Alertas';
@@ -150,6 +151,10 @@ export default function DashboardScreen() {
 
   const esGestion = flag('gestion');
   const puedeCaja = flag('abre_caja');
+  // Flag propio y no `abre_caja`: el diseño lo veta expresamente. Están a un
+  // carácter de distancia, y colgarle el cajón a «puede abrir turno» le daría
+  // acceso al dinero a cualquiera que pueda iniciar uno.
+  const puedeCajon = flag('abre_cajon');
   const turnoActivo =
     (turnos || []).find((t) => t.estado === 'abierto') || null;
 
@@ -269,6 +274,11 @@ export default function DashboardScreen() {
           )}
 
           <div className="flex-1" />
+
+          {/* Abrir el cajón fuera de una venta: contar a media tarde, cambiar
+              un billete. Hasta el 06-sep no existía forma de hacerlo sin
+              cobrar, y ésa era la razón de que hubiera una llave en la caja. */}
+          {puedeCajon && <BotonAbrirCajon />}
 
           {/* Abrir y cerrar caja exigen el mismo flag que en EsperaScreen. */}
           {puedeCaja &&
