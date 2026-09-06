@@ -7,9 +7,15 @@
 import { Keyboard, X } from 'lucide-react';
 import { useRegistroAtajos } from '../hooks/useAtajos';
 import { IconButton } from './ui';
+import { useCierreConEscape } from '../hooks/useCierreConEscape';
 
 export default function AyudaAtajos({ abierta, onCerrar }) {
   const registro = useRegistroAtajos();
+
+  // El hook va ANTES del `return null`: llamarlo después sería una llamada
+  // condicional a un hook. Por eso recibe `abierta` y se apaga solo.
+  useCierreConEscape(onCerrar, abierta);
+
   if (!abierta) return null;
 
   return (

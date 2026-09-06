@@ -39,6 +39,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 
 export default function ComprasScreen() {
   const {
@@ -411,6 +412,10 @@ export default function ComprasScreen() {
     setReferencia('');
     setActiveTab('historial');
   };
+
+  // El cuadro de «orden emitida» cierra con `finalizarFlujoOrden`, igual que su
+  // botón: vaciar el carrito es parte de cerrarlo, no un efecto aparte.
+  useCierreConEscape(finalizarFlujoOrden, !!ordenExitosa);
 
   // ── Columnas del historial de órdenes ───────────────────────────────────
   // Sin onEditar: una orden emitida no se corrige, se cancela y se emite otra

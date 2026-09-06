@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import {
   Field,
   Input,
@@ -92,6 +93,10 @@ export default function FacturasScreen() {
 
   const [busqueda, setBusqueda] = useState('');
   const [modalNueva, setModalNueva] = useState(false);
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  useCierreConEscape(() => setModalNueva(false), modalNueva);
   const [ventaRef, setVentaRef] = useState(null);
 
   const [form, setForm] = useState({

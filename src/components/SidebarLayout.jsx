@@ -13,6 +13,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { useSyncStore } from '../store/useSyncStore';
+import { useCierreConEscape } from '../hooks/useCierreConEscape';
 import { useAppStore } from '../store/useAppStore';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { useSessionStore } from '../store/useSessionStore';
@@ -88,6 +89,11 @@ export default function SidebarLayout() {
   const [globalPopup, setGlobalPopup] = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [bloqueoSalida, setBloqueoSalida] = useState(false);
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  useCierreConEscape(() => setBloqueoSalida(false), bloqueoSalida);
+  useCierreConEscape(() => setConfirmLogout(false), confirmLogout);
   const [showCierreModal, setShowCierreModal] = useState(false);
   const [verAyuda, setVerAyuda] = useState(false); // F1
 

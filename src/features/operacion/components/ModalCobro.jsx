@@ -16,6 +16,7 @@ import {
   Star,
 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
+import { useCierreConEscape } from '../../../hooks/useCierreConEscape';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
@@ -121,6 +122,15 @@ export default function ModalCobro({
   // { tipo, valor, autorizadoPor } — solo existe cuando ya fue autorizado.
   const [descuentoAplicado, setDescuentoAplicado] = useState(null);
   const [pinAuthAbierto, setPinAuthAbierto] = useState(false);
+
+  // ── ESCAPE CIERRA EL CUADRO DE ENCIMA, NO EL COBRO ──────────────────────
+  // El POS tiene un scope de atajos donde Escape cierra «lo que esté abierto»,
+  // y el cobro entero está en esa lista. Sin esto, Escape con el pinpad de
+  // autorización delante cerraba EL COBRO COMPLETO, con el pago a medias. El
+  // hook va en fase de captura y corta la propagación, así que gana el cuadro
+  // de encima — que es la misma regla que arregló el KDS y el POS el 28-ago.
+  useCierreConEscape(() => setPinAuthAbierto(false), pinAuthAbierto);
+  useCierreConEscape(() => setDialogoExcedente(null), !!dialogoExcedente);
   const [pinAuth, setPinAuth] = useState('');
   const [pinAuthError, setPinAuthError] = useState('');
 

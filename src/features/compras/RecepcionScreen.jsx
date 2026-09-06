@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { nombreDeProveedorDeLaOrden } from '../../lib/Compras';
 import {
   PageShell,
@@ -34,6 +35,12 @@ export default function RecepcionScreen() {
 
   const [activeTab, setActiveTab] = useState('pendientes');
   const [ordenAConfirmar, setOrdenAConfirmar] = useState(null);
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  // Confirmar una recepción mueve stock y recalcula el costo promedio
+  // ponderado, y corregirla después es otra operación: Escape se sale.
+  useCierreConEscape(() => setOrdenAConfirmar(null), !!ordenAConfirmar);
 
   const { pendientes, recibidas } = useMemo(() => {
     const ordenes = ordenesCompra || [];

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import {
@@ -77,6 +78,13 @@ export default function PanelRondas({ mesaId }) {
     comanda: null,
   });
   const [motivo, setMotivo] = useState('');
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  useCierreConEscape(
+    () => setModalCancelar({ show: false, comanda: null }),
+    modalCancelar.show,
+  );
 
   // Rondas activas de ESTA mesa (excluye completadas/canceladas; defensivo
   // ante el realtime que no expulsa terminadas de comandas_activas).

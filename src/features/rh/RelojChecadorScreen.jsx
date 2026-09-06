@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../api/supabase';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { getRolEfectivo, getCapacidades, tieneFlag } from '../../lib/Permisos';
@@ -58,6 +59,13 @@ export default function RelojChecadorScreen() {
   const [pidiendoPlantilla, setPidiendoPlantilla] = useState(false);
   const [quienAbrio, setQuienAbrio] = useState(null);
   const [cierrePendiente, setCierrePendiente] = useState(null);
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  // El del PIN de la plantilla ya tenía el suyo escrito a mano y se queda.
+  useCierreConEscape(() => setPlantillaAbierta(false), plantillaAbierta);
+  useCierreConEscape(() => setCierrePendiente(null), !!cierrePendiente);
+  useCierreConEscape(() => setSalidaPendiente(null), !!salidaPendiente);
 
   const {
     staff,

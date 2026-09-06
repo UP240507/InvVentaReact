@@ -1,5 +1,6 @@
 import { useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { categoriasDeMenu } from '../../lib/Catalogo';
 import {
   PageShell,
@@ -50,6 +51,11 @@ export default function RecetasScreen() {
 
   const [showModal, setShowModal] = useState(false);
   const [recetaAEliminar, setRecetaAEliminar] = useState(null);
+
+  // Escape cierra el cuadro de encima. Se pinta con un `div` suelto, así que
+  // no hereda el cierre de los componentes base.
+  // El de eliminar es destructivo y permanente: Escape CANCELA.
+  useCierreConEscape(() => setRecetaAEliminar(null), !!recetaAEliminar);
   const [editId, setEditId] = useState(null);
   const [modalTab, setModalTab] = useState('general');
 
@@ -176,6 +182,10 @@ export default function RecetasScreen() {
     setGrupoOpciones([]);
     setGrupoOpcionSel('');
   };
+
+  // El de la ficha de receta cierra con `cerrarModal`, que además olvida qué
+  // receta se estaba editando y limpia el borrador.
+  useCierreConEscape(cerrarModal, showModal);
 
   const abrirEditar = (item) => {
     const insumosNorm = (item.insumos || item.ingredientes || []).map((i) => ({

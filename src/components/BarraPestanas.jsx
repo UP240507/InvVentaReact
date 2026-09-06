@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { MoreHorizontal, X } from 'lucide-react';
+import { useCierreConEscape } from '../hooks/useCierreConEscape';
 
 /**
  * Navegación en teléfono: pestañas abajo, donde llega el pulgar.
@@ -46,6 +47,10 @@ const PESTANAS_VISIBLES = 4;
 export default function BarraPestanas({ items = [] }) {
   const location = useLocation();
   const [verMas, setVerMas] = useState(false);
+
+  // El desplegable de «ver más» también se cierra con Escape: tiene un fondo
+  // que lo cierra al tocarlo, y la tecla tiene que hacer lo mismo.
+  useCierreConEscape(() => setVerMas(false), verMas);
 
   const principales = items.slice(0, PESTANAS_VISIBLES);
   const resto = items.slice(PESTANAS_VISIBLES);
