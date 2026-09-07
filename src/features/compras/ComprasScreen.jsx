@@ -781,7 +781,15 @@ export default function ComprasScreen() {
                             factor: empaqueElegido.factor,
                             empaques: Number(cantidadItem),
                             precioPorEmpaque: Number(costoItem) || 0,
-                          }).precio_unitario.toFixed(4)}
+                          }).precio_unitario.toLocaleString('es-MX', {
+                            // Hasta cuatro decimales PORQUE el precio derivado
+                            // no se redondea -es lo que entra al costo promedio
+                            // ponderado-, pero sin rellenar con ceros: un
+                            // «$15.0000» que en realidad es 15 exacto solo
+                            // consigue que nadie se crea el numero.
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 4,
+                          })}
                         </strong>{' '}
                         por {insumoElegido?.unidad}.
                       </p>
