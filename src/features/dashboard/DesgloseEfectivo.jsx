@@ -102,9 +102,20 @@ export default function DesgloseEfectivo({
     );
 
   return (
-    <div className="space-y-5">
-      {grupo('Billetes', denominaciones?.billetes || [])}
-      {grupo('Monedas', denominaciones?.monedas || [])}
+    // ── DOS COLUMNAS CUANDO CABEN, Y NO ANTES ────────────────────────────
+    // Doce renglones en fila son mucha altura: en el cierre empujaban el
+    // resto del cuadro fuera de la pantalla y dejaban media pantalla en
+    // blanco al lado. Billetes y monedas caben uno junto al otro cuando hay
+    // ancho.
+    //
+    // La consulta es de CONTENEDOR (`@container`), no de ventana: el mismo
+    // componente vive en el cierre -ancho- y en la apertura -estrecho-, y lo
+    // que decide es el hueco que le toca, no el monitor.
+    <div className="@container space-y-5">
+      <div className="grid grid-cols-1 @xl:grid-cols-2 gap-x-8 gap-y-5 items-start">
+        {grupo('Billetes', denominaciones?.billetes || [])}
+        {grupo('Monedas', denominaciones?.monedas || [])}
+      </div>
 
       {/* El total es un RESULTADO. No hay dónde escribirlo, y eso es el diseño
           entero: si se pudiera teclear, se teclearía y el desglose se

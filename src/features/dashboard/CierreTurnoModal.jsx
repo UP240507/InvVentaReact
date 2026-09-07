@@ -22,6 +22,14 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 
+// El separador de miles no es adorno: con cuatro cifras, «$3302.50» se lee mal
+// justo donde hay que compararlo con lo que se acaba de contar.
+const dinero = (n) =>
+  `$${(Number(n) || 0).toLocaleString('es-MX', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 export default function CierreTurnoModal({ onClose }) {
   // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
   // el cierre de los componentes base.
@@ -152,7 +160,7 @@ export default function CierreTurnoModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[200] bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
         <div className="px-8 py-6 border-b border-adm-border flex justify-between items-center bg-adm-bg">
           <div>
             <h2 className="text-2xl font-black font-syne text-adm-ink">
@@ -192,52 +200,62 @@ export default function CierreTurnoModal({ onClose }) {
             RECORTABA: el PIN y el boton de confirmar dejaban de existir, no de
             verse. El cuerpo es lo que rueda; la cabecera, la firma y los
             botones se quedan donde se pueden alcanzar. */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-adm-panel">
-          {/* ARQUEO */}
-          <div className="space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-8 space-y-8 bg-white dark:bg-adm-panel">
+          {/* ── POR QUE UNA COLUMNA Y NO DOS ─────────────────────────────
+              Con el desglose, la columna del arqueo mide catorce renglones y
+              la de medios digitales tres: en dos columnas quedaba media
+              pantalla en blanco a la derecha, y el hueco crecia justo cuando
+              mas hay que leer. Ahora cada bloque usa el ancho entero y es el
+              propio desglose el que se reparte en dos. */}
+
+          {/* ── ARQUEO ── Va primero porque es lo que hay que HACER; los
+              medios digitales se leen, no se tocan. */}
+          <div className="space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
               Arqueo de Efectivo
             </h3>
-            <div className="bg-adm-bg rounded-ui p-5 border border-adm-border space-y-4">
-              <div className="space-y-2">
+            <div className="bg-adm-bg rounded-ui p-5 border border-adm-border space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   {
                     label: 'Fondo inicial',
-                    val: `$${(turnoActivo.fondo_inicial || 0).toFixed(2)}`,
-                    color: '',
+                    val: dinero(turnoActivo.fondo_inicial || 0),
+                    color: 'text-adm-ink',
                   },
                   {
                     label: 'Ingresos del turno',
-                    val: `+ $${(metricas?.efectivo || 0).toFixed(2)}`,
+                    val: `+ ${dinero(metricas?.efectivo || 0)}`,
                     color: 'text-adm-ok',
                   },
-                ].map(({ label, val, color }) => (
+                  {
+                    label: 'Sistema espera',
+                    val: dinero(esperadoEnCaja),
+                    color: 'text-adm-ink',
+                    fuerte: true,
+                  },
+                ].map(({ label, val, color, fuerte }) => (
                   <div
                     key={label}
-                    className="flex justify-between items-center"
+                    className={`rounded-ui px-4 py-3 border ${
+                      fuerte
+                        ? 'bg-white dark:bg-adm-panel border-adm-border'
+                        : 'border-transparent'
+                    }`}
                   >
-                    <span className="text-xs font-bold text-adm-muted">
+                    <p className="text-[10px] font-black text-adm-muted uppercase tracking-widest">
                       {label}
-                    </span>
-                    <span
-                      className={`font-mono font-bold ${color || 'text-adm-ink'}`}
+                    </p>
+                    <p
+                      className={`${fuerte ? 'text-xl font-black font-syne' : 'text-base font-bold'} ${color} tabular-nums`}
                     >
                       {val}
-                    </span>
+                    </p>
                   </div>
                 ))}
-                <div className="pt-2 border-t border-adm-border flex justify-between items-center">
-                  <span className="text-xs font-black text-adm-ink uppercase">
-                    Sistema espera
-                  </span>
-                  <span className="text-lg font-black font-syne text-adm-ink">
-                    ${esperadoEnCaja.toFixed(2)}
-                  </span>
-                </div>
               </div>
 
               <div className="pt-4 border-t border-adm-border">
-                <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-2 block">
+                <label className="text-[10px] font-black text-adm-info uppercase tracking-widest mb-3 block">
                   Cuenta el efectivo del cajón
                 </label>
                 <DesgloseEfectivo
@@ -250,7 +268,7 @@ export default function CierreTurnoModal({ onClose }) {
                 />
                 {conto && (
                   <div
-                    className={`mt-3 p-3 rounded-ui flex items-center justify-between border ${
+                    className={`mt-4 p-3 rounded-ui flex items-center justify-between border ${
                       diferencia === 0
                         ? 'bg-adm-ok/10 border-adm-ok/30 text-adm-ok'
                         : diferencia > 0
@@ -265,8 +283,8 @@ export default function CierreTurnoModal({ onClose }) {
                           ? 'Sobrante'
                           : 'Faltante'}
                     </span>
-                    <span className="font-black text-lg">
-                      ${Math.abs(diferencia).toFixed(2)}
+                    <span className="font-black text-lg tabular-nums">
+                      {dinero(Math.abs(diferencia))}
                     </span>
                   </div>
                 )}
@@ -274,42 +292,44 @@ export default function CierreTurnoModal({ onClose }) {
             </div>
           </div>
 
-          {/* MEDIOS DIGITALES */}
+          {/* ── MEDIOS DIGITALES ── */}
           <div className="space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
               Medios Digitales
             </h3>
-            {[
-              {
-                icon: CreditCard,
-                label: 'Tarjeta',
-                val: metricas?.tarjeta || 0,
-              },
-              {
-                icon: Landmark,
-                label: 'Transferencia',
-                val: metricas?.transferencia || 0,
-              },
-            ].map(({ icon: Icon, label, val }) => (
-              <div
-                key={label}
-                className="bg-adm-bg rounded-ui p-4 flex justify-between items-center border border-adm-border"
-              >
-                <span className="text-sm font-bold text-adm-muted dark:text-adm-ink flex items-center gap-2">
-                  <Icon className="w-4 h-4 text-adm-muted" /> {label}
-                </span>
-                <span className="font-mono font-black text-adm-ink">
-                  ${val.toFixed(2)}
-                </span>
-              </div>
-            ))}
-            <div className="bg-adm-danger/10 rounded-ui p-4 border border-adm-danger/20 flex justify-between items-center">
-              <span className="text-sm font-bold text-adm-danger flex items-center gap-2">
-                <Coins className="w-4 h-4" /> Propinas
-              </span>
-              <span className="font-mono font-black text-adm-danger">
-                ${(metricas?.propinas || 0).toFixed(2)}
-              </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  icon: CreditCard,
+                  label: 'Tarjeta',
+                  val: metricas?.tarjeta || 0,
+                  tono: 'border-adm-border bg-adm-bg text-adm-ink',
+                  iconoTono: 'text-adm-muted',
+                },
+                {
+                  icon: Landmark,
+                  label: 'Transferencia',
+                  val: metricas?.transferencia || 0,
+                  tono: 'border-adm-border bg-adm-bg text-adm-ink',
+                  iconoTono: 'text-adm-muted',
+                },
+                {
+                  icon: Coins,
+                  label: 'Propinas',
+                  val: metricas?.propinas || 0,
+                  tono: 'border-adm-danger/20 bg-adm-danger/10 text-adm-danger',
+                  iconoTono: 'text-adm-danger',
+                },
+              ].map(({ icon: Icon, label, val, tono, iconoTono }) => (
+                <div key={label} className={`rounded-ui p-4 border ${tono}`}>
+                  <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <Icon className={`w-3.5 h-3.5 ${iconoTono}`} /> {label}
+                  </span>
+                  <p className="font-mono font-black text-lg mt-1 tabular-nums">
+                    {dinero(val)}
+                  </p>
+                </div>
+              ))}
             </div>
             <div className="pt-4 flex items-center justify-between border-t border-adm-border">
               <div className="flex items-center gap-2 text-adm-muted">
@@ -322,8 +342,8 @@ export default function CierreTurnoModal({ onClose }) {
                 <p className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
                   Venta Total Neta
                 </p>
-                <p className="text-xl font-black text-adm-ink">
-                  ${(metricas?.totalVentas || 0).toFixed(2)}
+                <p className="text-xl font-black text-adm-ink tabular-nums">
+                  {dinero(metricas?.totalVentas || 0)}
                 </p>
               </div>
             </div>
@@ -341,10 +361,9 @@ export default function CierreTurnoModal({ onClose }) {
               PIN de quien autoriza el arqueo
             </label>
             <p className="text-xs font-bold text-adm-muted mb-3">
-              Firma los <strong>${contado.toFixed(2)}</strong> contados y la
-              diferencia de{' '}
-              <strong>${(arqueo.diferencia ?? 0).toFixed(2)}</strong>. Queda
-              guardado quién firmó.
+              Firma los <strong>{dinero(contado)}</strong> contados y la
+              diferencia de <strong>{dinero(arqueo.diferencia ?? 0)}</strong>.
+              Queda guardado quién firmó.
             </p>
             <input
               type="password"
