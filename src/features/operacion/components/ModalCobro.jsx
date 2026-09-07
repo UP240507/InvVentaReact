@@ -464,6 +464,7 @@ export default function ModalCobro({
           $
           {Math.max(0, saldoPendiente).toLocaleString('es-MX', {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       </div>
@@ -473,7 +474,11 @@ export default function ModalCobro({
             Cambio a entregar
           </span>
           <span className="font-black text-3xl text-ops-ok">
-            ${cambio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            $
+            {cambio.toLocaleString('es-MX', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </span>
         </div>
       )}
@@ -580,6 +585,7 @@ export default function ModalCobro({
                 $
                 {granTotal.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </p>
             </div>
@@ -592,6 +598,7 @@ export default function ModalCobro({
                   +$
                   {propinaTotal.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </p>
               </div>
@@ -652,6 +659,7 @@ export default function ModalCobro({
                       −$
                       {montoDescuento.toLocaleString('es-MX', {
                         minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
                       })}{' '}
                       ({round2(pctDescuento)}%)
                     </p>
@@ -772,6 +780,7 @@ export default function ModalCobro({
                               −$
                               {canjeDescuento.toLocaleString('es-MX', {
                                 minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
                               })}
                             </span>
                           )}
@@ -1049,6 +1058,7 @@ export default function ModalCobro({
                             $
                             {precioDisplay.toLocaleString('es-MX', {
                               minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
                             })}
                           </p>
                         </div>
@@ -1099,6 +1109,7 @@ export default function ModalCobro({
                       $
                       {subtotalSeleccion.toLocaleString('es-MX', {
                         minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
                       })}
                     </span>
                   </div>
@@ -1113,6 +1124,7 @@ export default function ModalCobro({
                   Dividir $
                   {granTotal.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}{' '}
                   entre:
                 </p>
@@ -1144,6 +1156,7 @@ export default function ModalCobro({
                   Toca de $
                   {montoPorPersona.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </p>
                 <button
@@ -1259,6 +1272,7 @@ export default function ModalCobro({
                   $
                   {totalBase.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </div>
@@ -1269,6 +1283,7 @@ export default function ModalCobro({
                     −$
                     {montoDescuento.toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                   </span>
                 </div>
@@ -1282,6 +1297,7 @@ export default function ModalCobro({
                     $
                     {propinaTotal.toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                   </span>
                 </div>
@@ -1309,6 +1325,7 @@ export default function ModalCobro({
                   $
                   {granTotal.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </h2>
               </div>
@@ -1361,6 +1378,7 @@ export default function ModalCobro({
                           $
                           {safeNumber(pago.monto).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </span>
                         <button
@@ -1460,6 +1478,7 @@ export default function ModalCobro({
                   $
                   {dialogoExcedente.monto.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>{' '}
                 excede el saldo por:
@@ -1468,6 +1487,7 @@ export default function ModalCobro({
                 $
                 {dialogoExcedente.excedente.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </p>
               <p className="text-sm text-ops-muted font-bold">

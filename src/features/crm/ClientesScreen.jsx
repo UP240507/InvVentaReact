@@ -280,6 +280,7 @@ export default function CrmScreen() {
           $
           {Number(c.total_gastado || 0).toLocaleString('es-MX', {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       ),
@@ -617,7 +618,7 @@ acking-widest px-2 flex justify-between"
                     $
                     {Number(clienteVivo.total_gastado || 0).toLocaleString(
                       'es-MX',
-                      { minimumFractionDigits: 2 },
+                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
                     )}
                   </p>
                 </div>
@@ -687,6 +688,7 @@ acking-widest px-2 flex justify-between"
                           $
                           {Number(v.total || 0).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </p>
                       </div>

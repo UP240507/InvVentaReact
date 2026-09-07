@@ -33,7 +33,10 @@ import { hoyLocalISO } from '../../lib/Fechas';
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const floor2 = (n) => Math.floor((Number(n) || 0) * 100) / 100;
 const money = (n) =>
-  (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  (Number(n) || 0).toLocaleString('es-MX', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 const METODOS = [
   {

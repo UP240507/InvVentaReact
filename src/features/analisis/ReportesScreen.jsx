@@ -40,7 +40,7 @@ import { supabase } from '../../api/supabase';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pct = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) : '0.0');
 
 // ─── KPI CARD ────────────────────────────────────────────────────────────────

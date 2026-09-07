@@ -203,6 +203,7 @@ export default function RecepcionScreen() {
           $
           {Number(o.total_estimado || o.total || 0).toLocaleString('es-MX', {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       ),
@@ -296,6 +297,7 @@ export default function RecepcionScreen() {
                             orden.total_estimado || orden.total || 0,
                           ).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </p>
                       </div>

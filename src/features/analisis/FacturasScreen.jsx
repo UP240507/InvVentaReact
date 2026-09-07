@@ -273,6 +273,7 @@ export default function FacturasScreen() {
           $
           {Number(f.total).toLocaleString('es-MX', {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       ),
@@ -426,6 +427,7 @@ export default function FacturasScreen() {
                           $
                           {Number(v.total).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </span>
                       </button>

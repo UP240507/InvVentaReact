@@ -140,7 +140,7 @@ export default function PerfilScreen() {
   }, [ventas, asistencias, nombre, hoyStr]);
 
   const fmt = (n) =>
-    `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+    `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // ── Teléfono → espejo en staff (offline-first) ─────────────────────────────
   const guardarTelefono = () => {

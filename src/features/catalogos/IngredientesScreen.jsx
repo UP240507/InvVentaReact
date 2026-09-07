@@ -288,6 +288,7 @@ export default function IngredientesScreen() {
             $
             {Number(item.precio).toLocaleString('es-MX', {
               minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
             })}
           </span>
           <span className="block text-[10px] text-adm-muted uppercase tracking-[0.14em]">

@@ -26,7 +26,7 @@
 import { arqueoDeDesglose } from '../../lib/Arqueo';
 
 const dinero = (n) =>
-  `$${(Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  `$${(Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** «1000» → «$1,000»; «0.5» → «50¢», que es como lo llama quien cuenta. */
 const etiqueta = (den) =>

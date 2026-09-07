@@ -646,7 +646,11 @@ export default function RecetasScreen() {
       ancho: '1%',
       celda: (r) => (
         <span className="text-adm-muted">
-          ${r._costo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          $
+          {r._costo.toLocaleString('es-MX', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </span>
       ),
     },
@@ -657,7 +661,11 @@ export default function RecetasScreen() {
       ancho: '1%',
       celda: (r) => (
         <span className="font-bold text-adm-ink">
-          ${r._precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+          $
+          {r._precio.toLocaleString('es-MX', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </span>
       ),
     },

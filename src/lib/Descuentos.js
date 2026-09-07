@@ -85,5 +85,5 @@ export function etiquetaDescuento(d) {
   if (!d || !d.tipo) return '';
   if (d.tipo === 'cortesia') return 'Cortesía';
   if (d.tipo === 'pct') return `−${Number(d.valor)}%`;
-  return `−$${Number(d.valor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  return `−$${Number(d.valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

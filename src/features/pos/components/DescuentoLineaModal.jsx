@@ -21,7 +21,7 @@ import {
 } from '../../../lib/Descuentos';
 
 const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const MODOS = [
   { id: 'pct', label: 'Porcentaje', icono: Percent },

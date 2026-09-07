@@ -377,6 +377,7 @@ export default function NominaScreen() {
                             Total: $
                             {linea.total_sueldo.toLocaleString('es-MX', {
                               minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
                             })}
                           </p>
                         </td>
@@ -391,6 +392,7 @@ export default function NominaScreen() {
                                 draft[linea.id_empleado]?.propinas || 0,
                               ).toLocaleString('es-MX', {
                                 minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
                               })}
                             </p>
                             <span className="text-[9px] font-black uppercase tracking-widest text-adm-ok">
@@ -426,6 +428,7 @@ export default function NominaScreen() {
                   $
                   {resumenNomina.totalSueldos.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </p>
               </div>
@@ -438,6 +441,7 @@ export default function NominaScreen() {
                   $
                   {resumenNomina.totalPropinas.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </p>
               </div>
@@ -450,6 +454,7 @@ export default function NominaScreen() {
                   $
                   {resumenNomina.granTotal.toLocaleString('es-MX', {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </p>
               </div>
@@ -516,6 +521,7 @@ export default function NominaScreen() {
                           $
                           {Number(nom.total_sueldos).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </p>
                       </div>
@@ -527,6 +533,7 @@ export default function NominaScreen() {
                           $
                           {Number(nom.total_propinas).toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </p>
                       </div>
@@ -540,6 +547,7 @@ export default function NominaScreen() {
                         $
                         {Number(nom.gran_total).toLocaleString('es-MX', {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </p>
                     </div>

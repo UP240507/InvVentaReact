@@ -1041,7 +1041,10 @@ export default function MesasScreen() {
                             $
                             {(mesa.orden_actual?.total || 0).toLocaleString(
                               'es-MX',
-                              { minimumFractionDigits: 0 },
+                              {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2,
+                              },
                             )}
                           </p>
                         )}

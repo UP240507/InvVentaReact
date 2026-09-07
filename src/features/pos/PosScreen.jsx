@@ -2049,6 +2049,7 @@ export default function PosScreen() {
                     $
                     {getPrecio(prod).toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                   </p>
                 </div>
@@ -2069,7 +2070,7 @@ export default function PosScreen() {
         // Sin `titulo`: el carrito ya trae su propia cabecera con el nombre de
         // la mesa y el contador de comensales.
         etiquetaAbrir={isMesa ? 'Ver comanda' : 'Ver carrito'}
-        resumen={`$${granTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+        resumen={`$${granTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         insignia={carrito.reduce((n, i) => n + (Number(i.cantidad) || 0), 0)}
         // Con el carrito vacío no hay nada que ver: la barra sólo taparía
         // productos. Aparece en cuanto entra la primera línea.
@@ -2159,6 +2160,7 @@ export default function PosScreen() {
                           $
                           {linea.neto.toLocaleString('es-MX', {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </p>
                         {linea.descuento > 0 && (
@@ -2167,6 +2169,7 @@ export default function PosScreen() {
                               $
                               {linea.bruto.toLocaleString('es-MX', {
                                 minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
                               })}
                             </span>
                             <span className="text-[10px] font-black uppercase tracking-widest text-ops-warn bg-ops-warn/10 border border-ops-warn/30 px-2 py-0.5 rounded-ui">
@@ -2281,6 +2284,7 @@ export default function PosScreen() {
                 $
                 {subtotal.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </span>
             </div>
@@ -2290,6 +2294,7 @@ export default function PosScreen() {
                 $
                 {totalIva.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </span>
             </div>
@@ -2299,6 +2304,7 @@ export default function PosScreen() {
                 $
                 {granTotal.toLocaleString('es-MX', {
                   minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 })}
               </span>
             </div>

@@ -1030,7 +1030,7 @@ export default function ConfiguracionScreen() {
                     Por cada $100.00 base cobrarás $
                     {(100 * (1 + Number(form.iva) / 100)).toLocaleString(
                       'es-MX',
-                      { minimumFractionDigits: 2 },
+                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
                     )}
                     .
                   </p>

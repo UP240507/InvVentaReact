@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ESTADO_UI = {
   libre: { texto: 'Libre', clase: 'text-ops-ok' },
