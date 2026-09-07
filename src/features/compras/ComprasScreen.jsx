@@ -42,6 +42,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { abrirFuera, motivoLegible } from '../../lib/Abrir';
 
+// Las flechitas del `type="number"` roban ancho, y en una casilla estrecha ese
+// ancho es justo el que le falta al numero. Nadie las usa: la cantidad se
+// teclea. Chromium las pinta salvo que se le diga, y WebView2 es Chromium.
+const SIN_FLECHAS =
+  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
 export default function ComprasScreen() {
   const {
     ordenesCompra,
@@ -135,6 +141,30 @@ export default function ComprasScreen() {
   const insumoElegido = (productos || []).find(
     (p) => String(p.id) === String(itemSeleccionado),
   );
+
+  // ── EL ANCHO DE CADA CASILLA, Y POR QUE TIENE QUE SUMAR DOCE ────────────
+  // La cantidad estaba en UNA de las doce columnas, con 14px de relleno a cada
+  // lado y las flechitas encima: quedaban unos veinte pixeles de texto y un
+  // «1500» salia cortado. Es el numero que entra al inventario y se teclea en
+  // cada linea de cada orden.
+  //
+  // Y sin empaque la fila sumaba once, asi que sobraba una columna al final.
+  // Por eso los anchos salen de un solo sitio: para poder verlos sumar.
+  const anchos =
+    empaquesDisponibles.length > 0
+      ? {
+          insumo: 'md:col-span-4',
+          empaque: 'md:col-span-3',
+          cantidad: 'md:col-span-2',
+          costo: 'md:col-span-2',
+          boton: 'md:col-span-1',
+        }
+      : {
+          insumo: 'md:col-span-5',
+          cantidad: 'md:col-span-2',
+          costo: 'md:col-span-3',
+          boton: 'md:col-span-2',
+        };
 
   // ─── MANEJADORES DE CARRITO ──────────────────────────────────────────
   const handleSelectProducto = (e) => {
@@ -483,6 +513,7 @@ export default function ComprasScreen() {
           $
           {Number(o.total).toLocaleString('es-MX', {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           })}
         </span>
       ),
@@ -635,13 +666,7 @@ export default function ComprasScreen() {
                     onSubmit={agregarAlCarrito}
                     className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
                   >
-                    <div
-                      className={
-                        empaquesDisponibles.length > 0
-                          ? 'md:col-span-4'
-                          : 'md:col-span-6'
-                      }
-                    >
+                    <div className={anchos.insumo}>
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest pl-2 mb-1 block">
                         Insumo
                       </label>
@@ -667,7 +692,7 @@ export default function ComprasScreen() {
                         teclea como toda la vida: un insumo sin empaques no es
                         un caso especial, es el caso por defecto. */}
                     {empaquesDisponibles.length > 0 && (
-                      <div className="md:col-span-3">
+                      <div className={anchos.empaque}>
                         <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
                           Se compra por
                         </label>
@@ -690,7 +715,7 @@ export default function ComprasScreen() {
                         </select>
                       </div>
                     )}
-                    <div className="md:col-span-1 text-center">
+                    <div className={anchos.cantidad}>
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
                         {empaqueElegido ? 'Cuántas' : 'Cant.'}
                       </label>
@@ -702,10 +727,10 @@ export default function ComprasScreen() {
                         aria-label="Cantidad"
                         value={cantidadItem}
                         onChange={(e) => setCantidadItem(e.target.value)}
-                        className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors"
+                        className={`w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ink outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors ${SIN_FLECHAS}`}
                       />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className={anchos.costo}>
                       <label className="text-[10px] font-black text-adm-muted uppercase tracking-widest mb-1 block">
                         {/* Con empaque, lo que se teclea es lo que cuesta UNO,
                             que es el número que viene en la factura. */}
@@ -721,13 +746,13 @@ export default function ComprasScreen() {
                         aria-label="Costo unitario"
                         value={costoItem}
                         onChange={(e) => setCostoItem(e.target.value)}
-                        className="w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ok outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors"
+                        className={`w-full bg-adm-bg border-2 border-adm-field rounded-ui p-3.5 font-black text-adm-ok outline-none focus:border-adm-ok dark:focus:border-adm-ok text-center transition-colors ${SIN_FLECHAS}`}
                       />
                     </div>
                     <button
                       type="submit"
                       aria-label="Agregar a la orden"
-                      className="md:col-span-2 w-full bg-adm-ink dark:bg-adm-danger text-adm-danger-fg p-4 rounded-ui font-black hover:bg-adm-ink dark:hover:bg-adm-warn transition-all active:scale-95 flex items-center justify-center shadow-lg"
+                      className={`${anchos.boton} w-full bg-adm-ink dark:bg-adm-danger text-adm-danger-fg p-4 rounded-ui font-black hover:bg-adm-ink dark:hover:bg-adm-warn transition-all active:scale-95 flex items-center justify-center shadow-lg`}
                     >
                       <PlusCircle className="w-6 h-6" />
                     </button>
@@ -820,10 +845,18 @@ export default function ComprasScreen() {
                               </td>
                               <td className="p-4 text-right font-black text-adm-ink">
                                 $
-                                {(
-                                  item.cantidad * item.precio_unitario
+                                {/* El MISMO numero que suma el resumen. Volver
+                                    a multiplicar aqui reabre la puerta del
+                                    centavo: 30 kg a 3.333... no da 100 exacto
+                                    en coma flotante, y el renglon acabaria
+                                    diciendo 99.99 debajo de un total de 100.
+                                    Las lineas viejas no traen `total`. */}
+                                {(item.total != null
+                                  ? Number(item.total)
+                                  : item.cantidad * item.precio_unitario
                                 ).toLocaleString('es-MX', {
                                   minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
                                 })}
                               </td>
                               <td className="p-4 text-center">
@@ -872,6 +905,7 @@ export default function ComprasScreen() {
                         $
                         {subtotal.toLocaleString('es-MX', {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </span>
                     </div>
@@ -881,6 +915,7 @@ export default function ComprasScreen() {
                         $
                         {ivaMonto.toLocaleString('es-MX', {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </span>
                     </div>
@@ -890,6 +925,7 @@ export default function ComprasScreen() {
                         $
                         {total.toLocaleString('es-MX', {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </span>
                     </div>
