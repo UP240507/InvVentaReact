@@ -54,7 +54,7 @@ export default function AbrirTurnoModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[200] bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
         <div className="px-8 py-6 border-b border-adm-border flex justify-between items-center bg-adm-bg">
           <div>
             <h2 className="text-2xl font-black font-syne text-adm-ink">
@@ -72,7 +72,14 @@ export default function AbrirTurnoModal({ onClose }) {
           </button>
         </div>
 
-        <div className="p-8 bg-white dark:bg-adm-panel space-y-6">
+        {/* ── EL CUADRO TIENE QUE CABER EN LA PANTALLA ──────────────────
+            Contar por denominaciones son doce renglones donde antes habia una
+            casilla. Con `overflow-hidden` y sin altura maxima, el panel crecia
+            por debajo del borde de la pantalla y lo que quedaba fuera se
+            RECORTABA: el PIN y el boton de confirmar dejaban de existir, no de
+            verse. El cuerpo es lo que rueda; la cabecera, la firma y los
+            botones se quedan donde se pueden alcanzar. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-8 bg-white dark:bg-adm-panel space-y-6">
           <div className="flex items-center gap-4 p-4 bg-adm-ok/10 rounded-ui border border-adm-ok/30">
             <div className="w-12 h-12 bg-adm-ok/15 rounded-full flex items-center justify-center shrink-0">
               <Wallet className="w-6 h-6 text-adm-ok" />

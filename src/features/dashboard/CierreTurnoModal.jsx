@@ -152,7 +152,7 @@ export default function CierreTurnoModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[200] bg-adm-ink/60 dark:bg-adm-bg/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
+      <div className="bg-white dark:bg-adm-panel rounded-ui-lg border border-adm-border shadow-2xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 transition-colors">
         <div className="px-8 py-6 border-b border-adm-border flex justify-between items-center bg-adm-bg">
           <div>
             <h2 className="text-2xl font-black font-syne text-adm-ink">
@@ -185,7 +185,14 @@ export default function CierreTurnoModal({ onClose }) {
           </div>
         )}
 
-        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-adm-panel">
+        {/* ── EL CUADRO TIENE QUE CABER EN LA PANTALLA ──────────────────
+            Contar por denominaciones son doce renglones donde antes habia una
+            casilla. Con `overflow-hidden` y sin altura maxima, el panel crecia
+            por debajo del borde de la pantalla y lo que quedaba fuera se
+            RECORTABA: el PIN y el boton de confirmar dejaban de existir, no de
+            verse. El cuerpo es lo que rueda; la cabecera, la firma y los
+            botones se quedan donde se pueden alcanzar. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-adm-panel">
           {/* ARQUEO */}
           <div className="space-y-6">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-adm-muted">
