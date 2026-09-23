@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
-import { useAuthStore } from '../auth/useAuthStore';
 import { calcularVenta } from '../../lib/Fiscal';
 import { useAtajos } from '../../hooks/useAtajos';
 import { useAcoplado } from '../../hooks/useAcoplado';
@@ -26,7 +25,6 @@ import {
   ArrowDownAZ,
   TrendingUp,
   Link2,
-  Link2Off,
   BellRing,
   BookMarked,
   Clock,
@@ -38,8 +36,6 @@ const nuevoId = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // ¿La mesa tiene una comanda TOTALMENTE lista esperando ser entregada?
 // (todos los items listos en KDS, y la comanda aún no entregada/cerrada).
@@ -119,9 +115,6 @@ export default function MesasScreen() {
     (mesas || []).filter(
       (m) => String(m.mesa_principal_id) === String(principalId),
     );
-
-  // ¿Esta mesa es satélite (está unida a otra)?
-  const esSatelite = (mesa) => mesa.mesa_principal_id != null;
 
   // Capacidad combinada: la propia + la de todas sus satélites.
   const capacidadCombinada = (mesa) =>

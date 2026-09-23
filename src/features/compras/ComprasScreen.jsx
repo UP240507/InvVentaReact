@@ -330,7 +330,7 @@ export default function ComprasScreen() {
       });
 
       setOrdenExitosa(nuevaOrden);
-    } catch (error) {
+    } catch {
       showToast('Error al generar la orden.', 'error');
     } finally {
       setIsSubmitting(false);

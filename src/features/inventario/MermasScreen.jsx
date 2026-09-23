@@ -86,7 +86,7 @@ export default function MermasScreen() {
 
     const stockActual = Number(producto.stock || 0);
     const cantidad = Number(cantidadAjuste);
-    let nuevoStock = stockActual;
+    let nuevoStock;
     let esAlta = false;
 
     if (tipoAjuste === 'Alta de Inventario') {

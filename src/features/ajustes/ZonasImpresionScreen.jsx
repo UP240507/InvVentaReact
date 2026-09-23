@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { PageShell, PageHeader, Button } from '../../components/ui';
-import { useSyncStore } from '../../store/useSyncStore';
 import {
   Printer,
   ReceiptText,
@@ -24,7 +23,6 @@ const iconoEstacion = (nombre) => {
 export default function ZonasImpresionScreen() {
   const { configuracion, recetas, updateConfiguracion, showToast } =
     useAppStore();
-  const { enqueueAction } = useSyncStore();
 
   const [zonas, setZonas] = useState(['Cocina', 'Barra']);
   const [nuevaZona, setNuevaZona] = useState('');

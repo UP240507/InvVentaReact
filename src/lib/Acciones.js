@@ -126,5 +126,5 @@ export function accionesDisponibles(ctx = {}) {
   // y no haga nada al pulsarla.
   return CATALOGO.filter(
     (a) => a.visible(ctx) && typeof a.ejecutar === 'function',
-  ).map(({ visible, ...resto }) => resto); // eslint-disable-line no-unused-vars
+  ).map(({ visible, ...resto }) => resto);
 }

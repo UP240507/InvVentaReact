@@ -263,7 +263,7 @@ localDB
     asistencias: 'id',
     comandas: 'id',
   })
-  .upgrade((tx) => {
+  .upgrade(() => {
     // Dexie reescribirá la tabla con el nuevo PK automáticamente.
     // Los registros sin campo 'id' quedarán con id autogenerado (Dexie asigna undefined→auto).
     console.log('🔄 [DB v13] Migrando roles_permisos PK: rol → id');

@@ -31,8 +31,11 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const RAIZ = path.resolve(__dirname, '..');
+// `__dirname` no existe en un modulo ESM, y aunque vitest lo tolere, eslint lo
+// marca. `import.meta.url` es la forma que no depende de eso.
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Censo verificado a mano el 04-sep-2026. Clave: ruta relativa a `src/`. */
 const CENSO = {
