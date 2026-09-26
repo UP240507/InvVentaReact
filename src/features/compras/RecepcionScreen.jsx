@@ -16,6 +16,7 @@ import {
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { franjaAlEscribir } from '../../lib/Franjas';
+import { recepcionDeLinea } from '../../lib/Costos';
 import {
   PackageCheck,
   Download,
@@ -89,28 +90,24 @@ export default function RecepcionScreen() {
       if (prodIndex !== -1) {
         const prod = productosActualizados[prodIndex];
 
-        // 1. Variables de Stock
+        // ── STOCK Y COSTO PROMEDIO ────────────────────────────────────
+        // La cuenta vive en `lib/Costos.js` y no aquí desde el 26-sep. No es
+        // orden: es que este número es el de más largo alcance del sistema
+        // —entra al costo de cada platillo con este insumo— y no se corrige
+        // solo: el promedio se diluye durante meses. Estaba suelto en esta
+        // pantalla, sin una sola prueba.
         const stockAnterior = Number(prod.stock || 0);
         const cantidadRecibida = Number(item.cantidad || 0);
-        const nuevoStock = Number(
-          (stockAnterior + cantidadRecibida).toFixed(3),
-        );
-
-        // 2. Costo Promedio Ponderado
         const costoAnterior = Number(prod.precio || 0);
         const costoRecibido = Number(item.precio_unitario || costoAnterior);
-        let nuevoCostoPromedio = costoAnterior;
 
-        if (nuevoStock > 0) {
-          const valorInventarioAnterior = stockAnterior * costoAnterior;
-          const valorEntradaNueva = cantidadRecibida * costoRecibido;
-          nuevoCostoPromedio = Number(
-            (
-              (valorInventarioAnterior + valorEntradaNueva) /
-              nuevoStock
-            ).toFixed(2),
-          );
-        }
+        const { stock: nuevoStock, costo: nuevoCostoPromedio } =
+          recepcionDeLinea({
+            stockAnterior,
+            costoAnterior,
+            cantidadRecibida,
+            costoRecibido,
+          });
 
         productosActualizados[prodIndex] = {
           ...prod,
