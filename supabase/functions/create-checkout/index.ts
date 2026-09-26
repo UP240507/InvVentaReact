@@ -169,6 +169,44 @@ Deno.serve(async (req) => {
       customerId = customer.id;
     }
 
+    // 4.b NADIE CONTRATA DOS VECES — el candado, no el letrero.
+    //
+    // `mode: 'subscription'` crea una suscripción NUEVA cada vez. Stripe no
+    // impide que un mismo cliente tenga varias a la vez: es una función suya,
+    // legítima para quien vende varios productos. Aquí no: una cuenta paga un
+    // plan. El 26-sep, en pruebas, tres clics dejaron TRES suscripciones de
+    // MXN 11,990 sobre el mismo cliente y la misma tarjeta, sin un solo error
+    // en pantalla.
+    //
+    // Se le pregunta a STRIPE y no a nuestra tabla a propósito: la fila de
+    // `suscripciones` la escribe el webhook, así que va un momento por detrás
+    // —y si el webhook falló, va por detrás para siempre—. Quien sabe de
+    // verdad qué se está cobrando es Stripe.
+    //
+    // `past_due` y `unpaid` cuentan como vivas: un pago que falló no borra la
+    // suscripción, y contratar encima deja dos —la impagada y la nueva—. Lo
+    // que hace falta en ese caso es cambiar la tarjeta, que es el portal.
+    const VIVAS = ['active', 'trialing', 'past_due', 'unpaid'];
+    if (sus?.stripe_customer_id) {
+      const existentes = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+        limit: 100,
+      });
+      const viva = existentes.data.find((x) => VIVAS.includes(x.status));
+      if (viva)
+        return json(
+          {
+            error:
+              'Ya tienes una suscripcion activa. Para cambiar la tarjeta, el plan o cancelar, entra en «Tarjeta, facturas y cancelacion»: contratar otra vez te cobraria dos veces.',
+            codigo: 'ya_tiene_suscripcion',
+            suscripcion_id: viva.id,
+            estado_stripe: viva.status,
+          },
+          409,
+        );
+    }
+
     // 5. Checkout Session (suscripción anual con renovación automática).
     //    El webhook hará la escritura en BD con los metadata de aquí.
     const session = await stripe.checkout.sessions.create({

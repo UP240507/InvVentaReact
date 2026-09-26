@@ -18,6 +18,7 @@ import {
   cargarCatalogo,
   precioMXN,
 } from './checkout';
+import { accionDeCobro } from './Suscripcion';
 
 // ─── Fase 1: BillingScreen real (editorial adm-*) ────────────────────────────
 // Muestra plan actual + uso vs límites, catálogo de upgrade y dispara el
@@ -68,6 +69,10 @@ export default function BillingScreen() {
       : 0;
 
   const estadoUi = ESTADO_UI[estado] ?? ESTADO_UI.cancelado;
+
+  // Con una suscripción viva en Stripe, contratar otra vez NO es una opción:
+  // `mode: 'subscription'` crea una segunda y cobra las dos. Ver `Suscripcion.js`.
+  const accion = accionDeCobro(suscripcion);
   const addonsContratados = Array.isArray(suscripcion?.addons)
     ? suscripcion.addons
     : [];
@@ -209,24 +214,37 @@ export default function BillingScreen() {
             <ShieldCheck className="w-4 h-4" /> Renovación
           </h3>
           <p className="text-sm leading-relaxed mb-6">
-            Anualidad con renovación automática. El pago se procesa de forma
-            segura en Stripe; los precios no incluyen IVA.
+            {accion === 'portal'
+              ? 'Anualidad con renovación automática. La tarjeta, las facturas, el cambio de plan y la cancelación se gestionan en Stripe.'
+              : 'Anualidad con renovación automática. El pago se procesa de forma segura en Stripe; los precios no incluyen IVA.'}
           </p>
           {suscripcion?.cancelar_al_final && (
             <p className="text-xs font-semibold text-adm-danger mb-4">
               Cancelación programada al final del periodo.
             </p>
           )}
-          <button
-            onClick={() =>
-              handleCheckout(suscripcion?.plan ?? 'basico', addonsContratados)
-            }
-            disabled={cargando !== null}
-            className="mt-auto w-full py-3 bg-adm-accent text-adm-accent-fg rounded-ui font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all"
-          >
-            {cargando ? 'Abriendo Stripe…' : 'Renovar / actualizar pago'}
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {/* ── CONTRATAR SOLO CUANDO NO HAY NADA VIVO ────────────────────
+              El botón decía «Renovar / actualizar pago» y abría un Checkout
+              nuevo SIEMPRE. Quien quería cambiar su tarjeta pulsaba éste —es
+              el que lleva la palabra «pago»— y acababa con una segunda
+              suscripción cobrándose en paralelo. Con una viva, este botón no
+              existe: el del portal pasa a ser el principal. */}
+          {accion === 'contratar' && (
+            <button
+              onClick={() =>
+                handleCheckout(suscripcion?.plan ?? 'basico', addonsContratados)
+              }
+              disabled={cargando !== null}
+              className="mt-auto w-full py-3 bg-adm-accent text-adm-accent-fg rounded-ui font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              {cargando
+                ? 'Abriendo Stripe…'
+                : estado === 'trial'
+                  ? 'Contratar'
+                  : 'Reactivar suscripción'}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
           {suscripcion?.stripe_customer_id && (
             <button
               onClick={async () => {
@@ -240,7 +258,11 @@ export default function BillingScreen() {
                 }
               }}
               disabled={cargando !== null}
-              className="w-full mt-3 py-2.5 rounded-ui font-bold text-sm text-adm-sidebar-fg border border-adm-sidebar-fg/20 hover:bg-adm-sidebar-2 disabled:opacity-50 transition-colors"
+              className={
+                accion === 'portal'
+                  ? 'mt-auto w-full py-3 bg-adm-accent text-adm-accent-fg rounded-ui font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all'
+                  : 'w-full mt-3 py-2.5 rounded-ui font-bold text-sm text-adm-sidebar-fg border border-adm-sidebar-fg/20 hover:bg-adm-sidebar-2 disabled:opacity-50 transition-colors'
+              }
             >
               {cargando === 'portal'
                 ? 'Abriendo portal…'
