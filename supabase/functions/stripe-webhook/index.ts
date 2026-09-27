@@ -31,6 +31,24 @@ const ESTADO_MAP: Record<string, string> = {
 const fecha = (unix?: number | null) =>
   unix ? new Date(unix * 1000).toISOString().slice(0, 10) : null;
 
+// `current_period_end` vive en la RAÍZ de la suscripción en la versión de API
+// que usa stripe@17, y en los ITEMS en las versiones nuevas. Se leen las dos:
+// si algún día la SDK sube de versión, esto sigue devolviendo la fecha en vez
+// de empezar a escribir null en silencio encima de la fecha buena.
+const vencimientoDe = (sub?: Stripe.Subscription | null): string | null => {
+  if (!sub) return null;
+  const raiz = (sub as { current_period_end?: number | null })
+    .current_period_end;
+  if (raiz) return fecha(raiz);
+  const conItems = sub as {
+    items?: { data?: Array<{ current_period_end?: number | null }> };
+  };
+  const fines = (conItems.items?.data ?? [])
+    .map((i) => i.current_period_end)
+    .filter((n): n is number => typeof n === 'number' && n > 0);
+  return fines.length ? fecha(Math.max(...fines)) : null;
+};
+
 Deno.serve(async (req) => {
   const STRIPE_KEY = Deno.env.get('STRIPE_SECRET_KEY');
   const WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET');
@@ -85,21 +103,29 @@ Deno.serve(async (req) => {
           ? await stripe.subscriptions.retrieve(subId)
           : null;
 
-        const { error } = await admin.from('suscripciones').upsert(
-          {
-            restaurante_id: restauranteId,
-            plan: planId,
-            estado: 'activo',
-            fecha_inicio: fecha(sub?.current_period_start) ?? fecha(Date.now() / 1000),
-            fecha_vencimiento: fecha(sub?.current_period_end),
-            addons, // array → jsonb (supabase-js serializa; un string sería jsonb-string)
-            trial_hasta: null,
-            cancelar_al_final: false,
-            stripe_customer_id: String(s.customer ?? '') || null,
-            stripe_subscription_id: subId || null,
-          },
-          { onConflict: 'restaurante_id' },
-        );
+        // El vencimiento se INCLUYE sólo si Stripe lo dio. Si no, se OMITE la
+        // columna: en un upsert que cae en UPDATE, omitirla conserva la fecha
+        // que ya estaba en vez de borrar con null la vigencia de un cliente
+        // que acaba de pagar. Si es un INSERT queda nula, y de eso se encarga
+        // la ventana de cortesía de `derivarPlan`, que además lo avisa.
+        const vencimiento = vencimientoDe(sub);
+        const fila: Record<string, unknown> = {
+          restaurante_id: restauranteId,
+          plan: planId,
+          estado: 'activo',
+          fecha_inicio:
+            fecha(sub?.current_period_start) ?? fecha(Date.now() / 1000),
+          addons, // array → jsonb (supabase-js serializa; un string sería jsonb-string)
+          trial_hasta: null,
+          cancelar_al_final: false,
+          stripe_customer_id: String(s.customer ?? '') || null,
+          stripe_subscription_id: subId || null,
+        };
+        if (vencimiento) fila.fecha_vencimiento = vencimiento;
+
+        const { error } = await admin
+          .from('suscripciones')
+          .upsert(fila, { onConflict: 'restaurante_id' });
         if (error) throw error;
 
         // Candado Fundador: al llegar a 10 activos, se apaga en el catálogo.
@@ -118,11 +144,16 @@ Deno.serve(async (req) => {
       // ── Cambios de la suscripción (renovación, cancelación programada) ──
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
+        // Igual que en el alta: sin fecha, NO se toca la columna. Este era el
+        // camino por el que un `customer.subscription.updated` cualquiera (un
+        // cambio de tarjeta, por ejemplo) podía dejar en null la vigencia de
+        // una cuenta que estaba perfecta.
         const patch: Record<string, unknown> = {
           estado: ESTADO_MAP[sub.status] ?? 'moroso',
-          fecha_vencimiento: fecha(sub.current_period_end),
           cancelar_al_final: sub.cancel_at_period_end === true,
         };
+        const vencimiento = vencimientoDe(sub);
+        if (vencimiento) patch.fecha_vencimiento = vencimiento;
         const { error } = await admin
           .from('suscripciones')
           .update(patch)

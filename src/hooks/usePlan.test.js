@@ -105,13 +105,120 @@ describe('derivarPlan · vigencia', () => {
     }
   });
 
-  it('RIESGO: una cuenta ACTIVA sin fecha_vencimiento queda FUERA', () => {
-    // `fecha_vencimiento` es nullable desde la migración del 25-jul. Si el
-    // webhook no la escribe, el cliente aparece como activo en la base y como
-    // NO vigente en la caja: paywall con la suscripción pagada. Queda afirmado
-    // para que se vea venir, no para bendecirlo.
+  // ── La cuenta de cobro SIN fecha de vencimiento ───────────────────────────
+  // `fecha_vencimiento` es nullable desde la migración del 25-jul y la escribe
+  // sólo el webhook de Stripe. Cuando falta, el cliente aparece como activo en
+  // la base: pagó. La decisión (26-sep) es ventana de cortesía + aviso, no
+  // paywall y no barra libre.
+  it('DECISIÓN: una cuenta activa sin fecha entra durante la ventana, y se avisa', () => {
+    const p = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      updated_at: '2026-09-25T10:00:00.000Z', // el webhook escribió ayer
+    });
+    expect(p.vigente).toBe(true);
+    expect(p.sinFechaVencimiento).toBe(true);
+    expect(p.diasRestantes).toBeGreaterThan(0);
+  });
+
+  it('la ventana se agota: pasados los días, la cuenta sin fecha queda fuera', () => {
+    // Lo que distingue esta decisión de «regalar el servicio»: la ventana tiene
+    // fondo. Ocho días después de la última vez que alguien tocó la fila, no.
+    const p = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      updated_at: '2026-09-18T10:00:00.000Z',
+    });
+    expect(p.vigente).toBe(false);
+    expect(p.sinFechaVencimiento).toBe(true);
+    expect(p.diasRestantes).toBe(0);
+  });
+
+  it('el ancla es updated_at, NO el alta del cliente', () => {
+    // Es la pieza que hace que esto funcione: el webhook que borra la fecha
+    // toca `updated_at` en el mismo UPDATE (trigger en Postgres), así que la
+    // ventana empieza a contar en el instante del fallo. Anclarla a
+    // `fecha_inicio` dejaría fuera de inmediato a un cliente de hace un año.
+    const viejoCliente = {
+      estado: 'activo',
+      plan: 'basico',
+      fecha_inicio: '2025-01-01',
+      created_at: '2025-01-01T00:00:00.000Z',
+      updated_at: '2026-09-26T09:00:00.000Z', // el webhook acaba de fallar
+    };
+    expect(derivarPlan(viejoCliente).vigente).toBe(true);
+  });
+
+  it('sin updated_at cae a fecha_inicio, y luego a created_at', () => {
+    const porInicio = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      fecha_inicio: '2026-09-25',
+    });
+    expect(porInicio.vigente).toBe(true);
+
+    const porCreated = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      created_at: '2026-09-25T10:00:00.000Z',
+    });
+    expect(porCreated.vigente).toBe(true);
+  });
+
+  it('sin NINGUNA fecha desde la que contar, no es vigente', () => {
+    // Una ventana sin ancla sería vigencia infinita, porque se recalcularía
+    // desde «ahora» en cada render. Imposible en una fila nuestra —las tres
+    // columnas son NOT NULL— pero un cache viejo a medias no puede abrir la
+    // caja para siempre.
     const p = derivarPlan({ estado: 'activo', plan: 'basico' });
     expect(p.vigente).toBe(false);
+    expect(p.sinFechaVencimiento).toBe(true);
+  });
+
+  it('una fecha basura no cuenta como ancla', () => {
+    const p = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      updated_at: 'no-es-una-fecha',
+    });
+    expect(p.vigente).toBe(false);
+  });
+
+  it('un MOROSO sin fecha también alcanza la ventana', () => {
+    const p = derivarPlan({
+      estado: 'moroso',
+      plan: 'basico',
+      updated_at: '2026-09-25T10:00:00.000Z',
+    });
+    expect(p.vigente).toBe(true);
+    expect(p.sinFechaVencimiento).toBe(true);
+  });
+
+  it('la ventana NO alcanza a suspendido, cancelado ni trial sin fecha', () => {
+    // La cortesía es para quien pagó. Un trial sin `trial_hasta` no pagó nada.
+    for (const estado of ['suspendido', 'cancelado', 'trial']) {
+      const p = derivarPlan({
+        estado,
+        plan: 'basico',
+        updated_at: '2026-09-26T09:00:00.000Z',
+      });
+      expect(p.vigente).toBe(false);
+      expect(p.sinFechaVencimiento).toBe(false);
+    }
+  });
+
+  it('con fecha buena, la bandera de aviso NO se prende', () => {
+    // Control: el aviso tiene que aparecer sólo cuando falta la fecha. Si se
+    // prendiera siempre, la pantalla avisaría de un fallo que no existe y el
+    // aviso dejaría de significar algo.
+    const p = derivarPlan({
+      estado: 'activo',
+      plan: 'basico',
+      fecha_vencimiento: '2027-01-01',
+      updated_at: '2026-09-26T09:00:00.000Z',
+    });
+    expect(p.vigente).toBe(true);
+    expect(p.sinFechaVencimiento).toBe(false);
   });
 
   it('los días restantes se redondean hacia arriba y nunca son negativos', () => {

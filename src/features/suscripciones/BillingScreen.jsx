@@ -46,6 +46,7 @@ export default function BillingScreen() {
     limiteEmpleados,
     modulos,
     diasRestantes,
+    sinFechaVencimiento,
   } = usePlan();
 
   const [catalogo, setCatalogo] = useState({ planes: [], addons: [] });
@@ -117,6 +118,24 @@ export default function BillingScreen() {
       {error && (
         <div className="flex items-center gap-2 px-4 py-3 bg-adm-danger/5 border border-adm-danger/40 rounded-ui mb-6 text-adm-danger text-sm font-semibold">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
+      {/* ── Falta la fecha de vencimiento ──────────────────────────────────
+          La escribe SÓLO el webhook de Stripe. Si falta, la caja sigue
+          abierta una ventana corta (ver `derivarPlan`) para no dejar fuera a
+          quien pagó, pero el fallo tiene que VERSE: un dato que falta en
+          silencio es el que nadie arregla. */}
+      {sinFechaVencimiento && (
+        <div className="flex items-start gap-2 px-4 py-3 bg-adm-warn/10 border border-adm-warn/40 rounded-ui mb-6 text-adm-warn text-sm font-semibold">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            No tenemos la fecha de tu próximo cobro. Tu cuenta sigue abierta
+            {diasRestantes > 0
+              ? ` ${diasRestantes} día${diasRestantes === 1 ? '' : 's'} más`
+              : ''}{' '}
+            mientras se sincroniza con Stripe. Entra a «Administrar suscripción»
+            para ver tu periodo real.
+          </span>
         </div>
       )}
 
