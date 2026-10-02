@@ -160,7 +160,12 @@ export function opcionesElegidas(grupos = [], seleccion = vacia) {
         // Se conservan tal cual vienen. No se convierten a número ni se ponen
         // a 0: un `null` dice «no configurado» y un 0 diría «configurado en
         // cero», y esa diferencia importará cuando esto se conecte.
-        precio: op?.precio ?? null,
+        // El catálogo guarda `precio_extra` (ModificadoresScreen); aquí se
+        // leía `precio`, que no existe en ninguna opción real. Nadie lo
+        // notó porque nadie consumía el dato: el día que se conectara, los
+        // extras habrían salido gratis sin un solo error. `precio` queda de
+        // respaldo para opciones que alguien escribiera a mano.
+        precio: op?.precio_extra ?? op?.precio ?? null,
         id_producto: op?.id_producto ?? null,
         cantidad: op?.cantidad ?? null,
       });

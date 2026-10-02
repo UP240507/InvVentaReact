@@ -203,6 +203,27 @@ describe('opcionesElegidas', () => {
     const g = gruposDeProducto(HAMBURGUESA, CATALOGO);
     expect(opcionesElegidas(g, { 1: ['999'] })).toEqual([]);
   });
+
+  it('lee el precio de `precio_extra`, que es donde lo guarda el catálogo', () => {
+    // Forma calcada de la fila de AZUL (01-oct): ModificadoresScreen escribe
+    // `precio_extra`. Leer sólo `precio` devolvía null para toda opción real.
+    const grupo = {
+      id: 7,
+      nombre: 'Extras',
+      tipo: 'multiple',
+      opciones: [
+        {
+          id_opcion: 71,
+          nombre: 'Extra Arrachera',
+          id_producto: 1,
+          cantidad: 0.1,
+          precio_extra: 56,
+        },
+      ],
+    };
+    const [op] = opcionesElegidas([grupo], { 7: ['71'] });
+    expect(op.precio).toBe(56);
+  });
 });
 
 describe('sublineasDe', () => {
