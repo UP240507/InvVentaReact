@@ -18,18 +18,15 @@
  * en el JSX del modal, la única forma de comprobarla sería a mano, tocando la
  * pantalla, que es justo lo que no se va a hacer un viernes por la noche.
  *
- * ── EL ALCANCE ES DELIBERADAMENTE CORTO ─────────────────────────────────────
- * **Las opciones NO suman precio ni descuentan inventario.** No es un olvido:
- * es la condición para que esto pueda entrar dos días antes de la prueba de
- * campo. Lo que se verifica el sábado es que el stock se descuenta bien; meter
- * código nuevo en el camino del inventario esa misma semana convertiría un
- * fallo de modificadores en un fallo de inventario, y no habría forma de saber
- * cuál de los dos fue.
+ * ── EL ALCANCE, ENTONCES Y AHORA ────────────────────────────────────────────
+ * Hasta el 01-oct **las opciones no sumaban precio ni descontaban inventario**,
+ * a propósito: era la condición para que esto entrara dos días antes de la
+ * prueba de campo de agosto sin meter código nuevo en el camino del stock.
  *
- * Los campos `precio` e `id_producto` de cada opción SE LEEN y se dejan
- * disponibles en `opcionesElegidas()` — para que el día que se conecten no haya
- * que volver a tocar esto — pero nadie los consume todavía. Ver
- * `docs/PENDIENTE_LUNES.md` §8.
+ * Desde el 01-oct sí, vía `lineaConOpciones()`: el precio de la opción se suma
+ * a la línea y su insumo entra en los insumos de la línea, que es lo que leen
+ * el cobro, la comanda de mesa y `verificarStock`. Ver la cabecera de esa
+ * función para el modelo.
  */
 
 /** Una selección siempre es `{ [grupoId]: [opcionId, ...] }`. */
@@ -141,9 +138,9 @@ export function seleccionCompleta(grupos = [], seleccion = vacia) {
 /**
  * Las opciones elegidas, aplanadas y con su grupo al lado.
  *
- * Aquí es donde viajan `precio`, `id_producto` y `cantidad` — hoy nadie los
- * mira (ver la cabecera), pero salen de una sola función para que conectarlos
- * el día de mañana sea un cambio en un sitio y no una búsqueda por el repo.
+ * Aquí es donde viajan `precio`, `id_producto` y `cantidad`, y salen de una
+ * sola función: `lineaConOpciones()` los consume desde aquí y de ningún otro
+ * sitio, así que un cambio de nombre en el catálogo se arregla en un lugar.
  */
 export function opcionesElegidas(grupos = [], seleccion = vacia) {
   const out = [];
@@ -172,6 +169,102 @@ export function opcionesElegidas(grupos = [], seleccion = vacia) {
     }
   }
   return out;
+}
+
+/** A centavos enteros y de vuelta: sumar 3.10 + 0.20 en coma flotante no da 3.30. */
+const aCentavos = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
+
+/**
+ * Lo que las opciones elegidas le hacen a la línea: precio e insumos.
+ *
+ * ── EL MODELO (decidido con Chris, 01-oct) ─────────────────────────────────
+ * Un extra es **un insumo, una cantidad y un precio colgados de la opción** —
+ * los tres campos que el catálogo de modificadores ya pedía desde el principio.
+ * No es un producto vendible con receta propia, que era lo que proponía el
+ * diseño del 14-ago: para las bebidas de AZUL (shot, crema, jarabe, leche
+ * vegetal) un extra siempre es un solo insumo, y el modelo simple no cierra la
+ * puerta al otro.
+ *
+ * El mismo mecanismo sirve para configurar: si el latte NO lleva leche en su
+ * receta y el grupo obligatorio «Tipo de leche» aporta 240 ml del insumo
+ * elegido, el inventario descuenta la leche que de verdad se sirvió sin ninguna
+ * lógica de sustitución.
+ *
+ * ── LAS REGLAS ──────────────────────────────────────────────────────────────
+ * - Sólo suma precio una opción con precio POSITIVO. «Quitar» no abarata el
+ *   platillo (DISENO_MODIFICADORES §4), así que un negativo no resta.
+ * - Sólo descuenta stock una opción con insumo y cantidad POSITIVA. Una opción
+ *   como «Término medio» no tiene ninguno de los dos y no toca nada.
+ * - La cantidad de la opción es POR UNIDAD del platillo: el motor de stock ya
+ *   multiplica cada insumo por la cantidad de la línea.
+ * - `precio_extras` viaja aparte para que el servidor pueda cotejar el precio
+ *   del catálogo contra el precio SIN extras. Si sólo viajara el total, cada
+ *   latte con shot saldría como divergencia de precio.
+ *
+ * @param {object} args
+ * @param {number} args.precioBase  precio de catálogo del platillo
+ * @param {Array}  args.insumos     insumos de la receta, tal cual
+ * @param {Array}  args.elegidas    salida de `opcionesElegidas()`
+ * @returns {{ precio:number, precio_base:number, precio_extras:number, insumos:Array }}
+ */
+export function lineaConOpciones({
+  precioBase = 0,
+  insumos = [],
+  elegidas = [],
+} = {}) {
+  const lista = Array.isArray(elegidas) ? elegidas : [];
+
+  const extrasCent = lista.reduce((acc, o) => {
+    const c = aCentavos(o?.precio);
+    return c > 0 ? acc + c : acc;
+  }, 0);
+  const baseCent = aCentavos(precioBase);
+
+  const deOpciones = lista
+    .filter((o) => o?.id_producto != null && o.id_producto !== '')
+    .map((o) => ({ productoId: o.id_producto, cantidad: Number(o.cantidad) }))
+    .filter((i) => Number.isFinite(i.cantidad) && i.cantidad > 0);
+
+  return {
+    precio: (baseCent + extrasCent) / 100,
+    precio_base: baseCent / 100,
+    precio_extras: extrasCent / 100,
+    insumos: [...(Array.isArray(insumos) ? insumos : []), ...deOpciones],
+  };
+}
+
+/**
+ * El precio y los insumos de partida de una línea, ANTES de sus opciones.
+ *
+ * ── EL FALLO QUE EVITA ──────────────────────────────────────────────────────
+ * El cuadro de «¿cómo lo quiere?» se reabre sobre una línea del carrito para
+ * cambiarle la nota (`abrirNotaDeLinea`), y en ese caso lo que llega como
+ * «producto» es la LÍNEA, que ya lleva los extras sumados y sus insumos
+ * agregados. Partir de ahí cobraría el shot dos veces y descontaría el café
+ * dos veces, cada vez que alguien tocara la nota.
+ *
+ * Por eso la línea guarda su base (`precio_base`, `insumos_base`) y se parte
+ * siempre de ella. Una línea sin esos campos es un platillo recién tocado en
+ * el menú, o una orden de mesa guardada antes del 01-oct: en los dos casos su
+ * precio y sus insumos SON la base.
+ *
+ * @param {object} producto            receta del catálogo o línea del carrito
+ * @param {number} precioDeCatalogo    lo que `getPrecio(producto)` devuelve
+ */
+export function baseDeLinea(producto, precioDeCatalogo = 0) {
+  const tieneBase =
+    producto?.precio_base != null && producto.precio_base !== '';
+  return {
+    precioBase: tieneBase ? Number(producto.precio_base) : precioDeCatalogo,
+    insumos: Array.isArray(producto?.insumos_base)
+      ? producto.insumos_base
+      : Array.isArray(producto?.insumos)
+        ? producto.insumos
+        : [],
+  };
 }
 
 /**

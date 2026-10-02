@@ -304,3 +304,102 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
     expect(mesaGuardada().estado).toBe('ocupada');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRAS (01-oct) — que lo que suma el cuadro llegue a la venta.
+//
+// La trampa que esta prueba vigila: `getPrecio()` lee `precio_venta` ANTES que
+// `precio`, y la línea del carrito hereda `precio_venta` del catálogo. Si el
+// POS sólo pusiera el precio con extras en `precio`, el carrito diría $92 y el
+// cobro cobraría $65, sin error en ningún sitio. Sólo se ve haciendo el
+// recorrido entero por la pantalla.
+describe('Integración · extras del cuadro → venta', () => {
+  beforeEach(() => {
+    h.app.modificadores = [
+      {
+        id: 30,
+        nombre: 'Tipo de leche',
+        tipo: 'unica',
+        obligatorio: true,
+        activo: true,
+        opciones: [
+          {
+            id_opcion: 301,
+            nombre: 'Entera',
+            id_producto: 503,
+            cantidad: 240,
+            precio_extra: 0,
+          },
+          {
+            id_opcion: 302,
+            nombre: 'Almendra',
+            id_producto: 504,
+            cantidad: 240,
+            precio_extra: 12,
+          },
+        ],
+      },
+      {
+        id: 31,
+        nombre: 'Extras',
+        tipo: 'multiple',
+        obligatorio: false,
+        activo: true,
+        opciones: [
+          {
+            id_opcion: 311,
+            nombre: 'Shot extra',
+            id_producto: 501,
+            cantidad: 18,
+            precio_extra: 15,
+          },
+        ],
+      },
+    ];
+    h.app.recetas = [
+      {
+        id: 77,
+        nombre: 'Latte',
+        precio_venta: 65,
+        categoria: 'Bebidas',
+        grupos_modificadores: [30, 31],
+        insumos: [{ productoId: 501, cantidad: 18 }],
+      },
+    ];
+  });
+
+  it('almendra + shot: la venta cobra 92, no el 65 de lista', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Latte/ }));
+    await user.click(await screen.findByRole('button', { name: /Almendra/ }));
+    await user.click(screen.getByRole('button', { name: /Shot extra/ }));
+    await user.click(screen.getByRole('button', { name: /Agregar al pedido/ }));
+    await user.click(screen.getByRole('button', { name: /Cobrar Ticket/ }));
+    await user.click(
+      await screen.findByRole('button', { name: /Pagar Restante/ }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+
+    const venta = ventaEncolada();
+    expect(venta.total).toBe(92);
+
+    // Lo que viaja al servidor: el trigger coteja catálogo contra
+    // precio - precio_extras, y el stock sale de `insumos`.
+    const [linea] = venta.items;
+    expect(linea.precio_extras).toBe(27);
+    expect(linea.precio_base).toBe(65);
+    expect(linea.insumos).toEqual([
+      { productoId: 501, cantidad: 18 },
+      { productoId: 504, cantidad: 240 },
+      { productoId: 501, cantidad: 18 },
+    ]);
+  });
+});

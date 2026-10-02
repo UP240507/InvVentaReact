@@ -61,6 +61,8 @@ import {
   faltantes,
   seleccionCompleta,
   opcionesElegidas,
+  lineaConOpciones,
+  baseDeLinea,
   textoDeReglas,
   firmaDeLinea,
   repartirPorNota,
@@ -741,11 +743,34 @@ export default function PosScreen() {
       notaLimpia,
     );
 
+    // Lo que las opciones le hacen a la línea: el precio de los extras y sus
+    // insumos. Se parte SIEMPRE de la base: si el cuadro se reabrió sobre una
+    // línea que ya tenía extras, `producto` es esa línea (ver `baseDeLinea`).
+    const { precioBase, insumos: insumosBase } = baseDeLinea(
+      producto,
+      getPrecio(producto),
+    );
+    const conOpciones = lineaConOpciones({
+      precioBase,
+      insumos: insumosBase,
+      elegidas,
+    });
+
     const base = {
       ...producto,
       id: lineId,
       receta_id: producto.receta_id ?? producto.id,
-      precio: getPrecio(producto),
+      // `precio_venta` TAMBIÉN se pisa, y no es redundante: `getPrecio()` lo
+      // lee ANTES que `precio`, y la línea lo hereda del catálogo por el
+      // spread. Con sólo `precio`, el cobro, la pre-cuenta y el trigger del
+      // servidor volverían al precio de lista y el extra saldría gratis, sin
+      // error. El precio de catálogo queda en `precio_base`.
+      precio: conOpciones.precio,
+      precio_venta: conOpciones.precio,
+      precio_base: conOpciones.precio_base,
+      precio_extras: conOpciones.precio_extras,
+      insumos: conOpciones.insumos,
+      insumos_base: insumosBase,
       nota: notaLimpia,
       // La selección cruda se guarda para poder reabrir el cuadro tal y como
       // se dejó; `modificadores` es la forma aplanada que leen la comanda, el
@@ -2819,6 +2844,20 @@ export default function PosScreen() {
                             }`}
                           >
                             {op.nombre}
+                            {/* El mesero tiene que poder decirle al cliente
+                                cuánto cuesta el extra antes de cobrárselo. */}
+                            {Number(op.precio_extra) > 0 && (
+                              <span className="block text-[11px] font-bold opacity-80">
+                                +$
+                                {Number(op.precio_extra).toLocaleString(
+                                  'es-MX',
+                                  {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  },
+                                )}
+                              </span>
+                            )}
                           </button>
                         );
                       })}

@@ -25,9 +25,12 @@ import {
   sublineasDe,
   firmaDeLinea,
   repartirPorNota,
+  lineaConOpciones,
+  baseDeLinea,
   textoDeReglas,
   recetasQueUsan,
 } from './Modificadores';
+import { construirDeltasStock } from './Inventario';
 
 // Datos calcados de lo que hay hoy en la base de AZUL, incluidas sus rarezas:
 // «Extras» es múltiple Y obligatorio con una sola opción, y las opciones no
@@ -187,9 +190,9 @@ describe('opcionesElegidas', () => {
   });
 
   it('conserva precio/producto/cantidad SIN convertirlos', () => {
-    // Hoy nadie los consume. Se guardan tal cual para que el día que se
-    // conecten no haya que volver aquí — y sin normalizar a 0, porque `null`
-    // («no configurado») y 0 («configurado en cero») no son lo mismo.
+    // Se guardan tal cual, sin normalizar a 0, porque `null` («no
+    // configurado») y 0 («configurado en cero») no son lo mismo.
+    // `lineaConOpciones` decide qué cuenta; aquí sólo se transporta.
     const g = gruposDeProducto(HAMBURGUESA, CATALOGO);
     const [arrachera] = opcionesElegidas(g, { 2: ['21'] });
     expect(arrachera).toMatchObject({
@@ -460,5 +463,208 @@ describe('repartirPorNota — lo que está en la plancha no se reescribe', () =>
     expect(r).toHaveLength(1);
     expect(r[0].cantidad).toBe(1);
     expect(r[0].cantidad_enviada).toBe(0);
+  });
+});
+
+// ── lineaConOpciones ───────────────────────────────────────────────────────
+// Lo que las opciones le hacen al cobro y al inventario. Los casos salen de
+// la barra de AZUL: un latte sin leche en la receta, el grupo obligatorio
+// «Tipo de leche» que aporta la leche, y extras con precio.
+const CAFE = 501;
+const VASO = 502;
+const ENTERA = 503;
+const ALMENDRA = 504;
+
+const LECHE = {
+  id: 30,
+  nombre: 'Tipo de leche',
+  tipo: 'unica',
+  obligatorio: true,
+  opciones: [
+    {
+      id_opcion: 301,
+      nombre: 'Entera',
+      id_producto: ENTERA,
+      cantidad: 240,
+      precio_extra: 0,
+    },
+    {
+      id_opcion: 302,
+      nombre: 'Almendra',
+      id_producto: ALMENDRA,
+      cantidad: 240,
+      precio_extra: 12,
+    },
+  ],
+};
+const EXTRAS_CAFE = {
+  id: 31,
+  nombre: 'Extras',
+  tipo: 'multiple',
+  obligatorio: false,
+  opciones: [
+    {
+      id_opcion: 311,
+      nombre: 'Shot extra',
+      id_producto: CAFE,
+      cantidad: 18,
+      precio_extra: 15,
+    },
+    {
+      id_opcion: 312,
+      nombre: 'Canela',
+      id_producto: null,
+      cantidad: 0,
+      precio_extra: 0,
+    },
+  ],
+};
+const LATTE = {
+  id: 77,
+  nombre: 'Latte',
+  precio_venta: 65,
+  grupos_modificadores: [30, 31],
+  insumos: [
+    { productoId: CAFE, cantidad: 18 },
+    { productoId: VASO, cantidad: 1 },
+  ],
+};
+const elegir = (seleccion) =>
+  opcionesElegidas(gruposDeProducto(LATTE, [LECHE, EXTRAS_CAFE]), seleccion);
+
+describe('lineaConOpciones — lo que el extra cobra y descuenta', () => {
+  it('suma el precio de los extras al de catálogo, y lo deja aparte', () => {
+    const r = lineaConOpciones({
+      precioBase: 65,
+      insumos: LATTE.insumos,
+      elegidas: elegir({ 30: ['302'], 31: ['311'] }),
+    });
+    expect(r.precio).toBe(92);
+    expect(r.precio_base).toBe(65);
+    expect(r.precio_extras).toBe(27);
+  });
+
+  it('suma en centavos: 0.10 + 0.20 no deja basura de coma flotante', () => {
+    const r = lineaConOpciones({
+      precioBase: 3,
+      elegidas: [{ precio: 0.1 }, { precio: 0.2 }],
+    });
+    expect(r.precio).toBe(3.3);
+    expect(r.precio_extras).toBe(0.3);
+  });
+
+  it('un precio negativo no abarata el platillo', () => {
+    // «Quitar» no resta (DISENO_MODIFICADORES §4). Si alguien captura -5 por
+    // error, el platillo no se vende más barato en silencio.
+    const r = lineaConOpciones({ precioBase: 65, elegidas: [{ precio: -5 }] });
+    expect(r.precio).toBe(65);
+    expect(r.precio_extras).toBe(0);
+  });
+
+  it('agrega el insumo de cada opción a los de la receta', () => {
+    const r = lineaConOpciones({
+      precioBase: 65,
+      insumos: LATTE.insumos,
+      elegidas: elegir({ 30: ['302'], 31: ['311'] }),
+    });
+    expect(r.insumos).toEqual([
+      { productoId: CAFE, cantidad: 18 },
+      { productoId: VASO, cantidad: 1 },
+      { productoId: ALMENDRA, cantidad: 240 },
+      { productoId: CAFE, cantidad: 18 },
+    ]);
+  });
+
+  it('una opción sin insumo o sin cantidad no toca el inventario', () => {
+    const r = lineaConOpciones({
+      precioBase: 65,
+      insumos: LATTE.insumos,
+      elegidas: elegir({ 30: ['301'], 31: ['312'] }),
+    });
+    // Canela no tiene insumo: sólo entra la leche entera.
+    expect(r.insumos).toHaveLength(3);
+    expect(r.insumos[2]).toEqual({ productoId: ENTERA, cantidad: 240 });
+  });
+
+  it('sin opciones, la línea queda como estaba', () => {
+    const r = lineaConOpciones({ precioBase: 65, insumos: LATTE.insumos });
+    expect(r).toEqual({
+      precio: 65,
+      precio_base: 65,
+      precio_extras: 0,
+      insumos: LATTE.insumos,
+    });
+  });
+
+  it('no muta los insumos de la receta', () => {
+    const insumos = [{ productoId: CAFE, cantidad: 18 }];
+    lineaConOpciones({ insumos, elegidas: elegir({ 31: ['311'] }) });
+    expect(insumos).toHaveLength(1);
+  });
+
+  it('de punta a punta: dos lattes de almendra con shot descuentan lo servido', () => {
+    // La prueba que importa. El motor de stock recibe la línea tal cual la
+    // arma el POS y multiplica por la cantidad de la línea: la cantidad de la
+    // opción es por unidad, no por línea.
+    const { insumos } = lineaConOpciones({
+      precioBase: 65,
+      insumos: LATTE.insumos,
+      elegidas: elegir({ 30: ['302'], 31: ['311'] }),
+    });
+    const deltas = construirDeltasStock([{ cantidad: 2, insumos }]);
+    const de = (id) => deltas.find((d) => d.productoId === id)?.cantidad;
+    expect(de(CAFE)).toBe(72); // 2 × (18 de receta + 18 del shot)
+    expect(de(VASO)).toBe(2);
+    expect(de(ALMENDRA)).toBe(480);
+    expect(de(ENTERA)).toBeUndefined();
+  });
+});
+
+describe('baseDeLinea — reabrir el cuadro no cobra el extra dos veces', () => {
+  // Cómo arma la línea el POS en `confirmarModificadores`.
+  const armarLinea = (producto, seleccion) => {
+    const { precioBase, insumos } = baseDeLinea(producto, 65);
+    const r = lineaConOpciones({
+      precioBase,
+      insumos,
+      elegidas: elegir(seleccion),
+    });
+    return {
+      ...producto,
+      precio: r.precio,
+      precio_venta: r.precio,
+      precio_base: r.precio_base,
+      precio_extras: r.precio_extras,
+      insumos: r.insumos,
+      insumos_base: insumos,
+    };
+  };
+
+  it('un platillo recién tocado parte de su precio y su receta', () => {
+    expect(baseDeLinea(LATTE, 65)).toEqual({
+      precioBase: 65,
+      insumos: LATTE.insumos,
+    });
+  });
+
+  it('reabrir una línea con shot y confirmar deja el mismo precio y los mismos insumos', () => {
+    const una = armarLinea(LATTE, { 30: ['302'], 31: ['311'] });
+    // Se reabre para ponerle nota: lo que llega como producto es la LÍNEA.
+    const dos = armarLinea(una, { 30: ['302'], 31: ['311'] });
+    expect(dos.precio).toBe(92);
+    expect(dos.insumos).toEqual(una.insumos);
+  });
+
+  it('quitar el shot al reabrir devuelve el precio de catálogo', () => {
+    const una = armarLinea(LATTE, { 30: ['301'], 31: ['311'] });
+    const dos = armarLinea(una, { 30: ['301'] });
+    expect(dos.precio).toBe(65);
+    expect(dos.precio_extras).toBe(0);
+  });
+
+  it('una orden de mesa guardada antes del cambio parte de lo que ya traía', () => {
+    // Sin `precio_base` ni `insumos_base`: su precio y sus insumos son la base.
+    const vieja = { ...LATTE, precio: 65 };
+    expect(baseDeLinea(vieja, 65).insumos).toBe(LATTE.insumos);
   });
 });
