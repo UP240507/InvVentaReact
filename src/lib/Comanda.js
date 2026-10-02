@@ -250,14 +250,25 @@ function fechaDe(iso) {
  * papel de 32 columnas, dos sangrías distintas se leen como un error de
  * impresión, no como dos clases de información.
  *
- * Aquí NO se imprime el precio de la opción aunque el dato venga: hoy los
- * modificadores no suman al total (ver `lib/Modificadores.js`), y un papel que
- * enseñara «+$15» junto a un total que no lo incluye sería una discusión con
- * el cliente en la mesa.
+ * ── EL PRECIO, SÓLO EN EL PAPEL DEL CLIENTE ────────────────────────────────
+ * Desde el 01-oct el precio de un extra SÍ va dentro del importe de la línea
+ * (`lineaConOpciones`). Así que en el ticket y la pre-cuenta se enseña al lado
+ * del extra: un latte de $92 sin decir de dónde salen los 27 de más es una
+ * discusión con el cliente en la mesa.
+ *
+ * Es por unidad, igual que el renglón del platillo enseña su total: «2x Latte
+ * $184 / Shot extra +$15.00» se lee como «el shot cuesta 15 cada uno».
+ *
+ * La comanda de cocina lo llama sin `conPrecio`, y así sigue sin precios por
+ * construcción, que es su regla.
  */
-function sublineasDeModificadores(item) {
+function sublineasDeModificadores(item, { conPrecio = false } = {}) {
   return (Array.isArray(item?.modificadores) ? item.modificadores : [])
-    .map((m) => `  ${m?.nombre || ''}`.trimEnd())
+    .map((m) => {
+      const p = num(m?.precio);
+      const precio = conPrecio && p > 0 ? ` +${money(p)}` : '';
+      return `  ${m?.nombre || ''}${precio}`.trimEnd();
+    })
     .filter((s) => s.trim().length > 0);
 }
 
@@ -340,7 +351,7 @@ export function construirTicket(
     const linea = importeDeLinea(item);
     // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
     // descuento es una operación sobre eso.
-    const sublineas = sublineasDeModificadores(item);
+    const sublineas = sublineasDeModificadores(item, { conPrecio: true });
 
     // Los componentes de un paquete se listan: el cliente pagó "Desayuno
     // completo" y tiene derecho a ver qué incluía.
@@ -560,7 +571,7 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
     const linea = importeDeLinea(item);
     // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
     // descuento es una operación sobre eso.
-    const sublineas = sublineasDeModificadores(item);
+    const sublineas = sublineasDeModificadores(item, { conPrecio: true });
 
     const componentes = (item?.componentes || []).filter(
       (c) => c?.recetaId != null,

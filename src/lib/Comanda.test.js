@@ -891,11 +891,41 @@ describe('modificadores · lo elegido llega al papel', () => {
     expect(cocina.cuerpo[0].sublineas).toHaveLength(2);
   });
 
-  it('NO imprime el precio de la opción, aunque el dato venga', () => {
-    // Hoy los modificadores no suman al total. Un papel que enseñara «+$15»
-    // junto a un total que no lo incluye es una discusión en la mesa.
+  it('la comanda de cocina NO imprime el precio de la opción', () => {
+    // La comanda no lleva precios por construcción. Desde el 01-oct el extra
+    // sí suma, pero eso es cosa del papel del cliente, no del cocinero.
     const [cocina] = construirComandas(conMods, { configuracion: config });
     expect(cocina.cuerpo[0].sublineas.join(' ')).not.toMatch(/15|\$/);
+  });
+
+  // Desde el 01-oct el precio del extra va DENTRO del importe de la línea
+  // (`lineaConOpciones`). El cliente tiene que ver de dónde sale.
+  const lineaConExtra = {
+    id: '1',
+    nombre: 'Latte',
+    cantidad: 2,
+    precio: 80,
+    modificadores: [
+      { grupo_id: 30, id_opcion: 301, nombre: 'Entera', precio: 0 },
+      { grupo_id: 31, id_opcion: 311, nombre: 'Shot extra', precio: 15 },
+    ],
+  };
+
+  it('el ticket enseña el precio del extra, y no el de una opción gratis', () => {
+    const t = construirTicket(
+      { folio: 'X-1', items: [lineaConExtra], total: 160 },
+      { configuracion: config },
+    );
+    expect(t.cuerpo[0].sublineas).toEqual(['  Entera', '  Shot extra +$15.00']);
+    expect(t.cuerpo[0].importe).toBe('$160.00');
+  });
+
+  it('la pre-cuenta también', () => {
+    const pre = construirPreCuenta(
+      { items: [lineaConExtra], total: 160 },
+      { configuracion: config },
+    );
+    expect(pre.cuerpo[0].sublineas).toContain('  Shot extra +$15.00');
   });
 
   it('sangra igual que los componentes de un paquete', () => {
