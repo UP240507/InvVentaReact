@@ -8,7 +8,7 @@
 //   2. La cantidad se edita en su lugar, y Enter no guarda a media captura.
 //   3. Volver a agregar un ingrediente reemplaza su cantidad: no suma.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
