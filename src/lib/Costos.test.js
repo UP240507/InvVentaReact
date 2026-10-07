@@ -8,7 +8,7 @@
 // se diluye durante meses, contaminando el costo de cada platillo que lleve el
 // insumo. En AZUL no hay conteo físico, así que nada lo endereza nunca.
 import { describe, it, expect } from 'vitest';
-import { recepcionDeLinea, aplicarRecepcion } from './Costos';
+import { recepcionDeLinea, aplicarRecepcion, decimalesDeCosto } from './Costos';
 
 describe('recepcionDeLinea · el promedio ponderado', () => {
   it('LA AFIRMACIÓN: pondera por unidades, no por dinero', () => {
@@ -22,7 +22,9 @@ describe('recepcionDeLinea · el promedio ponderado', () => {
       costoRecibido: 1000,
     });
     expect(r.stock).toBe(101);
-    expect(r.costo).toBe(19.8);
+    // 2000 / 101 exacto, a seis decimales (desde el 06-oct el costo no se
+    // redondea a centavos; ver `aCosto` en Costos.js). Se ensena $19.80.
+    expect(r.costo).toBe(19.80198);
   });
 
   it('el caso de todos los días: 30 kg a $20 sobre 10 kg a $14', () => {
@@ -71,17 +73,64 @@ describe('recepcionDeLinea · el promedio ponderado', () => {
     expect(Number.isFinite(r.costo)).toBe(true);
   });
 
-  it('el precio derivado de un empaque llega con sus decimales y se redondea a centavos al final', () => {
+  it('el precio derivado de un empaque llega con sus decimales y NO se redondea a centavos', () => {
     // `Empaques.derivarLinea` NO redondea el precio unitario a proposito: una
-    // arpilla de 30 kg a $100 da 3.3333... El redondeo ocurre AQUI, una sola
-    // vez, sobre el promedio ya calculado.
+    // arpilla de 30 kg a $100 da 3.3333... Hasta el 06-oct este promedio SI
+    // se redondeaba a centavos (3.33). Desde que las unidades son g, ml y pz
+    // el costo por unidad baja de un centavo y ese redondeo lo deformaba: se
+    // guarda con seis decimales y se ensena redondeado.
     const r = recepcionDeLinea({
       stockAnterior: 0,
       costoAnterior: 0,
       cantidadRecibida: 30,
       costoRecibido: 100 / 30,
     });
-    expect(r.costo).toBe(3.33);
+    expect(r.costo).toBe(3.333333);
+  });
+
+  it('EN ML: leche a $25 el litro queda a 0.025 por ml, no a 0.03', () => {
+    const r = recepcionDeLinea({
+      stockAnterior: 0,
+      costoAnterior: 0,
+      cantidadRecibida: 1000,
+      costoRecibido: 0.025,
+    });
+    expect(r.costo).toBe(0.025);
+  });
+
+  it('EN ML: un insumo de $4 el litro no se queda en costo cero', () => {
+    const r = recepcionDeLinea({
+      stockAnterior: 0,
+      costoAnterior: 0,
+      cantidadRecibida: 1000,
+      costoRecibido: 0.004,
+    });
+    expect(r.costo).toBe(0.004);
+  });
+
+  it('EN ML: el promedio de dos compras conserva sus decimales', () => {
+    // 1000 ml a 0.025 + 1000 ml a 0.03 = 0.0275
+    const r = recepcionDeLinea({
+      stockAnterior: 1000,
+      costoAnterior: 0.025,
+      cantidadRecibida: 1000,
+      costoRecibido: 0.03,
+    });
+    expect(r.costo).toBe(0.0275);
+  });
+
+  it('con el almacen en NEGATIVO, el costo es el de la entrada', () => {
+    // Sin conteo fisico, lo que mas se vende vive en negativo. Antes:
+    // (-500 x 0.03 + 1000 x 0.025) / 500 = 0.02, mas barato que las dos
+    // compras. Lo que no esta fisicamente no aporta costo.
+    const r = recepcionDeLinea({
+      stockAnterior: -500,
+      costoAnterior: 0.03,
+      cantidadRecibida: 1000,
+      costoRecibido: 0.025,
+    });
+    expect(r.stock).toBe(500);
+    expect(r.costo).toBe(0.025);
   });
 
   it('el stock se queda en tres decimales, como lo escribe la pantalla', () => {
@@ -173,5 +222,13 @@ describe('aplicarRecepcion · la orden completa', () => {
     ]);
     expect(productos[0].stock).toBe(50);
     expect(productos[0].precio).toBe(20.8);
+  });
+});
+
+describe('decimalesDeCosto', () => {
+  it('cuatro decimales por debajo de un peso, dos por encima', () => {
+    expect(decimalesDeCosto(0.025)).toBe(4);
+    expect(decimalesDeCosto(25)).toBe(2);
+    expect(decimalesDeCosto(0)).toBe(2);
   });
 });

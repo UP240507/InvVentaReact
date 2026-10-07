@@ -134,4 +134,22 @@ describe('RecepcionScreen · recibir mercancía', () => {
 
     expect(h.encolado.filter((e) => e[0] === 'productos')).toHaveLength(0);
   });
+
+  it('EN ML (06-oct): 1000 ml de leche a 0.025 se guardan a 0.025, no a 0.03', async () => {
+    // Desde que las unidades son g, ml y pz el costo por unidad baja de un
+    // centavo. Redondear a centavos subia la leche un 20 %.
+    app.productos = [
+      { id: 11, nombre: 'Leche Entera', unidad: 'ml', stock: 0, precio: 0 },
+    ];
+    app.ordenesCompra = [
+      {
+        ...ORDEN,
+        items: [{ id_producto: 11, cantidad: 1000, precio_unitario: 0.025 }],
+      },
+    ];
+    const { producto, movimiento } = await recibir();
+    expect(producto.stock).toBe(1000);
+    expect(producto.precio).toBe(0.025);
+    expect(movimiento.referencia).toMatch(/Costo Ingreso: \$0\.025/);
+  });
 });

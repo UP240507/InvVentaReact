@@ -16,6 +16,7 @@ import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { franjaAlEscribir } from '../../lib/Franjas';
 import { unidadesDisponibles, categoriasDeInsumo } from '../../lib/Catalogo';
+import { decimalesDeCosto } from '../../lib/Costos';
 import {
   Package,
   Plus,
@@ -288,7 +289,8 @@ export default function IngredientesScreen() {
             $
             {Number(item.precio).toLocaleString('es-MX', {
               minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
+              // «$0.03 por ml» escondía que la leche está a 0.025.
+              maximumFractionDigits: decimalesDeCosto(item.precio),
             })}
           </span>
           <span className="block text-[10px] text-adm-muted uppercase tracking-[0.14em]">
@@ -573,7 +575,10 @@ export default function IngredientesScreen() {
                         </span>
                         <input
                           type="number"
-                          step="0.01"
+                          // `any` y no 0.01: en ml y g el costo por unidad
+                          // baja de un centavo (leche a $25/L = 0.025 por
+                          // ml) y el navegador rechazaba guardarlo.
+                          step="any"
                           min="0"
                           required
                           value={formData.precio}

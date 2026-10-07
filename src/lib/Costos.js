@@ -23,10 +23,21 @@
 //                          stock_anterior + cantidad
 //
 // Es una media ponderada por unidades, no por dinero: 100 kg a $10 y 1 kg a
-// $1000 dan $19.80, no $505.
+// $1000 dan $19.80 (19.80198), no $505.
 
-/** Dinero: dos decimales. Mismo criterio que `Empaques.js`. */
-const aCentavos = (n) => Math.round((Number(n) || 0) * 100) / 100;
+/**
+ * Costo por unidad de inventario: seis decimales, NO centavos.
+ *
+ * Hasta el 06-oct esto redondeaba a dos decimales, y con insumos en kg o L
+ * casi no se notaba. Desde que las unidades son g, ml y pz (decisión de Chris,
+ * 06-oct), el costo por unidad baja de un centavo y el redondeo lo rompía: la
+ * leche a $25 el litro cuesta 0.025 el mililitro y se guardaba 0.03, un 20 %
+ * de más en cada bebida; un insumo de $4 el litro quedaba en 0.00 y sus
+ * platillos parecían gratis. Es la regla de `Empaques.derivarLinea`: el
+ * unitario no se redondea; se enseña redondeado (`decimalesDeCosto`) y se
+ * guarda tal cual. Los seis decimales sólo limpian la basura de coma flotante.
+ */
+const aCosto = (n) => Math.round((Number(n) || 0) * 1e6) / 1e6;
 
 /** Stock: tres decimales, como lo escribe la pantalla de recepción. */
 const aStock = (n) => Math.round((Number(n) || 0) * 1000) / 1000;
@@ -69,12 +80,19 @@ export function recepcionDeLinea({
   // Sin existencias después de la entrada no hay nada que promediar, y la
   // división sería por cero. Se conserva el costo que ya tenía: es lo único
   // que no inventa un número.
-  if (stock <= 0) return { stock, costo: aCentavos(costoPrevio) };
+  if (stock <= 0) return { stock, costo: aCosto(costoPrevio) };
+
+  // Con el almacén en negativo —que sin conteo físico es lo normal en lo que
+  // más se vende— lo que había no existe físicamente y no tiene costo que
+  // aportar. Promediarlo con valor negativo daba un costo por debajo de las
+  // dos compras: −500 ml a 0.03 más 1000 ml a 0.025 salía a 0.02. Manda el
+  // costo de la entrada (06-oct).
+  if (stockPrevio <= 0) return { stock, costo: aCosto(costoEntrada) };
 
   const valorPrevio = stockPrevio * costoPrevio;
   const valorEntrada = cantidad * costoEntrada;
 
-  return { stock, costo: aCentavos((valorPrevio + valorEntrada) / stock) };
+  return { stock, costo: aCosto((valorPrevio + valorEntrada) / stock) };
 }
 
 /**
@@ -122,4 +140,15 @@ export function aplicarRecepcion(productos = [], items = []) {
   }
 
   return { productos: copia, aplicadas, ignoradas };
+}
+
+/**
+ * Cuántos decimales enseñar de un costo por unidad.
+ *
+ * Dos de siempre, y cuatro cuando el costo es de menos de un peso: «$0.03 por
+ * ml» escondía que la leche está a 0.025.
+ */
+export function decimalesDeCosto(costo) {
+  const n = Math.abs(Number(costo) || 0);
+  return n > 0 && n < 1 ? 4 : 2;
 }

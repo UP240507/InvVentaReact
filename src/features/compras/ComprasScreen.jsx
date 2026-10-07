@@ -740,7 +740,9 @@ export default function ComprasScreen() {
                       </label>
                       <input
                         type="number"
-                        step="0.01"
+                        // `any`: sin empaque, el costo es por ml o por g y
+                        // baja de un centavo. Con 0.01 no se podía teclear.
+                        step="any"
                         min="0"
                         required
                         aria-label="Costo unitario"
