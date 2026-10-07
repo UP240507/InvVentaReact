@@ -668,3 +668,97 @@ describe('baseDeLinea — reabrir el cuadro no cobra el extra dos veces', () => 
     expect(baseDeLinea(vieja, 65).insumos).toBe(LATTE.insumos);
   });
 });
+
+// ── Sustituir (07-oct) ──────────────────────────────────────────────────────
+// Decisión de Chris: el Deslact/Light se ofrece en calientes Y en fríos, y
+// cada bebida lleva distinta leche. Una opción que sustituye permite UN solo
+// grupo «Tipo de leche» para todas: la cantidad la pone cada receta.
+describe('lineaConOpciones — una opción que sustituye en vez de agregar', () => {
+  const ENTERA_ID = 503;
+  const DESLACT_ID = 505;
+  const TIPO_LECHE = {
+    id: 40,
+    nombre: 'Tipo de leche',
+    tipo: 'unica',
+    obligatorio: false,
+    opciones: [
+      {
+        id_opcion: 401,
+        nombre: 'Deslactosada',
+        precio_extra: 6,
+        id_producto: DESLACT_ID,
+        sustituye: ENTERA_ID,
+        cantidad: 0,
+      },
+    ],
+  };
+  const conLeche = (ml) => ({
+    id: 90,
+    precio_venta: 75,
+    grupos_modificadores: [40],
+    insumos: [
+      { productoId: CAFE, cantidad: 100 },
+      { productoId: ENTERA_ID, cantidad: ml },
+    ],
+  });
+  const linea = (receta, seleccion) =>
+    lineaConOpciones({
+      precioBase: 75,
+      insumos: receta.insumos,
+      elegidas: opcionesElegidas(
+        gruposDeProducto(receta, [TIPO_LECHE]),
+        seleccion,
+      ),
+    });
+
+  it('cambia la leche entera por deslactosada en la cantidad de la receta', () => {
+    const r = linea(conLeche(50), { 40: ['401'] });
+    expect(r.insumos).toEqual([
+      { productoId: CAFE, cantidad: 100 },
+      { productoId: DESLACT_ID, cantidad: 50 },
+    ]);
+  });
+
+  it('el MISMO grupo sirve para una bebida de 300 ml', () => {
+    const r = linea(conLeche(300), { 40: ['401'] });
+    expect(r.insumos).toContainEqual({ productoId: DESLACT_ID, cantidad: 300 });
+    expect(r.insumos.some((i) => i.productoId === ENTERA_ID)).toBe(false);
+  });
+
+  it('cobra su precio: sustituir no abarata el platillo', () => {
+    expect(linea(conLeche(50), { 40: ['401'] }).precio).toBe(81);
+  });
+
+  it('sin elegir la opción, la receta sale con su leche entera', () => {
+    const r = linea(conLeche(50), {});
+    expect(r.insumos).toContainEqual({ productoId: ENTERA_ID, cantidad: 50 });
+    expect(r.precio).toBe(75);
+  });
+
+  it('si la receta no lleva lo que se sustituye, no toca el stock pero cobra', () => {
+    const sinLeche = {
+      ...conLeche(50),
+      insumos: [{ productoId: CAFE, cantidad: 100 }],
+    };
+    const r = linea(sinLeche, { 40: ['401'] });
+    expect(r.insumos).toEqual([{ productoId: CAFE, cantidad: 100 }]);
+    expect(r.precio).toBe(81);
+  });
+
+  it('acepta la llave vieja `id_producto` en la receta', () => {
+    const vieja = {
+      ...conLeche(50),
+      insumos: [{ id_producto: ENTERA_ID, cantidad: 50 }],
+    };
+    const r = linea(vieja, { 40: ['401'] });
+    expect(r.insumos).toEqual([{ productoId: DESLACT_ID, cantidad: 50 }]);
+  });
+
+  it('de punta a punta: dos frappés deslactosados descuentan deslactosada, no entera', () => {
+    const { insumos } = linea(conLeche(50), { 40: ['401'] });
+    const deltas = construirDeltasStock([{ cantidad: 2, insumos }]);
+    const de = (id) => deltas.find((d) => d.productoId === id)?.cantidad;
+    expect(de(DESLACT_ID)).toBe(100);
+    expect(de(ENTERA_ID)).toBeUndefined();
+  });
+});

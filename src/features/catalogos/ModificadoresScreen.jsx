@@ -58,6 +58,8 @@ export default function ModificadoresScreen() {
   const [opcionPrecio, setOpcionPrecio] = useState(0);
   const [opcionProductoId, setOpcionProductoId] = useState('');
   const [opcionCantidad, setOpcionCantidad] = useState('');
+  // '' = la opción AGREGA su insumo; un id = lo CAMBIA por ese de la receta.
+  const [opcionSustituye, setOpcionSustituye] = useState('');
 
   const modificadoresFiltrados = useMemo(() => {
     return (modificadores || [])
@@ -111,6 +113,7 @@ export default function ModificadoresScreen() {
     setOpcionPrecio(0);
     setOpcionProductoId('');
     setOpcionCantidad('');
+    setOpcionSustituye('');
   };
 
   const handleSubmit = (e) => {
@@ -184,6 +187,13 @@ export default function ModificadoresScreen() {
       showToast('La opción debe tener un nombre.', 'error');
       return;
     }
+    if (
+      opcionSustituye &&
+      String(opcionSustituye) === String(opcionProductoId)
+    ) {
+      showToast('Un insumo no se puede sustituir por sí mismo.', 'error');
+      return;
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -194,7 +204,16 @@ export default function ModificadoresScreen() {
           nombre: opcionNombre.trim(),
           precio_extra: Number(opcionPrecio) || 0,
           id_producto: opcionProductoId ? Number(opcionProductoId) : null,
-          cantidad: opcionCantidad ? Number(opcionCantidad) : 0,
+          // Al sustituir, la cantidad es la de cada receta, no la del grupo.
+          cantidad: opcionSustituye
+            ? 0
+            : opcionCantidad
+              ? Number(opcionCantidad)
+              : 0,
+          sustituye:
+            opcionProductoId && opcionSustituye
+              ? Number(opcionSustituye)
+              : null,
         },
       ],
     }));
@@ -636,6 +655,33 @@ export default function ModificadoresScreen() {
                       </select>
                     </div>
                     {opcionProductoId && (
+                      // Agregar o sustituir (07-oct). «Deslactosada» no suma
+                      // leche: cambia la entera de cada receta por la suya, en
+                      // la cantidad de esa receta. Así un solo grupo sirve
+                      // para un frappé de 50 ml y un smoothie de 300 ml.
+                      <div className="w-44">
+                        <select
+                          aria-label="Cómo afecta la receta"
+                          value={opcionSustituye}
+                          onChange={(e) => setOpcionSustituye(e.target.value)}
+                          className="w-full bg-white dark:bg-adm-panel border border-adm-field text-adm-muted dark:text-adm-ink font-medium px-3 py-2 rounded-ui outline-none focus:border-adm-info dark:focus:border-adm-info text-xs transition-colors"
+                        >
+                          <option value="">Además de la receta</option>
+                          {(productos || [])
+                            .filter(
+                              (p) =>
+                                p.activo !== false &&
+                                String(p.id) !== String(opcionProductoId),
+                            )
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                En lugar de: {p.nombre}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                    {opcionProductoId && !opcionSustituye && (
                       <div className="w-24">
                         <input
                           type="number"
@@ -695,7 +741,17 @@ export default function ModificadoresScreen() {
                                 </span>
                               )}
                             </p>
-                            {prodVinculado && (
+                            {prodVinculado && op.sustituye != null && (
+                              <p className="text-[10px] font-bold text-adm-muted mt-1 flex items-center gap-1">
+                                <PackageOpen className="w-3 h-3" /> Cambia{' '}
+                                {(productos || []).find(
+                                  (p) => String(p.id) === String(op.sustituye),
+                                )?.nombre || 'un insumo'}{' '}
+                                por {prodVinculado.nombre}, en la cantidad de
+                                cada receta
+                              </p>
+                            )}
+                            {prodVinculado && op.sustituye == null && (
                               <p className="text-[10px] font-bold text-adm-muted mt-1 flex items-center gap-1">
                                 <PackageOpen className="w-3 h-3" /> Descuenta{' '}
                                 {op.cantidad} {prodVinculado.unidad} de{' '}

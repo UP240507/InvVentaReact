@@ -165,6 +165,9 @@ export function opcionesElegidas(grupos = [], seleccion = vacia) {
         precio: op?.precio_extra ?? op?.precio ?? null,
         id_producto: op?.id_producto ?? null,
         cantidad: op?.cantidad ?? null,
+        // Si viene, la opción no AGREGA su insumo: CAMBIA este de la receta
+        // por el suyo, en la misma cantidad. Ver `lineaConOpciones`.
+        sustituye: op?.sustituye ?? null,
       });
     }
   }
@@ -223,8 +226,32 @@ export function lineaConOpciones({
   }, 0);
   const baseCent = aCentavos(precioBase);
 
-  const deOpciones = lista
-    .filter((o) => o?.id_producto != null && o.id_producto !== '')
+  const conInsumo = lista.filter(
+    (o) => o?.id_producto != null && o.id_producto !== '',
+  );
+  const esSustitucion = (o) => o?.sustituye != null && o.sustituye !== '';
+
+  // ── SUSTITUIR (07-oct) ────────────────────────────────────────────────────
+  // «Deslactosada» no AGREGA leche: cambia la entera de la receta por la
+  // deslactosada, en la cantidad que traiga cada receta. Así un solo grupo
+  // «Tipo de leche» sirve para un frappé de 50 ml y un smoothie de 300 ml, y
+  // la cantidad la pone quien captura la receta, no el grupo. Es también el
+  // requisito de AZUL «sustituir un ingrediente sin abaratar el platillo»: el
+  // precio de la opción se cobra igual, sea 0 o +$6.
+  //
+  // Si la receta no lleva el insumo que se sustituye, no se toca el stock (no
+  // hay nada que cambiar) y el precio de la opción se cobra igual.
+  const sustituciones = conInsumo.filter(esSustitucion);
+  const base = (Array.isArray(insumos) ? insumos : []).map((ins) => {
+    const pid = String(ins?.productoId ?? ins?.id_producto);
+    const s = sustituciones.find((o) => String(o.sustituye) === pid);
+    if (!s) return ins;
+    const { id_producto, ...resto } = ins;
+    return { ...resto, productoId: s.id_producto };
+  });
+
+  const deOpciones = conInsumo
+    .filter((o) => !esSustitucion(o))
     .map((o) => ({ productoId: o.id_producto, cantidad: Number(o.cantidad) }))
     .filter((i) => Number.isFinite(i.cantidad) && i.cantidad > 0);
 
@@ -232,7 +259,7 @@ export function lineaConOpciones({
     precio: (baseCent + extrasCent) / 100,
     precio_base: baseCent / 100,
     precio_extras: extrasCent / 100,
-    insumos: [...(Array.isArray(insumos) ? insumos : []), ...deOpciones],
+    insumos: [...base, ...deOpciones],
   };
 }
 
