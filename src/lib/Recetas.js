@@ -240,3 +240,138 @@ export function recetaConMismoCodigo(codigo, recetas = [], idActual = null) {
     ) || null
   );
 }
+
+// ── PLANTILLAS (06-oct) ──────────────────────────────────────────────────────
+// Se cargan las recetas con sus ingredientes y la cantidad en 0, y quien sabe
+// las porciones (el dueño, la barra) las llena desde esta pantalla. Una
+// cantidad en 0 es inofensiva para el inventario —`construirDeltasStock`
+// ignora los consumos en cero—, pero en pantalla una receta a medias se veía
+// igual que una terminada, con costo $0 y margen 100 % en verde. Estas reglas
+// existen para que «falta» se vea.
+
+const cantidadValida = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0;
+};
+
+const esPaqueteDeReceta = (r) =>
+  Array.isArray(r?.componentes) && r.componentes.length > 0;
+
+/**
+ * Qué le falta a una receta para estar capturada.
+ *
+ * Un paquete nunca está pendiente aquí: sus insumos salen de las recetas que
+ * lo componen, y ésas se miran una por una.
+ *
+ * @returns {{ pendientes: number, sinInsumos: boolean, completa: boolean }}
+ *   `pendientes`: ingredientes con cantidad vacía o en 0.
+ *   `sinInsumos`: no tiene ningún ingrediente (nivel 1 de la carga).
+ */
+export function estadoDeCaptura(receta) {
+  if (esPaqueteDeReceta(receta)) {
+    return { pendientes: 0, sinInsumos: false, completa: true };
+  }
+  const insumos = Array.isArray(receta?.insumos)
+    ? receta.insumos
+    : Array.isArray(receta?.ingredientes)
+      ? receta.ingredientes
+      : [];
+  const pendientes = insumos.filter((i) => !cantidadValida(i?.cantidad)).length;
+  const sinInsumos = insumos.length === 0;
+  return { pendientes, sinInsumos, completa: !sinInsumos && pendientes === 0 };
+}
+
+/**
+ * ¿La porción parece escrita en la unidad equivocada?
+ *
+ * ── EL ERROR QUE VIGILA ─────────────────────────────────────────────────────
+ * Quien llena la plantilla piensa en la tarjeta de la barra (100 ml, 18 g) y
+ * el insumo puede estar en otra unidad. «100» en un insumo en litros son 100
+ * litros por bebida: el costo y el stock se disparan y nada da error. Al
+ * revés, «0.1» en un insumo en ml es una décima de mililitro.
+ *
+ * No bloquea: avisa. Hay porciones raras de verdad (una pizca de sal de
+ * 0.5 g), y quien captura es quien sabe.
+ *
+ * @returns {string|null} el aviso, o null si la porción es razonable
+ */
+export function porcionSospechosa(cantidad, unidad) {
+  const n = Number(cantidad);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const u = String(unidad || '')
+    .trim()
+    .toLowerCase();
+
+  if (u === 'g' || u === 'ml') {
+    if (n > 5000) {
+      return `${n} ${u} en una sola porción es mucho. ¿Lo escribiste en otra unidad?`;
+    }
+    if (n < 1) {
+      return `${n} ${u} es menos de un ${u === 'g' ? 'gramo' : 'mililitro'}. ¿Lo escribiste en ${u === 'g' ? 'kg' : 'litros'}?`;
+    }
+    return null;
+  }
+  if (u === 'kg' || u === 'l' || u === 'lt') {
+    if (n > 5) {
+      return `${n} ${unidad} en una sola porción es mucho. ¿Lo escribiste en ${u === 'kg' ? 'gramos' : 'mililitros'}?`;
+    }
+    return null;
+  }
+  if (u === 'pz' || u === 'pza' || u === 'pzas') {
+    if (n > 50) return `${n} piezas en una sola porción es mucho.`;
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Agrega un ingrediente o, si ya estaba, le PONE la cantidad nueva.
+ *
+ * ── POR QUÉ REEMPLAZA Y YA NO SUMA ──────────────────────────────────────────
+ * Hasta el 06-oct volver a agregar un ingrediente sumaba. Con la cantidad sin
+ * forma de editarse, era la única manera de corregir, y corregir sumaba: quien
+ * ponía 100, veía el error y tecleaba 120, se quedaba con 220. Con plantillas
+ * —todas las recetas llegan con el ingrediente ya puesto en 0— ese camino es
+ * el normal, no la excepción.
+ *
+ * Además no muta: la versión anterior hacía `clone[idx].cantidad += …` sobre
+ * el objeto del estado previo, y React en modo estricto ejecuta el
+ * actualizador dos veces en desarrollo.
+ *
+ * @returns {{ insumos: Array, anterior: number|null }} `anterior` es la
+ *   cantidad que había si el ingrediente ya estaba, para poder avisarlo.
+ */
+export function ponerIngrediente(
+  insumos = [],
+  { productoId, cantidad, merma = 0 },
+) {
+  const lista = Array.isArray(insumos) ? insumos : [];
+  const id = String(productoId);
+  const idx = lista.findIndex(
+    (i) => String(i?.productoId ?? i?.id_producto) === id,
+  );
+  const nuevo = {
+    productoId: Number(productoId),
+    cantidad: Number(cantidad),
+    merma: Number(merma) || 0,
+  };
+  if (idx === -1) return { insumos: [...lista, nuevo], anterior: null };
+  return {
+    insumos: lista.map((i, k) => (k === idx ? { ...i, ...nuevo } : i)),
+    anterior: Number(lista[idx]?.cantidad) || 0,
+  };
+}
+
+/**
+ * Cambia la cantidad de un ingrediente en su lugar (el campo editable de la
+ * tabla). Guarda lo que se teclea tal cual: vacío se queda vacío y cuenta como
+ * pendiente, en vez de convertirse en un 0 que nadie escribió.
+ */
+export function cambiarCantidad(insumos = [], productoId, valor) {
+  const id = String(productoId);
+  return (Array.isArray(insumos) ? insumos : []).map((i) =>
+    String(i?.productoId ?? i?.id_producto) === id
+      ? { ...i, cantidad: valor }
+      : i,
+  );
+}

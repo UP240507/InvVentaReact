@@ -6,6 +6,10 @@ import {
   normalizaBusqueda,
   moverSeleccion,
   recetaConMismoCodigo,
+  estadoDeCaptura,
+  porcionSospechosa,
+  ponerIngrediente,
+  cambiarCantidad,
 } from './Recetas';
 
 const base = {
@@ -271,5 +275,149 @@ describe('recetaConMismoCodigo — la cortesía que le falta al índice', () => 
   it('aguanta basura', () => {
     expect(recetaConMismoCodigo('P01', null)).toBeNull();
     expect(recetaConMismoCodigo('P01', undefined)).toBeNull();
+  });
+});
+
+// ── Plantillas (06-oct) ─────────────────────────────────────────────────────
+// Las recetas de barra de AZUL se cargan con sus ingredientes en 0 y el dueño
+// pone las porciones. Estas pruebas fijan que una receta a medias se note.
+describe('estadoDeCaptura — que «falta» se vea', () => {
+  it('una plantilla con todo en 0 tiene todos sus ingredientes pendientes', () => {
+    const frappe = {
+      insumos: [
+        { productoId: 1, cantidad: 0 },
+        { productoId: 2, cantidad: 0 },
+        { productoId: 3, cantidad: 0 },
+      ],
+    };
+    expect(estadoDeCaptura(frappe)).toEqual({
+      pendientes: 3,
+      sinInsumos: false,
+      completa: false,
+    });
+  });
+
+  it('una cantidad vacía o no numérica cuenta como pendiente', () => {
+    const r = {
+      insumos: [
+        { productoId: 1, cantidad: '' },
+        { productoId: 2, cantidad: 'x' },
+        { productoId: 3, cantidad: 100 },
+      ],
+    };
+    expect(estadoDeCaptura(r).pendientes).toBe(2);
+  });
+
+  it('una receta sin ningún ingrediente no está completa', () => {
+    expect(estadoDeCaptura({ insumos: [] })).toEqual({
+      pendientes: 0,
+      sinInsumos: true,
+      completa: false,
+    });
+  });
+
+  it('con todas las cantidades puestas está completa', () => {
+    const r = {
+      insumos: [
+        { productoId: 1, cantidad: 100 },
+        { productoId: 2, cantidad: 18 },
+      ],
+    };
+    expect(estadoDeCaptura(r).completa).toBe(true);
+  });
+
+  it('un paquete nunca está pendiente: sus insumos son los de sus recetas', () => {
+    expect(
+      estadoDeCaptura({ insumos: [], componentes: [{ recetaId: 1 }] }).completa,
+    ).toBe(true);
+  });
+});
+
+describe('porcionSospechosa — el error de magnitud que no da error', () => {
+  it('100 en un insumo en litros es sospechoso (se pensaba en ml)', () => {
+    expect(porcionSospechosa(100, 'lt')).toMatch(/mililitros/);
+    expect(porcionSospechosa(100, 'L')).toMatch(/mililitros/);
+  });
+
+  it('18 en un insumo en kg es sospechoso (se pensaba en gramos)', () => {
+    expect(porcionSospechosa(18, 'kg')).toMatch(/gramos/);
+  });
+
+  it('0.1 en un insumo en ml es sospechoso (se pensaba en litros)', () => {
+    expect(porcionSospechosa(0.1, 'ml')).toMatch(/litros/);
+  });
+
+  it('las porciones de las tarjetas de AZUL pasan sin aviso', () => {
+    expect(porcionSospechosa(100, 'ml')).toBeNull(); // café del frappé
+    expect(porcionSospechosa(18, 'g')).toBeNull(); // un shot de café
+    expect(porcionSospechosa(0.3, 'lt')).toBeNull(); // vaso de leche
+    expect(porcionSospechosa(2, 'pz')).toBeNull(); // mazapán
+    expect(porcionSospechosa(1, 'pza')).toBeNull(); // bolsita de té
+  });
+
+  it('vacío o cero no avisa: eso es «pendiente», no «sospechoso»', () => {
+    expect(porcionSospechosa('', 'ml')).toBeNull();
+    expect(porcionSospechosa(0, 'ml')).toBeNull();
+  });
+
+  it('60 piezas en una porción es sospechoso', () => {
+    expect(porcionSospechosa(60, 'pz')).toMatch(/piezas/);
+  });
+});
+
+describe('ponerIngrediente — corregir ya no suma', () => {
+  it('agregar uno nuevo lo pone al final', () => {
+    const r = ponerIngrediente([{ productoId: 1, cantidad: 100 }], {
+      productoId: 2,
+      cantidad: 18,
+    });
+    expect(r.insumos).toHaveLength(2);
+    expect(r.anterior).toBeNull();
+  });
+
+  it('volver a agregar uno que ya estaba REEMPLAZA la cantidad y avisa cuál había', () => {
+    // El fallo de antes: 100, error, se teclea 120 y quedaba en 220.
+    const r = ponerIngrediente([{ productoId: 1, cantidad: 100, merma: 0 }], {
+      productoId: 1,
+      cantidad: 120,
+    });
+    expect(r.insumos).toEqual([{ productoId: 1, cantidad: 120, merma: 0 }]);
+    expect(r.anterior).toBe(100);
+  });
+
+  it('llenar una plantilla en 0 deja la cantidad tecleada', () => {
+    const r = ponerIngrediente([{ productoId: 1, cantidad: 0 }], {
+      productoId: '1',
+      cantidad: 100,
+    });
+    expect(r.insumos[0].cantidad).toBe(100);
+  });
+
+  it('no muta la lista ni los objetos que recibe', () => {
+    // React en modo estricto ejecuta el actualizador dos veces en desarrollo:
+    // mutar aquí sumaba doble.
+    const original = [{ productoId: 1, cantidad: 100 }];
+    const congelada = Object.freeze(
+      original.map((i) => Object.freeze({ ...i })),
+    );
+    ponerIngrediente(congelada, { productoId: 1, cantidad: 120 });
+    expect(congelada[0].cantidad).toBe(100);
+  });
+});
+
+describe('cambiarCantidad — el campo editable de la tabla', () => {
+  it('cambia sólo ese ingrediente y no muta', () => {
+    const antes = Object.freeze([
+      Object.freeze({ productoId: 1, cantidad: 0 }),
+      Object.freeze({ productoId: 2, cantidad: 18 }),
+    ]);
+    const despues = cambiarCantidad(antes, 1, '100');
+    expect(despues[0].cantidad).toBe('100');
+    expect(despues[1]).toBe(antes[1]);
+  });
+
+  it('vacío se queda vacío y cuenta como pendiente', () => {
+    const r = cambiarCantidad([{ productoId: 1, cantidad: 100 }], 1, '');
+    expect(estadoDeCaptura({ insumos: r }).pendientes).toBe(1);
   });
 });
