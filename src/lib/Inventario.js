@@ -18,20 +18,33 @@ export function construirDeltasStock(items = [], sustituciones = {}) {
 
     const insumos = Array.isArray(it?.insumos) ? it.insumos : [];
 
-    if (insumos.length > 0) {
-      for (const ins of insumos) {
-        const pid = ins?.productoId ?? ins?.id_producto;
-        if (pid == null) continue;
-        const consumo = (Number(ins?.cantidad) || 0) * qty;
-        if (consumo <= 0) continue;
-        const k = String(pid);
-        mapa.set(k, (mapa.get(k) || 0) + consumo);
-      }
-    } else {
-      const pid = it?.id ?? it?.producto_id;
+    // ── UNA LÍNEA SIN INSUMOS NO DESCUENTA NADA (06-oct) ─────────────────
+    // Aquí había un respaldo: sin insumos, se descontaba el producto cuyo id
+    // fuera el de la LÍNEA, pensado para «producto vendido directo». Pero el
+    // POS sólo vende recetas (`menuList = recetas`), así que ese id siempre
+    // es de una receta o una firma de línea, nunca de un producto. Dos fallos
+    // y ninguno daba error en pantalla:
+    //
+    //  - Ids que coinciden por casualidad. En AZUL la receta Pizza es el id 2
+    //    y el producto Queso Manchego también: una Pizza sin insumos habría
+    //    descontado manchego.
+    //  - Línea con modificador. Su id es la firma (`1787::30=302`), el
+    //    servidor la castea a bigint, revienta con 22P02 y la cola manda la
+    //    venta ENTERA a dead-letter sin reintento: también el café y el vaso
+    //    de las otras líneas. El stock local ya se había bajado, así que
+    //    pantalla y base divergen.
+    //
+    // Cargar el menú antes que las cantidades es justo lo que va a hacer
+    // AZUL, así que una receta sin insumos tiene que ser inofensiva: se
+    // vende, se cobra y no mueve stock. Un producto que se revende tal cual
+    // (un refresco) es una receta de un insumo con cantidad 1.
+    for (const ins of insumos) {
+      const pid = ins?.productoId ?? ins?.id_producto;
       if (pid == null) continue;
+      const consumo = (Number(ins?.cantidad) || 0) * qty;
+      if (consumo <= 0) continue;
       const k = String(pid);
-      mapa.set(k, (mapa.get(k) || 0) + qty);
+      mapa.set(k, (mapa.get(k) || 0) + consumo);
     }
   }
 

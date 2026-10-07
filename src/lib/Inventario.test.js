@@ -36,10 +36,29 @@ describe('construirDeltasStock · expansión de inventario', () => {
     ]);
   });
 
-  it('producto vendido directo (sin insumos) descuenta su propio id', () => {
+  // Antes del 06-oct esta prueba decía lo contrario («producto vendido directo
+  // descuenta su propio id»). El POS sólo vende recetas, así que ese id nunca
+  // era de un producto. Ver la cabecera del bucle en Inventario.js.
+  it('una receta sin insumos no descuenta nada', () => {
     expect(construirDeltasStock([{ id: 9, cantidad: 3, insumos: [] }])).toEqual(
-      [{ productoId: 9, cantidad: 3 }],
+      [],
     );
+  });
+
+  it('una receta sin insumos NO descuenta el producto que comparte su id', () => {
+    // Caso real de AZUL: receta Pizza = id 2, producto Queso Manchego = id 2.
+    const d = construirDeltasStock([{ id: 2, cantidad: 1 }]);
+    expect(d).toEqual([]);
+  });
+
+  it('una línea con modificador y sin insumos no manda su firma como producto', () => {
+    // La firma no es un bigint: el servidor revienta con 22P02 y la venta
+    // entera se va a dead-letter, junto con el stock de las OTRAS líneas.
+    const d = construirDeltasStock([
+      { id: '1787::30=302', receta_id: 1787, cantidad: 1, insumos: [] },
+      { id: 77, cantidad: 1, insumos: [{ productoId: 501, cantidad: 0.018 }] },
+    ]);
+    expect(d).toEqual([{ productoId: 501, cantidad: 0.018 }]);
   });
 
   it('soporta llave legacy id_producto', () => {
