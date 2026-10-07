@@ -19,6 +19,10 @@ import {
   filtrarInsumos,
   moverSeleccion,
   recetaConMismoCodigo,
+  estadoDeCaptura,
+  porcionSospechosa,
+  ponerIngrediente,
+  cambiarCantidad,
 } from '../../lib/Recetas';
 import {
   ChefHat,
@@ -39,6 +43,7 @@ import {
   Coins,
   EyeOff,
   Save,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function RecetasScreen() {
@@ -116,6 +121,12 @@ export default function RecetasScreen() {
       .filter((r) => {
         if (filtroEstado === 'Activos' && r.activo === false) return false;
         if (filtroEstado === 'Inactivos' && r.activo !== false) return false;
+        // Lo que falta por capturar, entre lo que se vende.
+        if (
+          filtroEstado === 'Pendientes' &&
+          (r.activo === false || estadoDeCaptura(r).completa)
+        )
+          return false;
         return (
           (r.nombre || '').toLowerCase().includes(busqueda.toLowerCase()) ||
           (r.codigo_pos || '').toLowerCase().includes(busqueda.toLowerCase())
@@ -522,24 +533,28 @@ export default function RecetasScreen() {
       return showToast('Datos inválidos.', 'error');
     const mermaFinal = Math.round(Number(mermaInsumo) * 100) / 100;
     if (mermaFinal >= 100) return showToast('Merma inválida.', 'error');
-    setForm((prev) => {
-      const clone = [...(prev.insumos || [])];
-      const idx = clone.findIndex(
-        (i) =>
-          String(i.productoId ?? i.id_producto) === String(insumoSeleccionado),
-      );
-      if (idx !== -1) {
-        clone[idx].cantidad += Number(cantidadInsumo);
-        clone[idx].merma = mermaFinal;
-      } else {
-        clone.push({
-          productoId: Number(insumoSeleccionado),
-          cantidad: Number(cantidadInsumo),
-          merma: mermaFinal,
-        });
-      }
-      return { ...prev, insumos: clone };
+    // Ya NO suma si el ingrediente estaba: le pone la cantidad nueva. Ver
+    // `ponerIngrediente` en lib/Recetas.js — sumar convertía cada corrección
+    // en un error (100, se teclea 120, quedaba 220), y con las recetas
+    // plantilla corregir es el camino normal.
+    const { insumos: nuevos, anterior } = ponerIngrediente(form.insumos, {
+      productoId: insumoSeleccionado,
+      cantidad: cantidadInsumo,
+      merma: mermaFinal,
     });
+    setForm((prev) => ({ ...prev, insumos: nuevos }));
+    const prod = productos.find(
+      (p) => String(p.id) === String(insumoSeleccionado),
+    );
+    const aviso = porcionSospechosa(cantidadInsumo, prod?.unidad);
+    if (aviso) {
+      showToast(aviso, 'error');
+    } else if (anterior != null && anterior > 0) {
+      showToast(
+        `${prod?.nombre || 'Ese ingrediente'} ya estaba con ${anterior} ${prod?.unidad || ''}: ahora lleva ${Number(cantidadInsumo)}.`,
+        'info',
+      );
+    }
     setInsumoSeleccionado('');
     setCantidadInsumo('');
     setMermaInsumo(0);
@@ -591,7 +606,13 @@ export default function RecetasScreen() {
         const costo = calcularCostoReceta(r.insumos || r.ingredientes || []);
         const precio = Number(r.precio_venta) || 0;
         const margen = precio > 0 ? ((precio - costo) / precio) * 100 : 0;
-        return { ...r, _costo: costo, _precio: precio, _margen: margen };
+        return {
+          ...r,
+          _costo: costo,
+          _precio: precio,
+          _margen: margen,
+          _captura: estadoDeCaptura(r),
+        };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [recetasFiltradas, productos],
@@ -608,6 +629,14 @@ export default function RecetasScreen() {
             {r.activo === false && (
               <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.14em] text-adm-danger">
                 oculto
+              </span>
+            )}
+            {/* Una receta a medias se veía igual que una terminada. */}
+            {!r._captura.completa && (
+              <span className="ml-2 text-[10px] font-bold uppercase tracking-[0.14em] text-adm-warn">
+                {r._captura.sinInsumos
+                  ? 'sin receta'
+                  : `${r._captura.pendientes} ${r._captura.pendientes === 1 ? 'cantidad pendiente' : 'cantidades pendientes'}`}
               </span>
             )}
           </p>
@@ -675,6 +704,11 @@ export default function RecetasScreen() {
       alinear: 'der',
       ancho: '1%',
       celda: (r) => {
+        // Con cantidades pendientes el costo sale bajo y el margen alto, en
+        // verde: un número que dice saber y no sabe. No se enseña.
+        if (!r._captura.completa) {
+          return <span className="text-adm-muted">Incompleta</span>;
+        }
         // Umbral de 30%: por debajo el platillo no paga su parte de los costos
         // fijos. Es el mismo criterio que usaba la barra de la tarjeta vieja.
         const tono =
@@ -772,7 +806,7 @@ export default function RecetasScreen() {
           className="flex-1 max-w-md"
         />
         <SegmentedControl
-          opciones={['Activos', 'Inactivos']}
+          opciones={['Activos', 'Pendientes', 'Inactivos']}
           valor={filtroEstado}
           onChange={setFiltroEstado}
         />
@@ -1441,9 +1475,92 @@ export default function RecetasScreen() {
                                   {prod.nombre}
                                 </td>
                                 <td className="px-4 py-4 text-center">
-                                  <span className="bg-adm-chip dark:bg-adm-bg text-adm-muted dark:text-adm-ink px-3 py-1.5 rounded-ui font-mono text-xs font-black border border-adm-border">
-                                    {ing.cantidad} {prod.unidad}
-                                  </span>
+                                  {/* Editable en su lugar (06-oct). Antes era
+                                      una etiqueta y la única forma de
+                                      corregir era volver a agregar, que
+                                      sumaba. Vacío o 0 = pendiente, en ámbar:
+                                      así se llena una receta plantilla. */}
+                                  {(() => {
+                                    const pendiente = !(
+                                      Number(ing.cantidad) > 0
+                                    );
+                                    const aviso = porcionSospechosa(
+                                      ing.cantidad,
+                                      prod.unidad,
+                                    );
+                                    const tono = pendiente
+                                      ? 'border-adm-warn bg-adm-warn/10'
+                                      : aviso
+                                        ? 'border-adm-danger bg-adm-danger/10'
+                                        : 'border-adm-border bg-adm-chip dark:bg-adm-bg';
+                                    return (
+                                      <div className="inline-flex flex-col items-center gap-1">
+                                        <label className="inline-flex items-center gap-1.5">
+                                          <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            step="any"
+                                            min="0"
+                                            aria-label={`Cantidad de ${prod.nombre} en ${prod.unidad}`}
+                                            placeholder="?"
+                                            data-cantidad-ingrediente=""
+                                            // Enter salta a la siguiente
+                                            // cantidad. Sin esto, Enter dentro
+                                            // del <form> GUARDA la receta y
+                                            // cierra el modal a media captura.
+                                            onKeyDown={(e) => {
+                                              if (e.key !== 'Enter') return;
+                                              e.preventDefault();
+                                              const todos = [
+                                                ...document.querySelectorAll(
+                                                  'input[data-cantidad-ingrediente]',
+                                                ),
+                                              ];
+                                              const k = todos.indexOf(
+                                                e.currentTarget,
+                                              );
+                                              todos[k + 1]?.focus();
+                                            }}
+                                            value={
+                                              Number(ing.cantidad) === 0 &&
+                                              ing.cantidad !== '0'
+                                                ? ''
+                                                : (ing.cantidad ?? '')
+                                            }
+                                            onChange={(e) =>
+                                              setForm((prev) => ({
+                                                ...prev,
+                                                insumos: cambiarCantidad(
+                                                  prev.insumos,
+                                                  ing.productoId ??
+                                                    ing.id_producto,
+                                                  e.target.value,
+                                                ),
+                                              }))
+                                            }
+                                            className={`w-20 px-2 py-1.5 rounded-ui font-mono text-xs font-black text-right text-adm-ink border-2 outline-none focus:border-adm-danger ${tono}`}
+                                          />
+                                          <span className="text-xs font-black text-adm-muted">
+                                            {prod.unidad}
+                                          </span>
+                                        </label>
+                                        {pendiente && (
+                                          <span className="text-[10px] font-black uppercase tracking-wider text-adm-warn">
+                                            Falta la cantidad
+                                          </span>
+                                        )}
+                                        {!pendiente && aviso && (
+                                          <span
+                                            role="alert"
+                                            className="max-w-[14rem] text-[10px] font-bold text-adm-danger flex items-start gap-1 text-left"
+                                          >
+                                            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                                            {aviso}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-4 py-4 text-center">
                                   {Number(mermaVal) > 0 ? (
