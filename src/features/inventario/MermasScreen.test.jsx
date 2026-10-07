@@ -120,4 +120,24 @@ describe('MermasScreen · el stock ajustado es un número', () => {
     expect(h.encolado).toHaveLength(0);
     expect(h.avisos.some(([m]) => /no puedes dar de baja/i.test(m))).toBe(true);
   });
+
+  it('el campo dice en qué unidad se captura, y el aviso también (06-oct)', async () => {
+    // Con los insumos en ml y g, quien tira un litro de leche y escribe «1»
+    // descuenta un mililitro. Antes el campo decía sólo «Cantidad» y el aviso
+    // «RESTAR 8 unidades del inventario».
+    const user = userEvent.setup();
+    const { container, unmount } = render(<MermasScreen />);
+    const botones = [...container.querySelectorAll('button')];
+    await user.click(botones.find((b) => /nuevo|ajuste/i.test(b.textContent)));
+    await user.selectOptions(
+      container.querySelectorAll('select')[0],
+      String(NARANJA.id),
+    );
+    await user.type(container.querySelector('input[type="number"]'), '8');
+
+    expect(container.textContent).toMatch(/Cantidad \*\s*en kg/);
+    expect(container.textContent).toMatch(/RESTAR 8 kg/);
+    expect(container.textContent).toMatch(/Stock final estimado:\s*42 kg/);
+    unmount();
+  });
 });

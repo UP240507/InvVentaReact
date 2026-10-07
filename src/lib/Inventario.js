@@ -259,3 +259,25 @@ export function verificarStock(items = [], productos = [], sustituciones = {}) {
   }
   return problemas;
 }
+
+/**
+ * Una cantidad de inventario lista para leerse: con separador de miles, hasta
+ * tres decimales y su unidad.
+ *
+ * ── POR QUÉ HACE FALTA DESDE EL 06-OCT ──────────────────────────────────────
+ * Con los insumos en ml y g las cifras crecen: «12500» se lee mal, y el
+ * descuento optimista del POS (`stock - delta`, sin redondear) puede dejar en
+ * pantalla un `12499.899999999`. Cinco sitios pintaban el stock crudo.
+ *
+ * @param {number|string} n
+ * @param {string} [unidad]
+ * @returns {string} p. ej. «12,500 ml»
+ */
+export function formatoCantidad(n, unidad = '') {
+  const v = Number(n);
+  const cifra = (Number.isFinite(v) ? v : 0).toLocaleString('es-MX', {
+    maximumFractionDigits: 3,
+  });
+  const u = String(unidad || '').trim();
+  return u ? `${cifra} ${u}` : cifra;
+}

@@ -4,6 +4,7 @@ import {
   construirDeltasStock,
   verificarStock,
   construirItemsComanda,
+  formatoCantidad,
 } from './Inventario';
 
 describe('construirDeltasStock · expansión de inventario', () => {
@@ -189,5 +190,21 @@ describe('construirItemsComanda · los modificadores sobreviven hasta cocina', (
       {},
     );
     expect(item.modificadores).toEqual([]);
+  });
+});
+
+describe('formatoCantidad — el stock en ml y g se lee', () => {
+  it('separa miles y pone la unidad', () => {
+    expect(formatoCantidad(12500, 'ml')).toBe('12,500 ml');
+  });
+
+  it('limpia la basura de coma flotante del descuento optimista', () => {
+    expect(formatoCantidad(12500 - 0.1, 'ml')).toBe('12,499.9 ml');
+    expect(formatoCantidad(0.1 + 0.2, 'g')).toBe('0.3 g');
+  });
+
+  it('sin unidad, sólo la cifra; lo que no es número, 0', () => {
+    expect(formatoCantidad(3)).toBe('3');
+    expect(formatoCantidad('x', 'pz')).toBe('0 pz');
   });
 });

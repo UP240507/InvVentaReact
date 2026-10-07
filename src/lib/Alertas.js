@@ -9,6 +9,7 @@
 //
 // Puro y testeable: recibe datos, devuelve alertas.
 
+import { formatoCantidad } from './Inventario';
 import {
   PackageX,
   CloudOff,
@@ -81,7 +82,7 @@ export function calcularAlertas(datos = {}, opciones = {}) {
         titulo: `${bajoMinimo.length} insumo${bajoMinimo.length !== 1 ? 's' : ''} bajo mínimo`,
         detalle: bajoMinimo
           .slice(0, 3)
-          .map((p) => `${p.nombre} (${p.stock} ${p.unidad || ''})`.trim())
+          .map((p) => `${p.nombre} (${formatoCantidad(p.stock, p.unidad)})`)
           .join(', '),
         ruta: '/compras',
         cta: 'Revisar',

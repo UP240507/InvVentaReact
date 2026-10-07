@@ -17,6 +17,7 @@ import { useAuthStore } from '../auth/useAuthStore';
 import { franjaAlEscribir } from '../../lib/Franjas';
 import { unidadesDisponibles, categoriasDeInsumo } from '../../lib/Catalogo';
 import { decimalesDeCosto } from '../../lib/Costos';
+import { formatoCantidad } from '../../lib/Inventario';
 import {
   Package,
   Plus,
@@ -312,7 +313,9 @@ export default function IngredientesScreen() {
             <span
               className={`font-bold tabular-nums ${vacio ? 'text-adm-danger' : critico ? 'text-adm-warn' : 'text-adm-ink'}`}
             >
-              {item.stock}
+              {/* Con separador de miles y sin basura de coma flotante:
+                  en ml y g las cifras crecen. */}
+              {formatoCantidad(item.stock)}
               <span className="text-[10px] uppercase opacity-70 ml-1">
                 {item.unidad}
               </span>

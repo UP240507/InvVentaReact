@@ -13,6 +13,7 @@ import {
 import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { franjaAlEscribir } from '../../lib/Franjas';
+import { formatoCantidad } from '../../lib/Inventario';
 import {
   Trash2,
   Plus,
@@ -35,6 +36,11 @@ export default function MermasScreen() {
   const [tipoAjuste, setTipoAjuste] = useState('Merma');
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
+  // La unidad del insumo elegido, para ponerla junto al campo y en el aviso.
+  const productoDelAjuste = (productos || []).find(
+    (p) => String(p.id) === String(insumoSeleccionado),
+  );
+  const unidadDelAjuste = productoDelAjuste?.unidad || '';
 
   const historialAjustes = useMemo(() => {
     return (movimientos || [])
@@ -351,7 +357,8 @@ export default function MermasScreen() {
                       .filter((p) => p.activo !== false)
                       .map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.nombre} (Stock: {p.stock} {p.unidad})
+                          {p.nombre} (Stock:{' '}
+                          {formatoCantidad(p.stock, p.unidad)})
                         </option>
                       ))}
                   </select>
@@ -384,8 +391,16 @@ export default function MermasScreen() {
                   </div>
 
                   <div>
+                    {/* La unidad a la vista (06-oct): con los insumos en ml
+                        y g, quien tira un litro de leche y escribe «1»
+                        descuenta un mililitro. */}
                     <label className="block text-xs font-bold text-adm-muted mb-1.5">
                       Cantidad *
+                      {unidadDelAjuste && (
+                        <span className="ml-1 text-adm-ink">
+                          en {unidadDelAjuste}
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
@@ -415,26 +430,17 @@ export default function MermasScreen() {
                         {tipoAjuste === 'Alta de Inventario'
                           ? 'SUMAR'
                           : 'RESTAR'}{' '}
-                        {cantidadAjuste}
+                        {formatoCantidad(cantidadAjuste, unidadDelAjuste)}
                       </strong>{' '}
-                      unidades del inventario. <br />
+                      del inventario. <br />
                       Stock final estimado:{' '}
                       <strong className="font-mono text-adm-ink text-sm">
-                        {tipoAjuste === 'Alta de Inventario'
-                          ? (
-                              Number(
-                                productos.find(
-                                  (p) => String(p.id) === insumoSeleccionado,
-                                )?.stock || 0,
-                              ) + Number(cantidadAjuste)
-                            ).toFixed(3)
-                          : (
-                              Number(
-                                productos.find(
-                                  (p) => String(p.id) === insumoSeleccionado,
-                                )?.stock || 0,
-                              ) - Number(cantidadAjuste)
-                            ).toFixed(3)}
+                        {formatoCantidad(
+                          Number(productoDelAjuste?.stock || 0) +
+                            (tipoAjuste === 'Alta de Inventario' ? 1 : -1) *
+                              Number(cantidadAjuste),
+                          unidadDelAjuste,
+                        )}
                       </strong>
                     </p>
                   </div>

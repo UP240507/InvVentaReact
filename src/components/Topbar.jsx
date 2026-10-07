@@ -29,6 +29,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useShellStore } from '../store/useShellStore';
 import { usePermisos } from '../hooks/usePermisos';
 import { tituloDeRuta, grupoDeRuta } from '../lib/Navegacion';
+import { formatoCantidad } from '../lib/Inventario';
 import { useAcoplado } from '../hooks/useAcoplado';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { useSessionStore } from '../store/useSessionStore';
@@ -283,7 +284,7 @@ export default function Topbar() {
                         AlertTriangle,
                         'bg-adm-accent/10 text-adm-accent',
                         'Stock crítico',
-                        `${p.nombre} (${p.stock} ${p.unidad || ''} restante).`,
+                        `${p.nombre} (${formatoCantidad(p.stock, p.unidad)} restante).`,
                         '/compras',
                       ),
                     )}

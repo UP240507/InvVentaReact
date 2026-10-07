@@ -6,7 +6,7 @@ import {
   X,
   ArrowRightLeft,
 } from 'lucide-react';
-import { verificarStock } from '../../../lib/Inventario';
+import { verificarStock, formatoCantidad } from '../../../lib/Inventario';
 import { useCierreConEscape } from '../../../hooks/useCierreConEscape';
 
 // Gate de inventario antes de cobrar: lista insumos agotados / bajo mínimo,
@@ -112,10 +112,10 @@ export default function ConfirmacionStockModal({
                   </span>
                 </div>
                 <p className="text-xs font-bold text-ops-muted mb-3">
-                  Requiere {p.requerido} {p.unidad || ''} · en stock {p.stock}{' '}
-                  {p.unidad || ''} · quedaría{' '}
+                  Requiere {formatoCantidad(p.requerido, p.unidad)} · en stock{' '}
+                  {formatoCantidad(p.stock, p.unidad)} · quedaría{' '}
                   <span className={agotado ? 'text-ops-danger' : ''}>
-                    {p.resultante}
+                    {formatoCantidad(p.resultante, p.unidad)}
                   </span>
                 </p>
                 <label className="flex items-center gap-2 text-xs font-black text-ops-muted dark:text-ops-ink">
@@ -128,7 +128,7 @@ export default function ConfirmacionStockModal({
                     <option value="">— mantener {p.nombre} —</option>
                     {opciones.map((o) => (
                       <option key={o.id} value={o.id}>
-                        {o.nombre} ({o.stock} {o.unidad || ''})
+                        {o.nombre} ({formatoCantidad(o.stock, o.unidad)})
                       </option>
                     ))}
                   </select>
