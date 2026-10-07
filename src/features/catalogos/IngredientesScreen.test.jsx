@@ -79,17 +79,9 @@ describe('IngredientesScreen · de dónde salen unidades y categorías', () => {
     await user.click(screen.getByRole('button', { name: /Nuevo insumo/i }));
 
     const unidad = await screen.findByLabelText('Unidad de medida');
-    // Las ocho de fábrica, que son las mismas que siembra la plantilla.
-    expect(opcionesDe(unidad)).toEqual([
-      'kg',
-      'g',
-      'L',
-      'ml',
-      'pz',
-      'paq',
-      'caja',
-      'bolsa',
-    ]);
+    // Las tres de fábrica (06-oct: la unidad más pequeña de cada cosa), que
+    // son las mismas que siembra la plantilla.
+    expect(opcionesDe(unidad)).toEqual(['g', 'ml', 'pz']);
 
     const categoria = screen.getByLabelText('Categoría del insumo');
     expect(opcionesDe(categoria)).toContain('Abarrotes');

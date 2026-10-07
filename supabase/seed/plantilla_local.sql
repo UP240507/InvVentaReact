@@ -98,6 +98,12 @@ insert into public.roles_permisos (restaurante_id, rol, capacidades) values
 -- Si hace falta una unidad nueva, se anade AQUI y se piensa una vez, en vez de
 -- teclearla distinta cada vez que alguien captura un insumo.
 --
+-- Y desde el 06-oct son solo tres: g, ml y pz, la unidad MAS PEQUENA de cada
+-- cosa. Es la que piensa quien prepara (la tarjeta dice 100 ml, no 0.1 L) y
+-- quita los decimales de las porciones, donde nacen los errores de magnitud.
+-- Caja, bolsa y paquete son como se COMPRA, no como se consume: van en el
+-- empaque de la linea de compra.
+--
 -- LAS CATEGORIAS SON DOS LISTAS, NO UNA
 --
 -- `categorias` son las del MENU: las que agrupan los platillos en el POS y las
@@ -126,7 +132,7 @@ insert into public.configuracion (
   'Nombre del local',          -- se cambia en Ajustes al dar de alta
   0.16,
   '¡Gracias por su preferencia!',
-  '["kg","g","L","ml","pz","paq","caja","bolsa"]'::jsonb,
+  '["g","ml","pz"]'::jsonb,
   -- Menu (POS y zonas de impresion): punto de partida, se edita en Ajustes.
   '["Desayunos","Platos fuertes","Bebidas","Postres"]'::jsonb,
   -- Almacen (pantalla de insumos): valen para cualquier local.

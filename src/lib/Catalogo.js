@@ -41,17 +41,20 @@
  * que este fichero vino a cerrar: hay una prueba que lo comprueba.
  *
  * Sin sinónimos a propósito: ni `lt` junto a `L`, ni `pza` junto a `pz`.
+ *
+ * ── LA UNIDAD MÁS PEQUEÑA DE CADA COSA (Chris, 06-oct) ──────────────────────
+ * Sólo tres: gramos, mililitros y piezas. Es la unidad en la que piensa quien
+ * prepara —las tarjetas de la barra dicen 100 ml, no 0.1 L— y quita los
+ * decimales de las porciones, que es donde nacen los errores de magnitud:
+ * 0.018 kg contra 18 g, y 0.1 escrito en un insumo en litros. `kg`, `L`,
+ * `paq`, `caja` y `bolsa` salen: las tres últimas son cómo se COMPRA, no cómo
+ * se consume, y eso va en el empaque de la línea de compra
+ * (DISENO_ALCANCE_INVENTARIO §4).
+ *
+ * Un local puede poner otra lista en Ajustes. Y un insumo que ya tenga otra
+ * unidad no cambia: sale aparte, bajo «ya en uso».
  */
-export const UNIDADES_BASE = [
-  'kg',
-  'g',
-  'L',
-  'ml',
-  'pz',
-  'paq',
-  'caja',
-  'bolsa',
-];
+export const UNIDADES_BASE = ['g', 'ml', 'pz'];
 
 /**
  * Categorías de ALMACÉN de fábrica. Valen para cualquier local —un almacén se

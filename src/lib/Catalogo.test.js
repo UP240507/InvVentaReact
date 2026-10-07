@@ -80,12 +80,15 @@ describe('unidadesDisponibles', () => {
       { unidad: 'pza', activo: true },
       { unidad: 'lt', activo: true },
       { unidad: 'Bolsa', activo: true },
-      { unidad: 'kg', activo: true }, // ésta sí está en la lista
+      // Desde el 06-oct `kg` tampoco está en la lista de fábrica (g, ml,
+      // pz): los cinco insumos de AZUL en kg salen aquí y no se pierden.
+      { unidad: 'kg', activo: true },
+      { unidad: 'g', activo: true }, // ésta sí está en la lista
     ];
     const r = unidadesDisponibles({ unidades: [] }, productos);
-    expect(r.sueltas).toEqual(['Bolsa', 'lt', 'pza']);
+    expect(r.sueltas).toEqual(['Bolsa', 'kg', 'lt', 'pza']);
     expect(r.lista).toEqual(UNIDADES_BASE); // no se contamina la buena
-    expect(r.sueltas).not.toContain('kg'); // lo que ya está no se repite
+    expect(r.sueltas).not.toContain('g'); // lo que ya está no se repite
   });
 
   it('`Bolsa` y `bolsa` son DOS valores, y se ven los dos', () => {
