@@ -129,3 +129,81 @@ describe('ModificadoresScreen · opción que sustituye', () => {
     ]);
   });
 });
+
+describe('ModificadoresScreen · opción con varios insumos', () => {
+  // «Tres leches» descuenta tres productos; antes una opción sólo podía uno.
+  it('«+ Otro insumo» junta los renglones y se guardan todos', async () => {
+    const user = userEvent.setup();
+    await abrirYNombrar(user); // 505 Deslactosada, «Además de la receta»
+    await user.type(screen.getByPlaceholderText('Cant.'), '30');
+    await user.click(screen.getByRole('button', { name: '+ Otro insumo' }));
+
+    // El renglón apartado se ve y los selectores quedan libres.
+    expect(
+      screen.getByText(/Descuenta 30 ml de Leche Deslactosada/),
+    ).toBeTruthy();
+    expect(screen.getByDisplayValue('Sin más insumos')).toBeTruthy();
+
+    await user.selectOptions(
+      screen.getByDisplayValue('Sin más insumos'),
+      '503',
+    );
+    await user.type(screen.getByPlaceholderText('Cant.'), '20');
+    await user.click(screen.getByRole('button', { name: 'Agregar' }));
+    await user.click(
+      screen.getByRole('button', { name: /Crear Grupo de Modificadores/ }),
+    );
+
+    const [op] = grupoGuardado().opciones;
+    expect(op.insumos).toEqual([
+      { id_producto: 505, cantidad: 30, sustituye: null },
+      { id_producto: 503, cantidad: 20, sustituye: null },
+    ]);
+    // El primero, también suelto: lo que lee una caja sin actualizar.
+    expect(op).toMatchObject({ id_producto: 505, cantidad: 30 });
+  });
+
+  it('con un solo insumo se guarda como siempre, sin lista', async () => {
+    const user = userEvent.setup();
+    await abrirYNombrar(user);
+    await user.type(screen.getByPlaceholderText('Cant.'), '30');
+    await user.click(screen.getByRole('button', { name: 'Agregar' }));
+    await user.click(
+      screen.getByRole('button', { name: /Crear Grupo de Modificadores/ }),
+    );
+    expect(grupoGuardado().opciones[0].insumos).toBeUndefined();
+  });
+
+  it('un renglón apartado se puede quitar antes de agregar la opción', async () => {
+    const user = userEvent.setup();
+    await abrirYNombrar(user);
+    await user.type(screen.getByPlaceholderText('Cant.'), '30');
+    await user.click(screen.getByRole('button', { name: '+ Otro insumo' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Quitar Leche Deslactosada' }),
+    );
+    expect(screen.queryByText(/Descuenta 30 ml/)).toBeNull();
+    expect(screen.getByDisplayValue('No afecta inventario')).toBeTruthy();
+  });
+
+  it('la lista del grupo muestra cada insumo de la opción', async () => {
+    const user = userEvent.setup();
+    await abrirYNombrar(user);
+    await user.selectOptions(
+      screen.getByLabelText('Cómo afecta la receta'),
+      '503',
+    );
+    await user.click(screen.getByRole('button', { name: '+ Otro insumo' }));
+    await user.selectOptions(
+      screen.getByDisplayValue('Sin más insumos'),
+      '503',
+    );
+    await user.type(screen.getByPlaceholderText('Cant.'), '15');
+    await user.click(screen.getByRole('button', { name: 'Agregar' }));
+
+    expect(
+      screen.getByText(/Cambia Leche Entera por Leche Deslactosada/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Descuenta 15 ml de Leche Entera/)).toBeTruthy();
+  });
+});

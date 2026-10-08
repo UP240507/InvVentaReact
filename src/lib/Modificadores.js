@@ -168,6 +168,10 @@ export function opcionesElegidas(grupos = [], seleccion = vacia) {
         // Si viene, la opción no AGREGA su insumo: CAMBIA este de la receta
         // por el suyo, en la misma cantidad. Ver `lineaConOpciones`.
         sustituye: op?.sustituye ?? null,
+        // Varios insumos (07-oct). Si la opción trae lista, manda la lista;
+        // si no, los tres campos de arriba son su único insumo. Ver
+        // `insumosDeOpcion`.
+        insumos: Array.isArray(op?.insumos) ? op.insumos : null,
       });
     }
   }
@@ -179,6 +183,42 @@ const aCentavos = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 };
+
+/**
+ * Los insumos de UNA opción, siempre como lista.
+ *
+ * ── VARIOS INSUMOS POR OPCIÓN (Chris, 07-oct) ───────────────────────────────
+ * Hasta hoy una opción descontaba un solo insumo, y eso obligaba a mentir de
+ * dos maneras: o «Miel y canela» descontaba sólo la miel, o cada Soda
+ * Italiana Mix era una receta aparte y la caja dejaba de parecerse a la
+ * carta. Ahora la opción puede traer `insumos: [{ id_producto, cantidad,
+ * sustituye }]`.
+ *
+ * Una opción guardada antes —con `id_producto`, `cantidad` y `sustituye`
+ * sueltos— se lee como una lista de uno, así que nada de lo que ya existe
+ * cambia de comportamiento. Y la pantalla, al guardar una opción con lista,
+ * copia el primer renglón a esos campos sueltos: una caja que todavía no se
+ * actualiza sigue descontando al menos ese insumo mientras dura el cambio de
+ * versión.
+ *
+ * @returns {Array<{id_producto, cantidad, sustituye}>}
+ */
+export function insumosDeOpcion(op) {
+  const valido = (i) => i && i.id_producto != null && i.id_producto !== '';
+  if (Array.isArray(op?.insumos) && op.insumos.length > 0) {
+    return op.insumos.filter(valido).map((i) => ({
+      id_producto: i.id_producto,
+      cantidad: i.cantidad ?? null,
+      sustituye: i.sustituye ?? null,
+    }));
+  }
+  const uno = {
+    id_producto: op?.id_producto,
+    cantidad: op?.cantidad ?? null,
+    sustituye: op?.sustituye ?? null,
+  };
+  return valido(uno) ? [uno] : [];
+}
 
 /**
  * Lo que las opciones elegidas le hacen a la línea: precio e insumos.
@@ -226,9 +266,11 @@ export function lineaConOpciones({
   }, 0);
   const baseCent = aCentavos(precioBase);
 
-  const conInsumo = lista.filter(
-    (o) => o?.id_producto != null && o.id_producto !== '',
-  );
+  // Cada opción puede traer varios insumos (07-oct): «Tres leches» descuenta
+  // condensada, evaporada y crema; «Fresa-Limón», dos jarabes. Se aplanan a
+  // una sola lista y cada renglón hace una de dos cosas: agrega su cantidad o
+  // sustituye un insumo de la receta.
+  const conInsumo = lista.flatMap(insumosDeOpcion);
   const esSustitucion = (o) => o?.sustituye != null && o.sustituye !== '';
 
   // ── SUSTITUIR (07-oct) ────────────────────────────────────────────────────

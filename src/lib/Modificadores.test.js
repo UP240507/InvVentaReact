@@ -26,6 +26,7 @@ import {
   firmaDeLinea,
   repartirPorNota,
   lineaConOpciones,
+  insumosDeOpcion,
   baseDeLinea,
   textoDeReglas,
   recetasQueUsan,
@@ -760,5 +761,157 @@ describe('lineaConOpciones — una opción que sustituye en vez de agregar', () 
     const de = (id) => deltas.find((d) => d.productoId === id)?.cantidad;
     expect(de(DESLACT_ID)).toBe(100);
     expect(de(ENTERA_ID)).toBeUndefined();
+  });
+});
+
+// ── Varios insumos por opción (07-oct) ──────────────────────────────────────
+// Decisión de Chris: la caja tiene que parecerse a la carta (una Soda
+// Italiana Mix con sus sabores, un Gourmet con sus 4) y el inventario tiene
+// que descontar todo lo que lleva cada sabor.
+describe('lineaConOpciones — una opción con varios insumos', () => {
+  const CONDENSADA = 601;
+  const EVAPORADA = 602;
+  const CREMA = 603;
+  const JARABE_FRESA = 611;
+  const JARABE_LIMON = 612;
+  const MINERAL = 620;
+  const LECHE = 503;
+  const DESLACT = 505;
+
+  const tresLeches = {
+    precio: 0,
+    // El primer renglón va copiado a los campos sueltos, como lo guarda la
+    // pantalla para las cajas que aún no se actualizan.
+    id_producto: CONDENSADA,
+    cantidad: 20,
+    insumos: [
+      { id_producto: CONDENSADA, cantidad: 20 },
+      { id_producto: EVAPORADA, cantidad: 20 },
+      { id_producto: CREMA, cantidad: 10 },
+    ],
+  };
+
+  it('Tres leches descuenta sus tres insumos', () => {
+    const r = lineaConOpciones({
+      precioBase: 85,
+      insumos: [{ productoId: CAFE, cantidad: 100 }],
+      elegidas: [tresLeches],
+    });
+    expect(r.insumos).toEqual([
+      { productoId: CAFE, cantidad: 100 },
+      { productoId: CONDENSADA, cantidad: 20 },
+      { productoId: EVAPORADA, cantidad: 20 },
+      { productoId: CREMA, cantidad: 10 },
+    ]);
+    expect(r.precio).toBe(85);
+  });
+
+  it('el renglón copiado a los campos sueltos NO se cuenta dos veces', () => {
+    const r = lineaConOpciones({ precioBase: 85, elegidas: [tresLeches] });
+    const condensada = r.insumos.filter((i) => i.productoId === CONDENSADA);
+    expect(condensada).toHaveLength(1);
+  });
+
+  it('Soda Italiana Mix Fresa-Limón: un producto, dos jarabes', () => {
+    const fresaLimon = {
+      precio: 0,
+      insumos: [
+        { id_producto: JARABE_FRESA, cantidad: 15 },
+        { id_producto: JARABE_LIMON, cantidad: 15 },
+      ],
+    };
+    const r = lineaConOpciones({
+      precioBase: 68,
+      insumos: [{ productoId: MINERAL, cantidad: 1 }],
+      elegidas: [fresaLimon],
+    });
+    expect(r.insumos).toEqual([
+      { productoId: MINERAL, cantidad: 1 },
+      { productoId: JARABE_FRESA, cantidad: 15 },
+      { productoId: JARABE_LIMON, cantidad: 15 },
+    ]);
+  });
+
+  it('una opción puede sustituir y agregar a la vez', () => {
+    // Ej.: «Deslactosada con canela»: cambia la leche y agrega canela.
+    const mixta = {
+      precio: 6,
+      insumos: [
+        { id_producto: DESLACT, sustituye: LECHE },
+        { id_producto: 630, cantidad: 2 },
+      ],
+    };
+    const r = lineaConOpciones({
+      precioBase: 63,
+      insumos: [{ productoId: LECHE, cantidad: 200 }],
+      elegidas: [mixta],
+    });
+    expect(r.insumos).toEqual([
+      { productoId: DESLACT, cantidad: 200 },
+      { productoId: 630, cantidad: 2 },
+    ]);
+    expect(r.precio).toBe(69);
+  });
+
+  it('de punta a punta: dos frappés tres leches descuentan el doble de cada insumo', () => {
+    const { insumos } = lineaConOpciones({
+      precioBase: 85,
+      elegidas: [tresLeches],
+    });
+    const deltas = construirDeltasStock([{ cantidad: 2, insumos }]);
+    const de = (id) => deltas.find((d) => d.productoId === id)?.cantidad;
+    expect([de(CONDENSADA), de(EVAPORADA), de(CREMA)]).toEqual([40, 40, 20]);
+  });
+});
+
+describe('insumosDeOpcion — la lista manda, lo viejo sigue valiendo', () => {
+  it('una opción vieja de un solo insumo se lee como lista de uno', () => {
+    expect(insumosDeOpcion({ id_producto: 7, cantidad: 3 })).toEqual([
+      { id_producto: 7, cantidad: 3, sustituye: null },
+    ]);
+  });
+
+  it('una opción sin insumo no da renglones', () => {
+    expect(insumosDeOpcion({ nombre: 'Término medio' })).toEqual([]);
+  });
+
+  it('con lista, se ignoran los campos sueltos', () => {
+    expect(
+      insumosDeOpcion({
+        id_producto: 1,
+        cantidad: 9,
+        insumos: [{ id_producto: 2, cantidad: 5 }],
+      }),
+    ).toEqual([{ id_producto: 2, cantidad: 5, sustituye: null }]);
+  });
+
+  it('descarta renglones sin insumo', () => {
+    expect(
+      insumosDeOpcion({
+        insumos: [
+          { id_producto: '', cantidad: 5 },
+          { id_producto: 3, cantidad: 1 },
+        ],
+      }),
+    ).toEqual([{ id_producto: 3, cantidad: 1, sustituye: null }]);
+  });
+
+  it('opcionesElegidas transporta la lista hasta la línea', () => {
+    const g = [
+      {
+        id: 9,
+        nombre: 'Sabor gourmet',
+        tipo: 'unica',
+        opciones: [
+          {
+            id_opcion: 91,
+            nombre: 'Tres leches',
+            insumos: [{ id_producto: 601, cantidad: 20 }],
+          },
+        ],
+      },
+    ];
+    const [op] = opcionesElegidas(g, { 9: ['91'] });
+    expect(op.insumos).toEqual([{ id_producto: 601, cantidad: 20 }]);
   });
 });

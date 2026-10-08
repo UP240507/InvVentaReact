@@ -16,6 +16,7 @@ import {
   recetasQueUsan,
   alternar,
   seleccionCompleta,
+  insumosDeOpcion,
 } from '../../lib/Modificadores';
 import {
   ListPlus,
@@ -60,6 +61,11 @@ export default function ModificadoresScreen() {
   const [opcionCantidad, setOpcionCantidad] = useState('');
   // '' = la opción AGREGA su insumo; un id = lo CAMBIA por ese de la receta.
   const [opcionSustituye, setOpcionSustituye] = useState('');
+  // Insumos ya apartados para la opción en edición (07-oct). «Tres leches»
+  // descuenta leche, evaporada y condensada; «Fresa-Limón» dos jarabes. Lo
+  // que está en los selectores de abajo es el insumo que se está armando;
+  // «+ Otro insumo» lo pasa aquí y deja los selectores libres.
+  const [opcionInsumos, setOpcionInsumos] = useState([]);
 
   const modificadoresFiltrados = useMemo(() => {
     return (modificadores || [])
@@ -114,7 +120,59 @@ export default function ModificadoresScreen() {
     setOpcionProductoId('');
     setOpcionCantidad('');
     setOpcionSustituye('');
+    setOpcionInsumos([]);
   };
+
+  const nombreDeProducto = (id) =>
+    (productos || []).find((p) => String(p.id) === String(id))?.nombre ||
+    'un insumo';
+  const unidadDeProducto = (id) =>
+    (productos || []).find((p) => String(p.id) === String(id))?.unidad || '';
+
+  // El insumo que está en los selectores, como renglón. null si no hay.
+  const insumoEnEdicion = () => {
+    if (!opcionProductoId) return null;
+    return {
+      id_producto: Number(opcionProductoId),
+      // Al sustituir, la cantidad es la de cada receta, no la del grupo.
+      cantidad: opcionSustituye
+        ? 0
+        : opcionCantidad
+          ? Number(opcionCantidad)
+          : 0,
+      sustituye: opcionSustituye ? Number(opcionSustituye) : null,
+    };
+  };
+
+  const insumoValido = (r) => {
+    if (r.sustituye != null && String(r.sustituye) === String(r.id_producto)) {
+      showToast('Un insumo no se puede sustituir por sí mismo.', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const apartarInsumo = () => {
+    const r = insumoEnEdicion();
+    if (!r) {
+      showToast('Elige primero el insumo que descuenta.', 'error');
+      return;
+    }
+    if (!insumoValido(r)) return;
+    setOpcionInsumos((prev) => [...prev, r]);
+    setOpcionProductoId('');
+    setOpcionCantidad('');
+    setOpcionSustituye('');
+  };
+
+  const quitarInsumoApartado = (idx) =>
+    setOpcionInsumos((prev) => prev.filter((_, i) => i !== idx));
+
+  // Texto de un renglón de insumo, igual en lo apartado y en la lista.
+  const textoDeInsumo = (r) =>
+    r.sustituye != null && r.sustituye !== ''
+      ? `Cambia ${nombreDeProducto(r.sustituye)} por ${nombreDeProducto(r.id_producto)}, en la cantidad de cada receta`
+      : `Descuenta ${r.cantidad ?? 0} ${unidadDeProducto(r.id_producto)} de ${nombreDeProducto(r.id_producto)}`;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -187,13 +245,10 @@ export default function ModificadoresScreen() {
       showToast('La opción debe tener un nombre.', 'error');
       return;
     }
-    if (
-      opcionSustituye &&
-      String(opcionSustituye) === String(opcionProductoId)
-    ) {
-      showToast('Un insumo no se puede sustituir por sí mismo.', 'error');
-      return;
-    }
+    const actual = insumoEnEdicion();
+    if (actual && !insumoValido(actual)) return;
+    const insumos = actual ? [...opcionInsumos, actual] : opcionInsumos;
+    const [primero] = insumos;
 
     setFormData((prev) => ({
       ...prev,
@@ -203,17 +258,14 @@ export default function ModificadoresScreen() {
           id_opcion: Date.now() + Math.random(),
           nombre: opcionNombre.trim(),
           precio_extra: Number(opcionPrecio) || 0,
-          id_producto: opcionProductoId ? Number(opcionProductoId) : null,
-          // Al sustituir, la cantidad es la de cada receta, no la del grupo.
-          cantidad: opcionSustituye
-            ? 0
-            : opcionCantidad
-              ? Number(opcionCantidad)
-              : 0,
-          sustituye:
-            opcionProductoId && opcionSustituye
-              ? Number(opcionSustituye)
-              : null,
+          // El primer insumo se copia a los campos sueltos de siempre: una caja
+          // con la versión anterior sólo lee esos, y así al menos descuenta
+          // el principal. La versión nueva lee `insumos` y no los suma dos
+          // veces (ver insumosDeOpcion).
+          id_producto: primero ? primero.id_producto : null,
+          cantidad: primero ? primero.cantidad : 0,
+          sustituye: primero ? primero.sustituye : null,
+          ...(insumos.length > 1 ? { insumos } : {}),
         },
       ],
     }));
@@ -636,6 +688,33 @@ export default function ModificadoresScreen() {
                     </div>
                   </div>
 
+                  {opcionInsumos.length > 0 && (
+                    <ul
+                      aria-label="Insumos de la opción"
+                      className="border-t border-adm-border pt-3 space-y-1"
+                    >
+                      {opcionInsumos.map((r, i) => (
+                        <li
+                          key={i}
+                          className="flex items-center justify-between text-[11px] font-bold text-adm-muted"
+                        >
+                          <span className="flex items-center gap-1">
+                            <PackageOpen className="w-3 h-3" />
+                            {textoDeInsumo(r)}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Quitar ${nombreDeProducto(r.id_producto)}`}
+                            onClick={() => quitarInsumoApartado(i)}
+                            className="text-adm-muted hover:text-adm-danger p-1"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <div className="flex gap-3 items-center border-t border-adm-border pt-3">
                     <PackageOpen className="w-4 h-4 text-adm-muted shrink-0" />
                     <div className="flex-1">
@@ -644,7 +723,11 @@ export default function ModificadoresScreen() {
                         onChange={(e) => setOpcionProductoId(e.target.value)}
                         className="w-full bg-white dark:bg-adm-panel border border-adm-field text-adm-muted dark:text-adm-ink font-medium px-3 py-2 rounded-ui outline-none focus:border-adm-info dark:focus:border-adm-info text-xs transition-colors"
                       >
-                        <option value="">No afecta inventario</option>
+                        <option value="">
+                          {opcionInsumos.length > 0
+                            ? 'Sin más insumos'
+                            : 'No afecta inventario'}
+                        </option>
                         {(productos || [])
                           .filter((p) => p.activo !== false)
                           .map((p) => (
@@ -694,6 +777,16 @@ export default function ModificadoresScreen() {
                         />
                       </div>
                     )}
+                    {opcionProductoId && (
+                      <button
+                        type="button"
+                        onClick={apartarInsumo}
+                        title="Esta opción descuenta más de un insumo"
+                        className="border border-adm-field text-adm-ink px-3 py-2 rounded-ui text-xs font-bold shrink-0 hover:border-adm-info transition-colors"
+                      >
+                        + Otro insumo
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={agregarOpcion}
@@ -716,12 +809,6 @@ export default function ModificadoresScreen() {
                     </div>
                   ) : (
                     formData.opciones.map((op, index) => {
-                      const prodVinculado = op.id_producto
-                        ? (productos || []).find(
-                            (p) => String(p.id) === String(op.id_producto),
-                          )
-                        : null;
-
                       return (
                         <div
                           key={index}
@@ -741,23 +828,15 @@ export default function ModificadoresScreen() {
                                 </span>
                               )}
                             </p>
-                            {prodVinculado && op.sustituye != null && (
-                              <p className="text-[10px] font-bold text-adm-muted mt-1 flex items-center gap-1">
-                                <PackageOpen className="w-3 h-3" /> Cambia{' '}
-                                {(productos || []).find(
-                                  (p) => String(p.id) === String(op.sustituye),
-                                )?.nombre || 'un insumo'}{' '}
-                                por {prodVinculado.nombre}, en la cantidad de
-                                cada receta
+                            {insumosDeOpcion(op).map((r, i) => (
+                              <p
+                                key={i}
+                                className="text-[10px] font-bold text-adm-muted mt-1 flex items-center gap-1"
+                              >
+                                <PackageOpen className="w-3 h-3" />{' '}
+                                {textoDeInsumo(r)}
                               </p>
-                            )}
-                            {prodVinculado && op.sustituye == null && (
-                              <p className="text-[10px] font-bold text-adm-muted mt-1 flex items-center gap-1">
-                                <PackageOpen className="w-3 h-3" /> Descuenta{' '}
-                                {op.cantidad} {prodVinculado.unidad} de{' '}
-                                {prodVinculado.nombre}
-                              </p>
-                            )}
+                            ))}
                           </div>
                           <button
                             onClick={() => removerOpcion(op.id_opcion)}
