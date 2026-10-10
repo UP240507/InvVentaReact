@@ -1721,6 +1721,16 @@ export default function ConfiguracionScreen() {
                         refrigerador es uno solo.
                       </p>
                       <p>
+                        <strong className="text-adm-ink">
+                          La misma hora cambia la carta.
+                        </strong>{' '}
+                        En cada receta se puede poner un precio para la tarde y
+                        decir si se vende sólo en la mañana o sólo en la tarde.
+                        La caja enseña sólo lo que se vende a esa hora, y cada
+                        producto se cobra con el precio de la hora en que se
+                        pidió, aunque la cuenta se pague después.
+                      </p>
+                      <p>
                         Cambiar la hora de corte{' '}
                         <strong className="text-adm-ink">
                           no reclasifica lo ya cobrado

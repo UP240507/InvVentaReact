@@ -59,12 +59,15 @@ const COMPLETA = {
   activo: true,
 };
 
-const montar = (recetas = [PLANTILLA, COMPLETA]) => {
+const montar = (
+  recetas = [PLANTILLA, COMPLETA],
+  configuracion = { categorias: [] },
+) => {
   Object.assign(h.app, {
     recetas,
     productos: PRODUCTOS,
     modificadores: [],
-    configuracion: { categorias: [] },
+    configuracion,
     showToast: (m) => h.avisos.push(m),
     upsertReceta: vi.fn(),
   });
@@ -159,5 +162,80 @@ describe('RecetasScreen · recetas plantilla', () => {
 
     expect(screen.getByLabelText(/Cantidad de Café en grano/).value).toBe('20');
     expect(h.avisos.some((m) => /ya estaba con 18/.test(m))).toBe(true);
+  });
+});
+
+describe('RecetasScreen · carta de la mañana y de la tarde', () => {
+  const AGUA = {
+    ...COMPLETA,
+    id: 503,
+    nombre: 'Agua de fruta',
+    categoria: 'Bebidas',
+    precio_venta: 34,
+  };
+  const montarCon = (configuracion, recetas = [AGUA]) =>
+    montar(recetas, { categorias: [], ...configuracion });
+  const abrir = (nombre) => fireEvent.doubleClick(screen.getByText(nombre));
+  const guardar = async (user) => {
+    await user.click(
+      screen.getByRole('button', { name: /Guardar|Actualizar/i }),
+    );
+    return h.enqueued.find((a) => a[0] === 'recetas')?.[2];
+  };
+
+  it('con franjas: se captura el precio de la tarde y se guarda', async () => {
+    const user = userEvent.setup();
+    montarCon({ franjas_activas: true, franja_corte: '14:00:00' });
+    abrir('Agua de fruta');
+    expect(
+      await screen.findByText(/La tarde empieza a las 14:00/),
+    ).toBeTruthy();
+    await user.type(screen.getByLabelText('Precio en la tarde'), '38');
+    const r = await guardar(user);
+    expect(r).toMatchObject({
+      precio_venta: 34,
+      precio_vespertino: 38,
+      franja_carta: null,
+    });
+  });
+
+  it('«Sólo en la mañana» esconde el precio de tarde y no lo guarda', async () => {
+    const user = userEvent.setup();
+    montarCon({ franjas_activas: true }, [{ ...AGUA, precio_vespertino: 38 }]);
+    abrir('Agua de fruta');
+    await user.selectOptions(
+      await screen.findByLabelText('Se vende en'),
+      'matutino',
+    );
+    expect(screen.queryByLabelText('Precio en la tarde')).toBeNull();
+    const r = await guardar(user);
+    expect(r).toMatchObject({
+      franja_carta: 'matutino',
+      precio_vespertino: null,
+    });
+  });
+
+  it('sin franjas no se enseña, y lo que ya tenía la receta se conserva', async () => {
+    const user = userEvent.setup();
+    montarCon({ franjas_activas: false }, [
+      { ...AGUA, precio_vespertino: 38, franja_carta: 'vespertino' },
+    ]);
+    abrir('Agua de fruta');
+    await screen.findByLabelText(/Categoría del menú/);
+    expect(screen.queryByLabelText('Se vende en')).toBeNull();
+    const r = await guardar(user);
+    expect(r).toMatchObject({
+      precio_vespertino: 38,
+      franja_carta: 'vespertino',
+    });
+  });
+
+  it('dejar vacío el precio de tarde guarda null: cobra lo mismo todo el día', async () => {
+    const user = userEvent.setup();
+    montarCon({ franjas_activas: true }, [{ ...AGUA, precio_vespertino: 38 }]);
+    abrir('Agua de fruta');
+    await user.clear(await screen.findByLabelText('Precio en la tarde'));
+    const r = await guardar(user);
+    expect(r.precio_vespertino).toBeNull();
   });
 });

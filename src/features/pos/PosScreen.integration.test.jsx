@@ -403,3 +403,171 @@ describe('Integración · extras del cuadro → venta', () => {
     ]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARTA DE LA MAÑANA Y DE LA TARDE (09-oct, AZUL)
+//
+// La hora real no se puede fijar sin romper userEvent, así que se mueve el
+// corte: a las 00:00 todo el día es «tarde», a las 23:59 casi todo es mañana.
+describe('Integración · carta de la tarde', () => {
+  const AGUA = {
+    id: 40,
+    nombre: 'Agua de fruta',
+    precio_venta: 34,
+    precio_vespertino: 38,
+    categoria: 'Bebidas',
+  };
+  const DESAYUNO = {
+    id: 41,
+    nombre: 'Chilaquiles',
+    precio_venta: 95,
+    franja_carta: 'matutino',
+    categoria: 'Desayunos',
+  };
+  const CENA = {
+    id: 42,
+    nombre: 'Arrachera',
+    precio_venta: 210,
+    franja_carta: 'vespertino',
+    categoria: 'Comidas',
+  };
+  const montar = (configuracion) => {
+    Object.assign(h.app, {
+      recetas: [AGUA, DESAYUNO, CENA],
+      configuracion: { precios_incluyen_iva: true, ...configuracion },
+    });
+    return render(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+  };
+  const cobrar = async (user) => {
+    await user.click(screen.getByRole('button', { name: /Cobrar Ticket/ }));
+    await user.click(
+      await screen.findByRole('button', { name: /Pagar Restante/ }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+    return ventaEncolada();
+  };
+
+  it('en la tarde cobra el precio de tarde y la venta lo lleva en la línea', async () => {
+    const user = userEvent.setup();
+    montar({ franjas_activas: true, franja_corte: '00:00' });
+
+    const boton = screen.getByRole('button', { name: /Agua de fruta/ });
+    expect(boton.textContent).toMatch(/38\.00/);
+    await user.click(boton);
+
+    const venta = await cobrar(user);
+    expect(venta.total).toBe(38);
+    const [linea] = venta.items;
+    // `precio_venta` es el que lee el trigger: si se quedara en 34, el
+    // servidor vería la venta de 38 como precio cambiado a mano.
+    expect(linea).toMatchObject({
+      precio: 38,
+      precio_venta: 38,
+      receta_id: 40,
+      precio_carta: 'vespertino',
+    });
+  });
+
+  it('cada mitad del día enseña su carta', () => {
+    const tarde = montar({ franjas_activas: true, franja_corte: '00:00' });
+    expect(screen.queryByRole('button', { name: /Chilaquiles/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Arrachera/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Agua de fruta/ })).toBeTruthy();
+    tarde.unmount();
+
+    montar({ franjas_activas: true, franja_corte: '23:59' });
+    expect(screen.getByRole('button', { name: /Chilaquiles/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Arrachera/ })).toBeNull();
+  });
+
+  it('con las franjas apagadas: un precio y todo el menú, como antes', async () => {
+    const user = userEvent.setup();
+    montar({ franjas_activas: false, franja_corte: '00:00' });
+    expect(screen.getByRole('button', { name: /Chilaquiles/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Arrachera/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+    const venta = await cobrar(user);
+    expect(venta.total).toBe(34);
+    expect(venta.items[0].id).toBe(40);
+  });
+
+  it('con sabor (modificador): mañana y tarde siguen siendo dos líneas', async () => {
+    const user = userEvent.setup();
+    h.app.modificadores = [
+      {
+        id: 50,
+        nombre: 'Sabor del agua',
+        tipo: 'unica',
+        obligatorio: true,
+        activo: true,
+        opciones: [{ id_opcion: 501, nombre: 'Jamaica', precio_extra: 0 }],
+      },
+    ];
+    const conSabor = { ...AGUA, grupos_modificadores: [50] };
+    Object.assign(h.app, {
+      recetas: [conSabor],
+      configuracion: {
+        precios_incluyen_iva: true,
+        franjas_activas: true,
+        franja_corte: '23:59',
+      },
+    });
+    const { rerender } = render(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    const pedirJamaica = async () => {
+      await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+      await user.click(await screen.findByRole('button', { name: /Jamaica/ }));
+      await user.click(
+        screen.getByRole('button', { name: /Agregar al pedido/ }),
+      );
+    };
+    await pedirJamaica();
+    h.app.configuracion = { ...h.app.configuracion, franja_corte: '00:00' };
+    rerender(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    await pedirJamaica();
+
+    const venta = await cobrar(user);
+    expect(venta.total).toBe(72);
+    expect(venta.items.map((i) => i.precio)).toEqual([34, 38]);
+    // El trigger coteja contra el catálogo con `receta_id`.
+    expect(venta.items.every((i) => i.receta_id === 40)).toBe(true);
+  });
+
+  it('la agua de la mañana y la de la tarde no se funden en una línea', async () => {
+    const user = userEvent.setup();
+    const { rerender } = montar({
+      franjas_activas: true,
+      franja_corte: '23:59',
+    });
+    await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+
+    // Dan las 2: la misma pantalla, ya con la carta de la tarde.
+    h.app.configuracion = { ...h.app.configuracion, franja_corte: '00:00' };
+    rerender(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+
+    const venta = await cobrar(user);
+    expect(venta.total).toBe(72);
+    expect(venta.items.map((i) => [i.precio, i.cantidad])).toEqual([
+      [34, 1],
+      [38, 1],
+    ]);
+  });
+});

@@ -73,6 +73,8 @@ export default function RecetasScreen() {
     grupos_modificadores: [],
     es_paquete: false,
     componentes: [],
+    precio_vespertino: '',
+    franja_carta: '',
   });
 
   const [inputNuevaCat, setInputNuevaCat] = useState('');
@@ -229,6 +231,8 @@ export default function RecetasScreen() {
       grupos_modificadores: item.grupos_modificadores || [],
       es_paquete: componentesNorm.length > 0,
       componentes: componentesNorm,
+      precio_vespertino: item.precio_vespertino ?? '',
+      franja_carta: item.franja_carta || '',
     });
     setEditId(item.id);
     setModalTab('general');
@@ -436,6 +440,15 @@ export default function RecetasScreen() {
           )
         : null,
       grupos_modificadores: form.grupos_modificadores || [],
+      // Carta de la tarde (09-oct). Vacío = lo mismo todo el día. Una receta
+      // que sólo se vende en la mañana no tiene precio de tarde que guardar.
+      franja_carta: form.franja_carta || null,
+      precio_vespertino:
+        form.franja_carta === 'matutino' ||
+        form.precio_vespertino === '' ||
+        form.precio_vespertino == null
+          ? null
+          : Number(form.precio_vespertino),
       activo: true,
     };
     enqueueAction('recetas', 'upsert', payload);
@@ -581,6 +594,8 @@ export default function RecetasScreen() {
       grupos_modificadores: [],
       es_paquete: false,
       componentes: [],
+      precio_vespertino: '',
+      franja_carta: '',
     });
     setEditId(null);
     setModalTab('general');
@@ -972,6 +987,69 @@ export default function RecetasScreen() {
                         className="w-full border-2 border-adm-danger bg-adm-bg p-4 rounded-ui font-black text-adm-ink outline-none"
                         autoFocus
                       />
+                    )}
+
+                    {/* CARTA DE LA MAÑANA Y DE LA TARDE (09-oct). Sólo con
+                        las franjas encendidas: apagadas, no hay tarde y estos
+                        campos no harían nada, que es peor que no verlos. */}
+                    {configuracion?.franjas_activas && (
+                      <div className="grid grid-cols-2 gap-6 p-5 rounded-ui border-2 border-adm-border bg-adm-bg">
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="receta-carta"
+                            className="text-[10px] font-black text-adm-muted uppercase px-2 tracking-widest"
+                          >
+                            Se vende en
+                          </label>
+                          <select
+                            id="receta-carta"
+                            value={form.franja_carta || ''}
+                            onChange={(e) =>
+                              setForm({ ...form, franja_carta: e.target.value })
+                            }
+                            className="w-full px-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-field rounded-ui font-black text-adm-ink focus:border-adm-danger outline-none"
+                          >
+                            <option value="">Todo el día</option>
+                            <option value="matutino">Sólo en la mañana</option>
+                            <option value="vespertino">Sólo en la tarde</option>
+                          </select>
+                        </div>
+                        {form.franja_carta !== 'matutino' && (
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="receta-precio-tarde"
+                              className="text-[10px] font-black text-adm-muted uppercase px-2 tracking-widest"
+                            >
+                              Precio en la tarde
+                            </label>
+                            <input
+                              id="receta-precio-tarde"
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              value={form.precio_vespertino ?? ''}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  precio_vespertino: e.target.value,
+                                })
+                              }
+                              placeholder="Igual que el normal"
+                              className="w-full px-4 py-3 bg-white dark:bg-adm-panel border-2 border-adm-field rounded-ui font-black text-adm-ink focus:border-adm-danger outline-none"
+                            />
+                          </div>
+                        )}
+                        <p className="col-span-2 text-xs font-bold text-adm-muted px-2">
+                          La tarde empieza a las{' '}
+                          {String(configuracion?.franja_corte || '16:00').slice(
+                            0,
+                            5,
+                          )}{' '}
+                          (Configuración → Turnos). La caja sólo enseña lo que
+                          se vende a esa hora, y cada producto se cobra con el
+                          precio de la hora en que se pide.
+                        </p>
+                      </div>
                     )}
 
                     {/* PAQUETE: combo fijo a precio de paquete */}

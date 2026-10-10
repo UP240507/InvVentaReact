@@ -77,6 +77,12 @@ import {
 import { siguienteIdVenta, siguienteIdComanda } from '../../lib/IdVenta';
 import { franjaAlEscribir } from '../../lib/Franjas';
 import {
+  franjaDeCarta,
+  conPrecioDeCarta,
+  seVendeEn,
+  sufijoDeCarta,
+} from '../../lib/Cartas';
+import {
   separarCuenta,
   haySeleccion,
   quedaPorFacturar,
@@ -476,7 +482,18 @@ export default function PosScreen() {
     }
   }, [mesaId, isMesa, mesaActual]);
 
-  const menuList = recetas || [];
+  // ── LA CARTA VIGENTE (09-oct) ─────────────────────────────────────────────
+  // Con las franjas encendidas, la caja enseña sólo lo que se vende en esta
+  // mitad del día y con su precio (lib/Cartas.js). El reloj se refresca cada
+  // medio minuto para que a las 2:00 cambie sola, sin recargar. El precio que
+  // se COBRA no sale de aquí sino del instante del toque (agregarAlCarrito).
+  const [ahoraCarta, setAhoraCarta] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAhoraCarta(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const franjaCarta = franjaDeCarta(configuracion, ahoraCarta);
+  const menuList = (recetas || []).filter((r) => seVendeEn(r, franjaCarta));
   const categoriasUnicas = [
     'Todas',
     ...new Set(menuList.map((p) => p.categoria || 'Sin Categoría')),
@@ -598,8 +615,17 @@ export default function PosScreen() {
     [modalMods, modificadores],
   );
 
-  const agregarAlCarrito = (producto) => {
+  const agregarAlCarrito = (delMenu) => {
     if (bloqueadoPorCuenta()) return;
+    // El precio de la carta se fija AHORA, con la hora del toque: una mesa del
+    // desayuno que pide otra agua a las 2:10 la paga con precio de la tarde.
+    const producto = conPrecioDeCarta(
+      delMenu,
+      franjaDeCarta(configuracion, new Date()),
+    );
+    // Una línea de tarde lleva su propio id: si no, la segunda agua se
+    // fundiría con la de la mañana y saldría al precio de aquélla.
+    const sufijo = sufijoDeCarta(producto);
     // Paquete con grupos "elige 1 de N" → primero se resuelven las elecciones.
     if (esPaquete(producto) && tieneElecciones(producto)) {
       setModalElecciones({ paquete: producto, seleccion: {} });
@@ -612,6 +638,9 @@ export default function PosScreen() {
     }
     const productoSanitizado = {
       ...producto,
+      ...(sufijo
+        ? { id: `${producto.id}${sufijo}`, receta_id: producto.id }
+        : {}),
       precio: getPrecio(producto),
       cantidad_enviada: 0,
       // PAQUETE: insumos expandidos AL VUELO desde las recetas componentes
@@ -652,7 +681,7 @@ export default function PosScreen() {
     const firma = grupos
       .map((g) => `${g.grupo}=${seleccion[g.grupo]}`)
       .join('|');
-    const lineId = `${paquete.id}:${firma}`;
+    const lineId = `${paquete.id}:${firma}${sufijoDeCarta(paquete)}`;
 
     const item = {
       ...paquete,
@@ -737,11 +766,9 @@ export default function PosScreen() {
     // hamburguesa término medio y otra bien cocida se fundirían en «2x
     // Hamburguesa» y la cocina sacaría dos iguales; el mesero no se entera
     // hasta que el cliente devuelve el plato.
-    const lineId = firmaDeLinea(
-      producto.receta_id ?? producto.id,
-      seleccion,
-      notaLimpia,
-    );
+    const lineId =
+      firmaDeLinea(producto.receta_id ?? producto.id, seleccion, notaLimpia) +
+      sufijoDeCarta(producto);
 
     // Lo que las opciones le hacen a la línea: el precio de los extras y sus
     // insumos. Se parte SIEMPRE de la base: si el cuadro se reabrió sobre una
@@ -2072,7 +2099,9 @@ export default function PosScreen() {
                   </p>
                   <p className="text-ops-ok font-black mt-2 text-lg">
                     $
-                    {getPrecio(prod).toLocaleString('es-MX', {
+                    {getPrecio(
+                      conPrecioDeCarta(prod, franjaCarta),
+                    ).toLocaleString('es-MX', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
