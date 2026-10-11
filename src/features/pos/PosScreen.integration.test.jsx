@@ -585,6 +585,55 @@ describe('Integración · carta de la tarde', () => {
     expect(venta.franja).toBe('vespertino');
   });
 
+  it('en la tarde se puede vender de la carta de la mañana, a su precio', async () => {
+    const user = userEvent.setup();
+    montar({ franjas_activas: true, franja_corte: '00:00' });
+    expect(screen.queryByRole('button', { name: /Chilaquiles/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Carta de la mañana' }),
+    );
+    const chilaquiles = screen.getByRole('button', { name: /Chilaquiles/ });
+    // Se ve de dónde viene, para que nadie lo confunda con la carta vigente.
+    expect(chilaquiles.textContent).toMatch(/Carta de la mañana/);
+    await user.click(chilaquiles);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Ocultar carta de la mañana' }),
+    );
+    expect(screen.queryByRole('button', { name: /Chilaquiles/ })).toBeNull();
+
+    const venta = await cobrar(user);
+    expect(venta.items[0]).toMatchObject({ nombre: 'Chilaquiles', precio: 95 });
+  });
+
+  it('el botón se apaga solo cuando cambia la carta', async () => {
+    const user = userEvent.setup();
+    const { rerender } = montar({
+      franjas_activas: true,
+      franja_corte: '23:59',
+    });
+    await user.click(screen.getByRole('button', { name: 'Carta de la tarde' }));
+    expect(screen.getByRole('button', { name: /Arrachera/ })).toBeTruthy();
+
+    h.app.configuracion = { ...h.app.configuracion, franja_corte: '00:00' };
+    rerender(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    // Ya es tarde: la carta de la mañana NO se queda abierta.
+    expect(screen.queryByRole('button', { name: /Chilaquiles/ })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Carta de la mañana' }),
+    ).toBeTruthy();
+  });
+
+  it('sin franjas no hay botón de otra carta', () => {
+    montar({ franjas_activas: false });
+    expect(screen.queryByRole('button', { name: /Carta de la/ })).toBeNull();
+  });
+
   it('la agua de la mañana y la de la tarde no se funden en una línea', async () => {
     const user = userEvent.setup();
     const { rerender } = montar({

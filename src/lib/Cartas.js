@@ -99,3 +99,13 @@ export function conPrecioDeCarta(receta, franja) {
 export function sufijoDeCarta(linea) {
   return linea?.precio_carta === VESPERTINO ? SUFIJO_TARDE : '';
 }
+
+/**
+ * La otra mitad del día, en palabras: «mañana» si ahora es tarde y al revés.
+ * `null` sin franjas. La usa el botón que deja vender de la otra carta.
+ */
+export function nombreDeOtraCarta(franja) {
+  if (franja === VESPERTINO) return 'mañana';
+  if (franja === MATUTINO) return 'tarde';
+  return null;
+}

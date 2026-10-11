@@ -81,6 +81,7 @@ import {
   conPrecioDeCarta,
   seVendeEn,
   sufijoDeCarta,
+  nombreDeOtraCarta,
 } from '../../lib/Cartas';
 import {
   separarCuenta,
@@ -493,7 +494,22 @@ export default function PosScreen() {
     return () => clearInterval(t);
   }, []);
   const franjaCarta = franjaDeCarta(configuracion, ahoraCarta, turnos);
-  const menuList = (recetas || []).filter((r) => seVendeEn(r, franjaCarta));
+
+  // ── VENDER DE LA OTRA CARTA (10-oct) ──────────────────────────────────────
+  // AZUL a veces vende un jugo de la mañana en la tarde, o una cerveza en la
+  // mañana. Un botón junto a las categorías enseña también la otra carta, con
+  // cada producto marcado. Se guarda EN QUÉ franja se abrió y no un sí/no:
+  // así se apaga solo cuando cambia la carta, y nadie se queda con todo
+  // revuelto toda la tarde por un jugo que pidieron a las 2:30.
+  // El precio es el de siempre (`conPrecioDeCarta` con la franja vigente): un
+  // producto «sólo en la mañana» no tiene precio de tarde.
+  const [otraCartaEn, setOtraCartaEn] = useState(null);
+  const verOtraCarta = franjaCarta != null && otraCartaEn === franjaCarta;
+  const otraCarta = nombreDeOtraCarta(franjaCarta);
+  const hayOtraCarta = (recetas || []).some((r) => !seVendeEn(r, franjaCarta));
+  const menuList = (recetas || []).filter(
+    (r) => verOtraCarta || seVendeEn(r, franjaCarta),
+  );
   const categoriasUnicas = [
     'Todas',
     ...new Set(menuList.map((p) => p.categoria || 'Sin Categoría')),
@@ -2077,6 +2093,22 @@ export default function PosScreen() {
               {cat}
             </button>
           ))}
+          {hayOtraCarta && (
+            <button
+              type="button"
+              aria-pressed={verOtraCarta}
+              onClick={() => setOtraCartaEn(verOtraCarta ? null : franjaCarta)}
+              className={`ml-auto px-5 py-2.5 rounded-ui font-black text-sm whitespace-nowrap transition-all border border-dashed ${
+                verOtraCarta
+                  ? 'bg-ops-accent/15 text-ops-ink border-ops-accent'
+                  : 'bg-ops-panel-2 text-ops-muted border-ops-border hover:text-ops-ink'
+              }`}
+            >
+              {verOtraCarta
+                ? `Ocultar carta de la ${otraCarta}`
+                : `Carta de la ${otraCarta}`}
+            </button>
+          )}
         </div>
 
         {/* El hueco de abajo en estrecho es para la barra flotante del
@@ -2097,6 +2129,11 @@ export default function PosScreen() {
                   <p className="font-black text-ops-ink text-sm leading-tight line-clamp-2">
                     {prod.nombre}
                   </p>
+                  {!seVendeEn(prod, franjaCarta) && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mt-1">
+                      Carta de la {otraCarta}
+                    </p>
+                  )}
                   <p className="text-ops-ok font-black mt-2 text-lg">
                     $
                     {getPrecio(
