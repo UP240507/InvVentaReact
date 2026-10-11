@@ -105,9 +105,96 @@ export function franjaDe(fecha, corte) {
  * @param {object} configuracion  la fila de `configuracion` del local
  * @param {Date|string} fecha     el instante que se está guardando
  */
-export function franjaAlEscribir(configuracion, fecha = new Date()) {
+export function franjaAlEscribir(
+  configuracion,
+  fecha = new Date(),
+  turnos = null,
+) {
   if (!configuracion?.franjas_activas) return null;
-  return franjaDe(fecha, configuracion?.franja_corte || CORTE_POR_DEFECTO);
+  const corte = configuracion?.franja_corte || CORTE_POR_DEFECTO;
+  if (configuracion?.franja_por_corte) {
+    return franjaPorCorte(fecha, turnos, corte);
+  }
+  return franjaDe(fecha, corte);
+}
+
+// ─── LA TARDE EMPIEZA CON EL PRIMER CORTE DE CAJA (10-oct) ──────────────────
+// Pedido de AZUL. Con el corte a una hora fija, una mesa del desayuno que se
+// alarga pasadas las 2 empezaba a pedir con precios de la tarde y dejaba de ver
+// los desayunos en la caja. Y el reporte la contaba en la tarde aunque el
+// billete entrara al cajón de la mañana. En AZUL nunca se hace corte hasta
+// acabar el turno, y el corte no se deja hacer con mesas abiertas
+// (`mesasAbiertas`), así que el primer corte del día es el cambio de turno de
+// verdad: reporte, carta y cajón dicen lo mismo.
+//
+// Esto corrige §1.1 de docs/DISENO_TURNOS.md («la franja se deriva del reloj»)
+// sólo para el local que lo enciende, y conserva su miedo: «la noche que a
+// nadie se le ocurrió cerrar el turno». Si no hay corte, manda el reloj:
+// `franja_corte` pasa a ser la hora de RESPALDO.
+
+/** 'YYYY-M-D' en la hora del aparato. */
+function diaLocal(d) {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** Fecha de la base → Date. Acepta ISO sin zona (Supabase a veces la omite). */
+export function aFecha(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  const s = String(v);
+  const conZona = s.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(s) ? s : `${s}Z`;
+  const d = new Date(conZona);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * El instante del primer corte de caja del día de `fecha`, hasta `fecha`.
+ * `null` si todavía no hay.
+ *
+ * Sólo cuentan los turnos ABIERTOS Y CERRADOS ese mismo día: el turno de la
+ * tarde que se cierra a las 0:30 es un corte de «hoy», pero de la jornada de
+ * ayer, y contarlo pondría todo el día siguiente en la tarde. Tampoco cuentan
+ * los `cerrado_forzado` (un turno huérfano que se cerró solo al abrir otro).
+ */
+export function primerCorteDelDia(turnos, fecha = new Date()) {
+  const ahora = aFecha(fecha);
+  if (!ahora) return null;
+  const hoy = diaLocal(ahora);
+  let primero = null;
+  for (const t of Array.isArray(turnos) ? turnos : []) {
+    if (t?.estado !== 'cerrado') continue;
+    const cierre = aFecha(t.fecha_cierre);
+    const apertura = aFecha(t.fecha_apertura);
+    if (!cierre || !apertura) continue;
+    if (diaLocal(cierre) !== hoy || diaLocal(apertura) !== hoy) continue;
+    if (cierre > ahora) continue;
+    if (!primero || cierre < primero) primero = cierre;
+  }
+  return primero;
+}
+
+/**
+ * La franja según el corte: tarde desde el primer corte del día; sin corte,
+ * la hora de respaldo decide. Sin `turnos` (quien llama no los tiene) también
+ * decide la hora: es lo seguro, no inventar un corte.
+ */
+export function franjaPorCorte(fecha, turnos, respaldo = CORTE_POR_DEFECTO) {
+  const d = aFecha(fecha);
+  if (!d) return null;
+  if (primerCorteDelDia(turnos, d)) return VESPERTINO;
+  return franjaDe(d, respaldo);
+}
+
+/**
+ * Las mesas que impiden el corte de caja: ocupadas o esperando cobro.
+ * Con el turno por corte, una mesa abierta al cortar quedaría con lo pedido en
+ * la mañana y lo que pida después en la tarde, y su dinero en el cajón
+ * equivocado. AZUL prefiere que el sistema quede limpio: no se corta.
+ */
+export function mesasAbiertas(mesas = []) {
+  return (Array.isArray(mesas) ? mesas : []).filter((m) =>
+    ['ocupada', 'por_cobrar'].includes(m?.estado),
+  );
 }
 
 /** Cómo se nombra una franja en pantalla. `null` tiene nombre propio. */

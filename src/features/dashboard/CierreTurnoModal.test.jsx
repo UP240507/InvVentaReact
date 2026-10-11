@@ -66,9 +66,9 @@ const ROLES = [
   { rol: 'Cajero', capacidades: { autoriza_arqueo: false, abre_cajon: true } },
 ];
 
-const montar = () => {
+const montar = (mesas = []) => {
   Object.assign(h.app, {
-    mesas: [],
+    mesas,
     ventas: [],
     turnos: [TURNO],
     configuracion: {},
@@ -182,5 +182,33 @@ describe('CierreTurnoModal', () => {
     expect(arq.detalles).toMatch(/contado \$400\.00/);
     expect(arq.detalles).toMatch(/Firma: Diego/);
     expect(arq.nivel).toBe('warning');
+  });
+});
+
+describe('CierreTurnoModal · con mesas abiertas no hay corte (10-oct)', () => {
+  it('dice cuáles son y el botón no se activa aunque todo lo demás esté listo', async () => {
+    const user = userEvent.setup();
+    montar([
+      { id: 3, nombre: 'Mesa 3', estado: 'ocupada' },
+      { id: 5, nombre: 'Terraza 5', estado: 'por_cobrar' },
+      { id: 7, nombre: 'Mesa 7', estado: 'libre' },
+    ]);
+
+    expect(
+      screen.getByText(/No se puede hacer el corte: hay 2 mesas abiertas/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Mesa 3, Terraza 5/)).toBeTruthy();
+
+    const campo = screen.getByLabelText('Piezas de $500');
+    await user.clear(campo);
+    await user.type(campo, '2');
+    await user.type(
+      screen.getByLabelText('PIN de quien autoriza el arqueo'),
+      '1111',
+    );
+    const boton = screen.getByRole('button', { name: /Confirmar Cierre/ });
+    expect(boton.disabled).toBe(true);
+    await user.click(boton);
+    expect(h.cierres).toHaveLength(0);
   });
 });

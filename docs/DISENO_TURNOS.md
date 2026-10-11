@@ -256,3 +256,30 @@ Ninguna bloquea los pasos 1-4; todas se pueden contestar antes del 5.
 3. **¿Corte Z por franja o uno al día?** Ligado a la anterior. Mi lectura: el
    corte Z se queda como está —es de la sesión de caja— y las franjas viven en
    los reportes.
+
+## 8 · Adenda del 10-oct: la tarde puede empezar con el primer corte de caja
+
+§1.1 decía que la franja se deriva del reloj. Para AZUL eso se quedó corto en
+cuanto la franja empezó a decidir también **la carta y el precio de la tarde**
+(`lib/Cartas.js`, 09-oct): una mesa del desayuno que se alarga pasadas las 2
+empezaba a pedir con precios de la tarde y dejaba de ver los desayunos, y el
+reporte contaba en la tarde ventas cuyo dinero entró al cajón de la mañana.
+
+Nuevo ajuste `configuracion.franja_por_corte` (apagado por defecto). Encendido:
+
+- **La tarde empieza con el primer corte de caja del día** (`franjaPorCorte`).
+  Sólo cuentan turnos abiertos y cerrados ese mismo día: el turno de la noche
+  que corta a las 0:30 no pone el día siguiente en la tarde. Los
+  `cerrado_forzado` no cuentan.
+- **Si no hay corte, manda el reloj**: `franja_corte` pasa a ser la hora de
+  respaldo. Es el miedo de §1.1 —«la noche que a nadie se le ocurrió cerrar el
+  turno»— y por eso no se quitó el reloj, se dejó detrás.
+- **Con mesas abiertas no hay corte** (`mesasAbiertas`), en el cuadro de
+  cierre y en `cerrarTurno` del store. Esto aplica siempre, no sólo con el
+  ajuste encendido: el aviso que había ya pedía cobrar todo antes del corte, y
+  AZUL prefiere que el sistema quede limpio.
+
+Lo que esto NO cambia: `turnos` sigue siendo la sesión de caja y `franja` la
+mitad del día; no se reutiliza `turno_id`. Lo que cambia es de dónde sale el
+instante en que empieza la tarde. AZUL confirmó que nunca hace un corte antes
+de acabar el turno; un local que corte a media mañana no debe encender esto.

@@ -90,3 +90,24 @@ describe('conPrecioDeCarta', () => {
     expect(conPrecioDeCarta(aguaTarde, null)).toBe(aguaTarde);
   });
 });
+
+describe('franjaDeCarta con turno por corte', () => {
+  const confCorte = {
+    franjas_activas: true,
+    franja_por_corte: true,
+    franja_corte: '23:59',
+  };
+  it('un corte posterior al reloj guardado de la caja ya cambia la carta', () => {
+    const relojViejo = a(14, 25);
+    const corte = {
+      estado: 'cerrado',
+      fecha_apertura: a(7).toISOString(),
+      fecha_cierre: new Date(2026, 9, 9, 14, 25, 20).toISOString(),
+    };
+    expect(franjaDeCarta(confCorte, relojViejo, [corte])).toBe('vespertino');
+  });
+  it('un turno abierto no adelanta nada', () => {
+    const abierto = { estado: 'abierto', fecha_apertura: a(7).toISOString() };
+    expect(franjaDeCarta(confCorte, a(15), [abierto])).toBe('matutino');
+  });
+});

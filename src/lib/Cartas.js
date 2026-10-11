@@ -22,7 +22,7 @@
 //
 // Módulo puro, como Franjas.js: lo usan el POS y sus pruebas.
 
-import { VESPERTINO, MATUTINO, franjaAlEscribir } from './Franjas';
+import { VESPERTINO, MATUTINO, franjaAlEscribir, aFecha } from './Franjas';
 
 /** Lo que se agrega al id de una línea cobrada con precio de la tarde. */
 export const SUFIJO_TARDE = '::tarde';
@@ -31,8 +31,22 @@ export const SUFIJO_TARDE = '::tarde';
  * La franja de la carta en este instante, o `null` si el local no usa
  * franjas (entonces no hay carta de la tarde: un precio y todo el menú).
  */
-export function franjaDeCarta(configuracion, ahora = new Date()) {
-  return franjaAlEscribir(configuracion, ahora);
+export function franjaDeCarta(
+  configuracion,
+  ahora = new Date(),
+  turnos = null,
+) {
+  // La caja guarda su reloj cada 30 s. Un corte que llega por tiempo real es
+  // POSTERIOR a ese reloj, y sin esto la carta tardaría hasta medio minuto en
+  // cambiar con el cajero esperando. Para la carta —que siempre es «ahora»—
+  // un corte que ya está en la lista ya ocurrió.
+  let instante = ahora instanceof Date ? ahora : new Date(ahora);
+  for (const t of Array.isArray(turnos) ? turnos : []) {
+    if (t?.estado !== 'cerrado') continue;
+    const c = aFecha(t.fecha_cierre);
+    if (c && c > instante) instante = c;
+  }
+  return franjaAlEscribir(configuracion, instante, turnos);
 }
 
 /**

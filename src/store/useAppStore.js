@@ -4,6 +4,7 @@ import { useAuthStore } from '../features/auth/useAuthStore';
 import { localDB } from './localDB';
 import { useSyncStore } from './useSyncStore';
 import { siguienteIdUnico, SERIE_AUDITORIA } from '../lib/IdVenta';
+import { mesasAbiertas } from '../lib/Franjas';
 // ── HELPER UTC ────────────────────────────────────────────────────────────────
 // Supabase a veces omite 'Z' en timestamps → browser los interpreta como local.
 // Esta función fuerza interpretación UTC en cualquier formato.
@@ -924,6 +925,18 @@ export const useAppStore = create((set, get) => ({
     );
     if (!turnoActivo) {
       console.warn('[cerrarTurno] No hay turno abierto para cerrar.');
+      return;
+    }
+
+    // Con mesas abiertas no hay corte (10-oct). El cuadro de cierre ya no deja
+    // confirmar, pero la regla vive también aquí para que ningún otro camino
+    // (paleta de comandos, un botón futuro) pueda saltársela.
+    const abiertas = mesasAbiertas(get().mesas);
+    if (abiertas.length > 0) {
+      get().showToast(
+        `No se puede hacer el corte con ${abiertas.length === 1 ? 'una mesa abierta' : `${abiertas.length} mesas abiertas`}.`,
+        'error',
+      );
       return;
     }
 

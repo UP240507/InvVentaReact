@@ -290,7 +290,11 @@ export default function GastosScreen() {
       // que la escala, tres líneas más arriba.
       franja: anterior
         ? (anterior.franja ?? null)
-        : franjaAlEscribir(configuracion, capturadoEn),
+        : franjaAlEscribir(
+            configuracion,
+            capturadoEn,
+            useAppStore.getState().turnos,
+          ),
       origen: anterior?.origen ?? 'manual',
       origen_ref: anterior?.origen_ref ?? null,
       estado: anterior?.estado ?? 'pagado',
@@ -333,7 +337,11 @@ export default function GastosScreen() {
       // una persona con el recibo delante. Si ya traía franja, se respeta.
       franja:
         (confirmarMonto?.franja ?? null) ||
-        franjaAlEscribir(configuracion, new Date()),
+        franjaAlEscribir(
+          configuracion,
+          new Date(),
+          useAppStore.getState().turnos,
+        ),
     };
     delete fila._derivado;
     enqueueAction('gastos', 'upsert', fila);

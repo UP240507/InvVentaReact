@@ -210,7 +210,11 @@ export default function IngredientesScreen() {
           cantidad: Math.abs(stockNuevo - stockAnterior),
           referencia: 'Edición manual del insumo',
           fecha: ajustadoEn.toISOString(),
-          franja: franjaAlEscribir(configuracion, ajustadoEn),
+          franja: franjaAlEscribir(
+            configuracion,
+            ajustadoEn,
+            useAppStore.getState().turnos,
+          ),
           usuario: useAuthStore.getState().user?.nombre || 'Sistema',
           stock_anterior: stockAnterior,
           stock_nuevo: stockNuevo,

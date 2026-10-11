@@ -8,6 +8,7 @@ import {
 } from '../../lib/Arqueo';
 import DesgloseEfectivo from './DesgloseEfectivo';
 import { buscarAutorizador } from '../../lib/Autorizacion';
+import { mesasAbiertas as mesasQueBloquean } from '../../lib/Franjas';
 import { abrirCajonConRegistro, MOTIVOS } from '../../lib/Cajon';
 import { abrirCajon } from '../../lib/Hub';
 import { useSessionStore } from '../../store/useSessionStore';
@@ -68,9 +69,12 @@ export default function CierreTurnoModal({ onClose }) {
   const turnoActivo =
     (turnos || []).find((t) => t.estado === 'abierto') || null;
 
-  const mesasAbiertas = (mesas || []).filter((m) =>
-    ['ocupada', 'por_cobrar'].includes(m.estado),
-  );
+  // ── CON MESAS ABIERTAS NO HAY CORTE (10-oct) ────────────────────────────
+  // Antes sólo avisaba. Ahora el primer corte del día puede ser el cambio de
+  // turno (lib/Franjas.js, `franja_por_corte`): una mesa abierta quedaría con
+  // lo pedido en la mañana y lo que pida después en la tarde, y su dinero en
+  // el cajón equivocado. AZUL pidió que el sistema quede limpio.
+  const mesasAbiertas = mesasQueBloquean(mesas);
 
   // D5: el desglose efectivo/tarjeta sale de cada venta (no del string metodo_pago).
   const metricas = useMemo(
@@ -93,7 +97,7 @@ export default function CierreTurnoModal({ onClose }) {
   const denominaciones = denominacionesDe(configuracion);
 
   const handleConfirmarCierre = async () => {
-    if (!turnoActivo || !conto) return;
+    if (!turnoActivo || !conto || mesasAbiertas.length > 0) return;
 
     const firmante = buscarAutorizador({
       staff,
@@ -183,11 +187,14 @@ export default function CierreTurnoModal({ onClose }) {
             <AlertTriangle className="w-6 h-6 text-adm-warn shrink-0 mt-0.5" />
             <div>
               <h3 className="font-black text-adm-warn">
-                Aún hay {mesasAbiertas.length} mesas abiertas
+                No se puede hacer el corte: hay {mesasAbiertas.length}{' '}
+                {mesasAbiertas.length === 1 ? 'mesa abierta' : 'mesas abiertas'}
               </h3>
               <p className="text-sm font-medium text-adm-warn">
-                Cobra o cancela todas las mesas antes del corte para que los
-                ingresos entren en este turno.
+                {mesasAbiertas
+                  .map((m) => m.nombre || `Mesa ${m.id}`)
+                  .join(', ')}
+                . Cóbralas o cancélalas para que su dinero entre en este turno.
               </p>
             </div>
           </div>
@@ -386,7 +393,9 @@ export default function CierreTurnoModal({ onClose }) {
           </button>
           <button
             onClick={handleConfirmarCierre}
-            disabled={isSubmitting || !conto || pin === ''}
+            disabled={
+              isSubmitting || !conto || pin === '' || mesasAbiertas.length > 0
+            }
             className="flex-1 py-4 rounded-ui font-black text-adm-danger-fg bg-adm-danger shadow-lg shadow-adm-danger/30 transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <CheckCircle2 className="w-5 h-5" />

@@ -18,6 +18,9 @@ import {
   filtrarPorFranja,
   soloDeFranja,
   cuantasSinFranja,
+  primerCorteDelDia,
+  franjaPorCorte,
+  mesasAbiertas,
   MATUTINO,
   VESPERTINO,
 } from './Franjas';
@@ -199,5 +202,117 @@ describe('cuantasSinFranja', () => {
       ]),
     ).toBe(3);
     expect(cuantasSinFranja([])).toBe(0);
+  });
+});
+
+// ─── LA TARDE EMPIEZA CON EL PRIMER CORTE DE CAJA (10-oct) ──────────────────
+describe('franja por corte de caja', () => {
+  // Turnos con fechas LOCALES convertidas a ISO, como las guarda la caja.
+  const iso = (h, min = 0, dia = 23) =>
+    new Date(2026, 7, dia, h, min, 0).toISOString();
+  const MANANA = {
+    id: 'M',
+    estado: 'cerrado',
+    fecha_apertura: iso(7),
+    fecha_cierre: iso(14, 25),
+  };
+  const conf = {
+    franjas_activas: true,
+    franja_por_corte: true,
+    franja_corte: '16:00',
+  };
+
+  it('una mesa del desayuno que se alarga: a las 2:20 sigue siendo mañana', () => {
+    // El turno de la mañana todavía no corta: no hay corte en la lista.
+    const abierto = { ...MANANA, estado: 'abierto', fecha_cierre: null };
+    expect(franjaAlEscribir(conf, alas(14, 20), [abierto])).toBe(MATUTINO);
+  });
+
+  it('desde el corte es tarde, aunque falten horas para la de respaldo', () => {
+    expect(franjaAlEscribir(conf, alas(14, 25), [MANANA])).toBe(VESPERTINO);
+    expect(franjaAlEscribir(conf, alas(15, 0), [MANANA])).toBe(VESPERTINO);
+  });
+
+  it('antes del corte del día, aunque el corte ya exista, es mañana', () => {
+    // Estampar una venta de las 13:00 (cobrada offline y subida después).
+    expect(franjaAlEscribir(conf, alas(13, 0), [MANANA])).toBe(MATUTINO);
+  });
+
+  it('sin corte, manda la hora de respaldo: el día que nadie cortó', () => {
+    expect(franjaAlEscribir(conf, alas(15, 59), [])).toBe(MATUTINO);
+    expect(franjaAlEscribir(conf, alas(16, 0), [])).toBe(VESPERTINO);
+    // Sin turnos a mano (quien llama no los tiene) decide también la hora.
+    expect(franjaAlEscribir(conf, alas(16, 30))).toBe(VESPERTINO);
+  });
+
+  it('el turno de la noche que corta a las 0:30 no pone el día siguiente en la tarde', () => {
+    const noche = {
+      id: 'N',
+      estado: 'cerrado',
+      fecha_apertura: iso(14, 30, 22),
+      fecha_cierre: iso(0, 30, 23),
+    };
+    expect(primerCorteDelDia([noche], alas(9))).toBeNull();
+    expect(franjaAlEscribir(conf, alas(9), [noche])).toBe(MATUTINO);
+  });
+
+  it('un corte de ayer no cuenta hoy', () => {
+    const ayer = {
+      ...MANANA,
+      fecha_apertura: iso(7, 0, 22),
+      fecha_cierre: iso(14, 0, 22),
+    };
+    expect(franjaAlEscribir(conf, alas(9), [ayer])).toBe(MATUTINO);
+  });
+
+  it('un turno cerrado a la fuerza (huérfano) no es un corte', () => {
+    const forzado = { ...MANANA, estado: 'cerrado_forzado' };
+    expect(franjaAlEscribir(conf, alas(15), [forzado])).toBe(MATUTINO);
+  });
+
+  it('cuenta el PRIMER corte del día, no el último', () => {
+    const tarde = {
+      id: 'T',
+      estado: 'cerrado',
+      fecha_apertura: iso(14, 30),
+      fecha_cierre: iso(22, 0),
+    };
+    expect(primerCorteDelDia([tarde, MANANA], alas(23)).getTime()).toBe(
+      new Date(MANANA.fecha_cierre).getTime(),
+    );
+  });
+
+  it('acepta fechas de la base sin zona (Supabase a veces la omite)', () => {
+    const sinZona = {
+      ...MANANA,
+      fecha_apertura: MANANA.fecha_apertura.replace('Z', ''),
+      fecha_cierre: MANANA.fecha_cierre.replace('Z', ''),
+    };
+    expect(franjaPorCorte(alas(14, 30), [sinZona], '16:00')).toBe(VESPERTINO);
+  });
+
+  it('con el ajuste apagado sigue mandando la hora, aunque haya corte', () => {
+    const porHora = { ...conf, franja_por_corte: false, franja_corte: '16:00' };
+    expect(franjaAlEscribir(porHora, alas(14, 30), [MANANA])).toBe(MATUTINO);
+  });
+
+  it('con las franjas apagadas no clasifica, haya corte o no', () => {
+    expect(
+      franjaAlEscribir({ ...conf, franjas_activas: false }, alas(15), [MANANA]),
+    ).toBeNull();
+  });
+});
+
+describe('mesasAbiertas — lo que impide el corte', () => {
+  it('ocupadas y por cobrar sí; libres, reservadas y agrupadas no', () => {
+    const mesas = [
+      { id: 1, estado: 'ocupada' },
+      { id: 2, estado: 'por_cobrar' },
+      { id: 3, estado: 'libre' },
+      { id: 4, estado: 'reservada' },
+      { id: 5, estado: 'agrupada' },
+    ];
+    expect(mesasAbiertas(mesas).map((m) => m.id)).toEqual([1, 2]);
+    expect(mesasAbiertas(null)).toEqual([]);
   });
 });

@@ -127,7 +127,11 @@ export default function RecepcionScreen() {
           // Toda la recepción comparte instante y franja: es un solo acto, y
           // partirla porque el bucle cruzó las 16:00 sería inventar una
           // entrega en dos turnos.
-          franja: franjaAlEscribir(configuracion, recibidoEn),
+          franja: franjaAlEscribir(
+            configuracion,
+            recibidoEn,
+            useAppStore.getState().turnos,
+          ),
           usuario: user?.nombre || 'Administrador',
           stock_anterior: stockAnterior,
           stock_nuevo: nuevoStock,

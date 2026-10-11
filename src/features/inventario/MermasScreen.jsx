@@ -124,7 +124,11 @@ export default function MermasScreen() {
       // El inventario es UNO. La franja es una dimensión del movimiento —para
       // poder preguntar cuánto consumió cada turno—, nunca una partición del
       // stock: el refrigerador no se puede partir en dos. Ver §1.2 del diseño.
-      franja: franjaAlEscribir(configuracion, movidoEn),
+      franja: franjaAlEscribir(
+        configuracion,
+        movidoEn,
+        useAppStore.getState().turnos,
+      ),
       usuario: user?.nombre || 'Administrador',
       stock_anterior: stockActual,
       stock_nuevo: nuevoStock,

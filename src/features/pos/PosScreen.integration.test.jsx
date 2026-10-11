@@ -546,6 +546,45 @@ describe('Integración · carta de la tarde', () => {
     expect(venta.items.every((i) => i.receta_id === 40)).toBe(true);
   });
 
+  it('turno por corte: antes del corte es mañana aunque sea tarde; después, tarde', async () => {
+    const user = userEvent.setup();
+    // Respaldo a las 00:00: por hora, todo el día sería tarde. Con un turno
+    // ABIERTO y sin corte, manda la hora... así que se pone el respaldo a las
+    // 23:59 para que sin corte sea mañana, y el corte decida.
+    const hoy = new Date();
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const abierto = {
+      id: 'M',
+      estado: 'abierto',
+      fecha_apertura: inicio.toISOString(),
+    };
+    h.app.turnos = [abierto];
+    const { rerender } = montar({
+      franjas_activas: true,
+      franja_por_corte: true,
+      franja_corte: '23:59',
+    });
+    expect(screen.getByRole('button', { name: /Chilaquiles/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+
+    // Se hace el corte: el turno de la mañana queda cerrado.
+    h.app.turnos = [
+      { ...abierto, estado: 'cerrado', fecha_cierre: new Date().toISOString() },
+    ];
+    rerender(
+      <MemoryRouter>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /Chilaquiles/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Agua de fruta/ }));
+
+    const venta = await cobrar(user);
+    expect(venta.items.map((i) => i.precio)).toEqual([34, 38]);
+    // Y la venta se estampa en la tarde: se cobró después del corte.
+    expect(venta.franja).toBe('vespertino');
+  });
+
   it('la agua de la mañana y la de la tarde no se funden en una línea', async () => {
     const user = userEvent.setup();
     const { rerender } = montar({

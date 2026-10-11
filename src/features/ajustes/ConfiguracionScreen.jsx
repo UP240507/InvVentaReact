@@ -349,6 +349,7 @@ export default function ConfiguracionScreen() {
     // cobrar y el inventario al mover, así que tienen que ser consultables.
     franjas_activas: conf.franjas_activas ?? false,
     franja_corte: (conf.franja_corte || '16:00').slice(0, 5),
+    franja_por_corte: conf.franja_por_corte ?? false,
     // El logo, ya en puntos de impresora. Ver `lib/LogoTermico.js`.
     logo_bitmap: conf.logo_bitmap || '',
     logo_ancho: conf.logo_ancho || 0,
@@ -489,6 +490,7 @@ export default function ConfiguracionScreen() {
       mensaje_ticket: form.mensaje_ticket,
       franjas_activas: !!form.franjas_activas,
       franja_corte: form.franja_corte || '16:00',
+      franja_por_corte: !!form.franja_por_corte,
       // Los tres van juntos o no van: un bitmap sin sus medidas es basura que
       // el hub descartaría, y unas medidas sin bitmap no imprimen nada.
       logo_bitmap: form.logo_bitmap || null,
@@ -1690,9 +1692,20 @@ export default function ConfiguracionScreen() {
 
                 {form.franjas_activas && (
                   <>
+                    <Toggle
+                      field="franja_por_corte"
+                      label="La tarde empieza con el primer corte de caja"
+                      description="El turno cambia cuando se hace el primer corte del día, no a una hora fija. Así una mesa del desayuno que se alarga sigue con la carta y los precios de la mañana, y el reporte cuadra con el cajón."
+                      form={form}
+                      setForm={setForm}
+                    />
                     <div className="grid grid-cols-2 gap-5">
                       <Field
-                        label="Hora en que empieza la tarde"
+                        label={
+                          form.franja_por_corte
+                            ? 'Si no hay corte, la tarde empieza a las'
+                            : 'Hora en que empieza la tarde'
+                        }
                         field="franja_corte"
                         type="time"
                         form={form}

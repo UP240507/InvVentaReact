@@ -492,7 +492,7 @@ export default function PosScreen() {
     const t = setInterval(() => setAhoraCarta(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
-  const franjaCarta = franjaDeCarta(configuracion, ahoraCarta);
+  const franjaCarta = franjaDeCarta(configuracion, ahoraCarta, turnos);
   const menuList = (recetas || []).filter((r) => seVendeEn(r, franjaCarta));
   const categoriasUnicas = [
     'Todas',
@@ -621,7 +621,7 @@ export default function PosScreen() {
     // desayuno que pide otra agua a las 2:10 la paga con precio de la tarde.
     const producto = conPrecioDeCarta(
       delMenu,
-      franjaDeCarta(configuracion, new Date()),
+      franjaDeCarta(configuracion, new Date(), turnos),
     );
     // Una línea de tarde lleva su propio id: si no, la segunda agua se
     // fundiría con la de la mañana y saldría al precio de aquélla.
@@ -1578,7 +1578,7 @@ export default function PosScreen() {
       //
       // Con `franjas_activas = false` esto es `null` — o sea, todos los locales
       // de hoy siguen exactamente igual.
-      franja: franjaAlEscribir(configuracion, cobradoEn),
+      franja: franjaAlEscribir(configuracion, cobradoEn, turnos),
       propina: fiscalTicket.propina,
       // ── CUÁNTAS VECES HA SALIDO ESTE TICKET EN PAPEL ────────────────────
       // Nace en 1 porque abajo se imprime, y en 0 cuando NO se imprime nada
