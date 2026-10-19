@@ -140,4 +140,31 @@ describe('MermasScreen · el stock ajustado es un número', () => {
     expect(container.textContent).toMatch(/Stock final estimado:\s*42 kg/);
     unmount();
   });
+
+  it('«Se terminó (uso en barra)»: con sólo elegir insumo y guardar baja 1 y es Salida, no Merma (19-oct)', async () => {
+    // Las salsas de la michelada se cuentan por botella. Darla de baja tiene
+    // que ser un toque, y no debe sumar al total de mermas de Reportes.
+    const user = userEvent.setup();
+    const { container, unmount } = render(<MermasScreen />);
+    const botones = [...container.querySelectorAll('button')];
+    await user.click(botones.find((b) => /nuevo|ajuste/i.test(b.textContent)));
+    const selects = container.querySelectorAll('select');
+    await user.selectOptions(selects[0], String(NARANJA.id));
+    await user.selectOptions(selects[1], 'Uso en barra');
+
+    expect(container.querySelector('input[type="number"]').value).toBe('1');
+    expect(container.querySelector('textarea').required).toBe(false);
+
+    await user.click(
+      [...container.querySelectorAll('button[type="submit"]')].pop(),
+    );
+    unmount();
+
+    const producto = h.encolado.find((e) => e[0] === 'productos')?.[2];
+    const movimiento = h.encolado.find((e) => e[0] === 'movimientos')?.[2];
+    expect(producto.stock).toBe(49);
+    expect(movimiento.tipo).toBe('Salida');
+    expect(movimiento.referencia).toBe('[Uso en barra] Se terminó');
+    expect(h.avisos.some(([, t]) => t === 'error')).toBe(false);
+  });
 });

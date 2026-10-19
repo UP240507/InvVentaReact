@@ -24,6 +24,10 @@ import {
   ArchiveRestore,
 } from 'lucide-react';
 
+/** La opción del cuadro y el tipo de movimiento de una botella que se acabó. */
+const USO_EN_BARRA = 'Uso en barra';
+const TIPO_USO_EN_BARRA = 'Salida';
+
 export default function MermasScreen() {
   const { productos, movimientos, configuracion, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
@@ -36,6 +40,12 @@ export default function MermasScreen() {
   const [tipoAjuste, setTipoAjuste] = useState('Merma');
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
+  // «Se terminó» (19-oct, AZUL): las salsas de la michelada, el Clamato y el
+  // agua mineral no se descuentan por venta —un golpe no se mide y una botella
+  // dura semanas—, se cuentan por botella. Cuando una se acaba se da de baja
+  // aquí con un toque: es CONSUMO, no pérdida, así que no entra al total de
+  // mermas de Reportes. Va como movimiento `Salida`, igual que una venta.
+  const esUsoEnBarra = tipoAjuste === USO_EN_BARRA;
   // La unidad del insumo elegido, para ponerla junto al campo y en el aviso.
   const productoDelAjuste = (productos || []).find(
     (p) => String(p.id) === String(insumoSeleccionado),
@@ -44,7 +54,12 @@ export default function MermasScreen() {
 
   const historialAjustes = useMemo(() => {
     return (movimientos || [])
-      .filter((m) => m.tipo === 'Ajuste' || m.tipo === 'Merma')
+      .filter(
+        (m) =>
+          m.tipo === 'Ajuste' ||
+          m.tipo === 'Merma' ||
+          m.tipo === TIPO_USO_EN_BARRA,
+      )
       .filter((m) => {
         if (!busqueda) return true;
         const prod = productos.find(
@@ -71,7 +86,7 @@ export default function MermasScreen() {
       );
     }
 
-    if (!motivoAjuste.trim()) {
+    if (!motivoAjuste.trim() && !esUsoEnBarra) {
       return showToast('Debes justificar el motivo del ajuste.', 'error');
     }
 
@@ -108,7 +123,11 @@ export default function MermasScreen() {
       nuevoStock = Number((stockActual - cantidad).toFixed(3));
     }
 
-    const tipoMovimiento = esAlta ? 'Ajuste' : 'Merma';
+    const tipoMovimiento = esAlta
+      ? 'Ajuste'
+      : esUsoEnBarra
+        ? TIPO_USO_EN_BARRA
+        : 'Merma';
 
     // El mismo reloj para la fecha y para la franja; ver el comentario de
     // `PosScreen` sobre por qué no pueden salir de dos `new Date()` distintos.
@@ -119,7 +138,7 @@ export default function MermasScreen() {
       tipo: tipoMovimiento,
       producto_id: producto.id,
       cantidad: cantidad,
-      referencia: `[${tipoAjuste}] ${motivoAjuste.trim()}`,
+      referencia: `[${tipoAjuste}] ${motivoAjuste.trim() || (esUsoEnBarra ? 'Se terminó' : '')}`,
       fecha: movidoEn.toISOString(),
       // El inventario es UNO. La franja es una dimensión del movimiento —para
       // poder preguntar cuánto consumió cada turno—, nunca una partición del
@@ -250,7 +269,7 @@ export default function MermasScreen() {
         const prod = productos.find(
           (p) => String(p.id) === String(mov.producto_id),
         );
-        const esMerma = mov.tipo === 'Merma';
+        const esMerma = mov.tipo === 'Merma' || mov.tipo === TIPO_USO_EN_BARRA;
         return (
           <span
             className={`font-bold whitespace-nowrap ${esMerma ? 'text-adm-danger' : 'text-adm-ok'}`}
@@ -375,15 +394,23 @@ export default function MermasScreen() {
                     </label>
                     <select
                       value={tipoAjuste}
-                      onChange={(e) => setTipoAjuste(e.target.value)}
+                      onChange={(e) => {
+                        setTipoAjuste(e.target.value);
+                        // Casi siempre se acaba UNA botella: que baste guardar.
+                        if (e.target.value === USO_EN_BARRA && !cantidadAjuste)
+                          setCantidadAjuste('1');
+                      }}
                       className={`w-full border font-bold px-4 py-3 rounded-ui outline-none transition-colors ${
                         tipoAjuste === 'Alta de Inventario'
                           ? 'bg-adm-ok/10 border-adm-ok/30 text-adm-ok focus:border-adm-ok'
-                          : tipoAjuste === 'Consumo Interno'
+                          : tipoAjuste === 'Consumo Interno' || esUsoEnBarra
                             ? 'bg-adm-warn/10 border-adm-warn/30 text-adm-warn focus:border-adm-warn'
                             : 'bg-adm-danger/10 border-adm-danger/30 text-adm-danger focus:border-adm-danger'
                       }`}
                     >
+                      <option value={USO_EN_BARRA}>
+                        Se terminó (uso en barra)
+                      </option>
                       <option value="Merma">Merma (Desecho / Caducidad)</option>
                       <option value="Consumo Interno">
                         Consumo Interno / Cortesía
@@ -452,10 +479,10 @@ export default function MermasScreen() {
 
                 <div>
                   <label className="block text-xs font-bold text-adm-muted mb-1.5">
-                    Justificación del Ajuste *
+                    Justificación del Ajuste {esUsoEnBarra ? '(opcional)' : '*'}
                   </label>
                   <textarea
-                    required
+                    required={!esUsoEnBarra}
                     value={motivoAjuste}
                     onChange={(e) => setMotivoAjuste(e.target.value)}
                     className="w-full bg-adm-bg border border-adm-field text-adm-ink font-medium p-4 rounded-ui outline-none focus:border-adm-field dark:focus:border-adm-info min-h-[100px] resize-none text-sm transition-colors"
