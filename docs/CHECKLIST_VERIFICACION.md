@@ -67,10 +67,11 @@ cómo se pierde el único que verificaba algo.
       porque es lo que autoriza a compilar, no un trámite.
 - [ ] `npm run test:rapido`. Pendiente desde el 13-ago.
 
-  > **Lo que tiene que dar, medido el 12-ago para que no vuelva a costar dos
-  > días:** 6 fallos en `useConectividad.test.jsx`, y **no son una regresión**
-  > —vienen de compartir estado global con `--isolate=false`; ese archivo solo
-  > pasa 11 de 11—. **Si aparece un séptimo, ESE sí es nuevo.**
+  > **Desde el 26-oct tiene que dar 0 fallos.** Ya no usa `--isolate=false`:
+  > corre el proyecto «logica» de `vitest.config.js` (los `.test.js`, en node y
+  > aislados). Los 6 fallos de `useConectividad` que había que tolerar venían de
+  > compartir estado sin aislar; ese archivo es de pantalla y ya no entra aquí.
+  > Cualquier fallo es real.
 
 - [ ] Las **cinco** versiones en **0.2.8** (`npm run version` — hay que subirla:
       la 0.2.7 ya está publicada y una caja nunca se ofrece a sí misma la

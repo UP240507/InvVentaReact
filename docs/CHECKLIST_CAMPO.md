@@ -9,7 +9,7 @@ Si un paso falla: **para y anótalo**. No sigas con el bloque.
 
 ## 0 · En la máquina, antes de salir
 
-- [ ] `npm run test:rapido` → 6 fallos en `useConectividad`, ni uno más
+- [ ] `npm run test:rapido` → 0 fallos (desde el 26-oct son las pruebas de lógica, aisladas)
 - [ ] `npm run test:run` en verde
 - [ ] `npm run version` → 0.2.8 en los cinco archivos
 - [ ] `cargo test` en `src-tauri`
