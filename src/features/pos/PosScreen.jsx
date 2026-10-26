@@ -855,8 +855,13 @@ export default function PosScreen() {
         if (item.id === id) {
           const nuevaCantidad = safeNumber(item.cantidad, 0) + delta;
           if (nuevaCantidad < (item.cantidad_enviada || 0)) {
+            // El aviso decía «Cancélalo con perfil de Gerente», y ese camino no
+            // existe: nada quita de la cuenta lo ya enviado. Lo que se hace hoy
+            // en el local es que el gerente lo deje en cortesía (descuento de
+            // línea, con su PIN). Se dice eso hasta que exista cancelar de
+            // verdad (censo del 21-oct, §3.1).
             showToast(
-              `Ya hay ${item.cantidad_enviada} en preparación. Cancélalo con perfil de Gerente.`,
+              `Ya hay ${item.cantidad_enviada} en preparación y no se puede quitar de la cuenta. Si el cliente ya no lo quiere, el gerente puede dejarlo en Cortesía con el botón % de la línea.`,
               'error',
             );
             return item;
