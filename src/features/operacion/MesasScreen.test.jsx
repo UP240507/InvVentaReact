@@ -60,6 +60,13 @@ vi.mock('../../store/useSyncStore', () => ({
     getState: () => ({ enqueueAction: () => {} }),
   }),
 }));
+// MesasScreen lee quién actúa para Auditoría. Sin esto la prueba arrastra el
+// cliente real de Supabase y se queja de que faltan las variables del .env.
+vi.mock('../auth/useAuthStore', () => ({
+  useAuthStore: Object.assign(() => ({ user: null }), {
+    getState: () => ({ user: null, restauranteId: 'r' }),
+  }),
+}));
 
 import MesasScreen from './MesasScreen';
 

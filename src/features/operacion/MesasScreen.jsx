@@ -2,6 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
+import { useSessionStore } from '../../store/useSessionStore';
+import { useAuthStore } from '../auth/useAuthStore';
 import { calcularVenta } from '../../lib/Fiscal';
 import { useAtajos } from '../../hooks/useAtajos';
 import { useAcoplado } from '../../hooks/useAcoplado';
@@ -48,6 +50,14 @@ const mesaConRondaLista = (comandasActivas, mesaId) =>
       (c.items || []).length > 0 &&
       (c.items || []).every(itemListo),
   );
+
+// Quién hace el movimiento, para Auditoría: el empleado que entró con su PIN
+// y, si no hay, el usuario de la sesión. Se lee al momento de actuar, no al
+// montar: en la caja el PIN cambia de mano sin que la pantalla se desmonte.
+const quienActua = () =>
+  useSessionStore.getState().empleadoActivo?.nombre ||
+  useAuthStore.getState().user?.nombre ||
+  'Sin identificar';
 
 export default function MesasScreen() {
   const {
@@ -177,6 +187,19 @@ export default function MesasScreen() {
         return sat || m;
       }),
     }));
+
+    // Juntar sólo une mesas LIBRES (`mesasLibres`): no mueve cuentas ni dinero.
+    // El rastro queda porque cambia en qué mesa cae el consumo que venga.
+    useAppStore.getState().registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quienActua(),
+      accion: 'MESAS_JUNTADAS',
+      modulo: 'Mesas',
+      nivel: 'info',
+      detalles: `${principal.nombre} junto con ${satelites
+        .map((s) => s.nombre)
+        .join(', ')}.`,
+    });
 
     showToast(
       `${satelites.length + 1} mesas unidas a ${principal.nombre} (cap. ${
@@ -424,6 +447,31 @@ export default function MesasScreen() {
             : m,
       ),
     }));
+
+    // ── EL RASTRO ─────────────────────────────────────────────────────────────
+    // Un traspaso mueve consumo de una cuenta a otra, incluido lo que ya está en
+    // cocina. Hasta el 26-oct no dejaba nada: si al cobrar faltaba o sobraba un
+    // platillo, no había forma de saber que se había movido, ni quién.
+    const folioOrigen = mesaOrigen.orden_actual?.folio;
+    const lineas = itemsParaMover
+      .map((it) => {
+        const enCocina = Number(it.cantidad_enviada || 0);
+        return `${it.cantidad}x ${it.nombre}${enCocina > 0 ? ` (${enCocina} en cocina)` : ''}`;
+      })
+      .join(', ');
+    useAppStore.getState().registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quienActua(),
+      accion: 'TRASPASO_MESA',
+      modulo: 'Mesas',
+      nivel: 'warning',
+      detalles:
+        `De ${mesaOrigen.nombre}${folioOrigen ? ` (folio ${folioOrigen})` : ''}` +
+        ` a ${destino.nombre}: ${lineas}.` +
+        (itemsRestantes.length === 0
+          ? ` ${mesaOrigen.nombre} queda libre.`
+          : ''),
+    });
 
     showToast('Traspaso completado con éxito', 'success');
     setModalTraspaso({ show: false, mesaOrigen: null });
