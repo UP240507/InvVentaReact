@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: el token va en localStorage y la base sale de window.location.
+// Ver vitest.config.js.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   parsearPairing,

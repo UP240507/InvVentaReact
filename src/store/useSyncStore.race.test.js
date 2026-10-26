@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: arrastra lib/Hub, que lee localStorage y window.location.
+// Ver vitest.config.js.
 /**
  * Reproduce condición de carrera en processQueue.
  *

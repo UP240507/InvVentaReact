@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: window.open y el puente de Tauri viven en window.
+// Ver vitest.config.js.
 // src/lib/Abrir.test.js
 //
 // La afirmación es una: **abrirFuera dice la verdad sobre si abrió.** De eso

@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: escucha securitypolicyviolation en document.
+// Ver vitest.config.js.
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   firmaDeBloqueo,

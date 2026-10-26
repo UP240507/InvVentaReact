@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: la sesión persiste en localStorage; en node no se escribe.
+// Ver vitest.config.js.
 // src/store/useSessionStore.caducidad.test.js
 //
 // La sesión de un aparato caduca al cerrarse el turno en el que se abrió.

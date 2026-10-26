@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: lee document.hidden y document.hasFocus.
+// Ver vitest.config.js.
 // src/lib/Notificador.test.js
 //
 // Se prueba `estaDesatendida` porque es LA línea que falló el 12-ago: el aviso

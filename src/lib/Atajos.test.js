@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: el despachador se engancha a keydown de window; en node no se instala.
+// Ver vitest.config.js.
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   normalizarCombo,

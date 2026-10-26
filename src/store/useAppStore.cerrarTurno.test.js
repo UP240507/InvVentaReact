@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// jsdom a propósito: el store persiste en localStorage al crearse.
+// Ver vitest.config.js.
 // La regla «con mesas abiertas no hay corte» (10-oct) vive también en el
 // store, no sólo en el cuadro de cierre: así ningún otro camino (la paleta de
 // comandos, un botón futuro) puede cortar con mesas abiertas.
