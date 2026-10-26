@@ -14,6 +14,7 @@ import {
 import { useSyncStore } from '../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
+import { useSessionStore } from '../../store/useSessionStore';
 import { derivarPlan } from '../../hooks/usePlan';
 import { supabase } from '../../api/supabase';
 import {
@@ -223,6 +224,26 @@ export default function EmpleadosScreen() {
     };
     delete empleadoGuardar.password;
 
+    // ── EL RASTRO ──────────────────────────────────────────────────────────
+    // Hasta el 26-oct la fila decía `usuario: 'Administrador'` fijo: el alta y
+    // la edición de un empleado —sueldo, rol, PIN— no registraban quién fue.
+    // Y se escribía al final, después de sincronizar la credencial, así que
+    // tres caminos que YA habían guardado la fila salían antes sin dejar
+    // rastro: la edición sin conexión, la contraseña corta y el fallo de la
+    // Edge Function. Ahora se audita justo después de guardar, en cada camino.
+    const auditarGuardado = () =>
+      registrarAuditoria({
+        fecha: new Date().toISOString(),
+        usuario:
+          useSessionStore.getState().empleadoActivo?.nombre ||
+          useAuthStore.getState().user?.nombre ||
+          'Sin identificar',
+        accion: isEditing ? 'EDICIÓN_EMPLEADO' : 'ALTA_EMPLEADO',
+        modulo: 'RRHH',
+        nivel: 'warning',
+        detalles: `Empleado: ${empleadoGuardar.nombre} | Rol: ${empleadoGuardar.rol}`,
+      });
+
     setSaving(true);
     try {
       if (!isEditing) {
@@ -283,6 +304,7 @@ export default function EmpleadosScreen() {
         const authId =
           efData?.auth_id ?? efData?.authId ?? efData?.user?.id ?? null;
         upsertStaff({ ...empleadoGuardar, auth_id: authId });
+        auditarGuardado();
       } else {
         // ── EDICIÓN: la fila staff se escribe offline-first como siempre. Pero si
         //    cambió la CREDENCIAL (PIN de operativo / contraseña o rol de elevado),
@@ -310,6 +332,7 @@ export default function EmpleadosScreen() {
           }
           enqueueAction('staff', 'upsert', empleadoGuardar);
           upsertStaff(empleadoGuardar);
+          auditarGuardado();
           showToast(
             'Sin conexión: se guardaron los cambios, pero el PIN/contraseña de acceso solo se actualizan en línea. Se conservó el anterior.',
             'info',
@@ -322,6 +345,7 @@ export default function EmpleadosScreen() {
         // Persistir la fila (offline-first) y, si aplica, re-sincronizar la credencial.
         enqueueAction('staff', 'upsert', empleadoGuardar);
         upsertStaff(empleadoGuardar);
+        auditarGuardado();
 
         if (credencialCambio) {
           // Validación temprana: cambiar de rol a elevado o querer nueva
@@ -366,15 +390,6 @@ export default function EmpleadosScreen() {
           }
         }
       }
-
-      registrarAuditoria({
-        fecha: new Date().toISOString(),
-        usuario: 'Administrador',
-        accion: isEditing ? 'EDICIÓN_EMPLEADO' : 'ALTA_EMPLEADO',
-        modulo: 'RRHH',
-        nivel: 'warning',
-        detalles: `Empleado: ${empleadoGuardar.nombre} | Rol: ${empleadoGuardar.rol}`,
-      });
 
       showToast(
         `Empleado ${isEditing ? 'actualizado' : 'registrado'} con éxito`,
