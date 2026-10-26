@@ -382,14 +382,47 @@ export default function KdsScreen() {
       setShowConfirmModal(false);
       return;
     }
+
+    // ── EL RASTRO ────────────────────────────────────────────────────────────
+    // La purga no toca la cuenta ni el stock, pero deja a TODAS las estaciones
+    // sin lo pendiente. Hasta el 26-oct no dejaba nada: ni fila de auditoría ni
+    // motivo en las rondas, así que una mesa que reclamaba su platillo no tenía
+    // a quién preguntar y la ronda cancelada no decía por qué.
+    //
+    // Quién es quien tiene el KDS delante: el empleado que entró con su PIN y,
+    // si no hay, el usuario de la sesión. El PIN propio y la purga por estación
+    // llegan con `purga_kds` (censo del 21-oct, §3.7); esto es sólo el rastro.
+    const quien =
+      useSessionStore.getState().empleadoActivo?.nombre ||
+      user?.nombre ||
+      'Sin identificar';
+    const motivo = `Purga del KDS (${quien})`;
+
     activas.forEach((c) => {
-      enqueueAction('comandas', 'upsert', { ...c, estado: 'cancelada' });
+      enqueueAction('comandas', 'upsert', {
+        ...c,
+        estado: 'cancelada',
+        motivo_cancelacion: motivo,
+      });
     });
     useAppStore.setState((prev) => ({
       comandas_activas: prev.comandas_activas.filter(
         (c) => !activas.find((a) => String(a.id) === String(c.id)),
       ),
     }));
+
+    const rondas = activas
+      .map((c) => `${c.mesa || 'Mostrador'}${c.folio ? ` (${c.folio})` : ''}`)
+      .join(', ');
+    useAppStore.getState().registrarAuditoria?.({
+      fecha: new Date().toISOString(),
+      usuario: quien,
+      accion: 'KDS_PURGADO',
+      modulo: 'KDS',
+      nivel: 'warning',
+      detalles: `${quien} purgó ${activas.length} ronda(s) en producción: ${rondas}.`,
+    });
+
     showToast('Producción purgada', 'success');
     setShowConfirmModal(false);
   };
