@@ -17,10 +17,25 @@ globalThis.__setOnline = (value) => {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value });
 };
 
-// En el entorno node `navigator` existe pero `onLine` vale undefined, y el
-// código lo lee como «sin conexión» (`!navigator.onLine`). Una prueba de lógica
-// que tocara esa rama pasaría por el camino offline sin que nadie lo notara.
-// Se deja en true, que es lo que da el navegador y lo que da jsdom.
-if (typeof navigator !== 'undefined' && navigator.onLine === undefined) {
+// En el entorno node la conexión no es la del navegador, y depende de la
+// versión de Node:
+//
+//   · Node 21 o más: `navigator` existe, pero `onLine` vale undefined y el
+//     código lo lee como «sin conexión» (`!navigator.onLine`). Una prueba de
+//     lógica pasaría por el camino offline sin que nadie lo notara.
+//   · Node 20: `navigator` NO existe. `useSyncStore` lee `navigator.onLine` al
+//     crearse y revienta con ReferenceError al importarlo (1-nov, Windows de
+//     Chris; el contenedor tenía Node 22 y no se vio).
+//
+// En los dos casos se deja `onLine` en true, que es lo que da el navegador y lo
+// que da jsdom.
+if (typeof navigator === 'undefined') {
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    writable: true,
+    value: {},
+  });
+}
+if (navigator.onLine === undefined) {
   globalThis.__setOnline(true);
 }
