@@ -171,3 +171,31 @@ describe('El método de pago lo deciden los métodos, no los pagos', () => {
     expect(venta.efectivo).toBe(75);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H14 · Una cuenta de $0 se cierra con el mismo botón, sin capturar pago.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('H14 · la cuenta de $0', () => {
+  it('se cierra sin capturar pago, queda como cortesía y no abre el cajón', async () => {
+    const user = userEvent.setup();
+    montarDirecta();
+    await user.click(screen.getByRole('button', { name: /Agua cortesía/ }));
+    await user.click(screen.getByRole('button', { name: /Cobrar Ticket/ }));
+
+    // Con 71f8522 este botón estaba apagado: pedía un pago mayor que cero.
+    const cerrar = screen.getByRole('button', {
+      name: /Confirmar y Cerrar Cuenta/,
+    });
+    expect(cerrar).toBeEnabled();
+    await user.click(cerrar);
+
+    const venta = ventaEncolada();
+    expect(venta.total).toBe(0);
+    expect(venta.efectivo).toBe(0);
+    expect(venta.metodo_pago).toBe('cortesia'); // con 71f8522: 'efectivo'
+
+    // Sin dinero no hay por qué abrir el cajón.
+    const doc = construirTicket(h.tickets.at(-1), { configuracion: {} });
+    expect(doc.abrirCajon).toBe(false);
+  });
+});

@@ -362,7 +362,13 @@ export default function ModalCobro({
   const excedente = saldoPendiente < 0 ? Math.abs(saldoPendiente) : 0;
   const cambio = round2(Math.min(excedente, totalEfectivoRecibido));
 
-  const estaPagado = saldoPendiente <= 0 && totalPagado > 0;
+  // Una cuenta de $0 (todo en cortesía) ya está pagada: no hay nada que
+  // cobrar. Hasta la 0.3.2 se exigía un pago mayor que cero, el cajero
+  // tecleaba un billete para poder cerrar, y ese billete entraba al corte como
+  // efectivo que nunca estuvo en la caja (medido el 17-nov: $200 en una venta
+  // de $0).
+  const cuentaEnCero = granTotal <= 0;
+  const estaPagado = saldoPendiente <= 0 && (totalPagado > 0 || cuentaEnCero);
 
   const UMBRAL_EXCEDENTE = 1; // < $1 = redondeo, no dispara diálogo
 
@@ -454,6 +460,12 @@ export default function ModalCobro({
   // pinta.
   const pieDeCobro = (
     <div className="shrink-0 p-5 lg:p-8 bg-white dark:bg-ops-panel border-t-2 border-ops-border shadow-[0_-10px_20px_rgba(0,0,0,0.02)] transition-colors z-10">
+      {cuentaEnCero && pagos.length === 0 && (
+        <p className="mb-3 text-sm font-bold text-ops-ok">
+          La cuenta está en $0: no hay nada que cobrar. Ciérrala con el botón de
+          abajo.
+        </p>
+      )}
       <div className="flex justify-between items-center mb-3">
         <span className="font-black text-ops-muted uppercase tracking-widest text-xs">
           Saldo Pendiente
