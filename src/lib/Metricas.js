@@ -369,3 +369,17 @@ export function resumenDelPeriodo(
     ventas: delPeriodo,
   };
 }
+
+/**
+ * El dinero de un conjunto de ventas, por método, sumando los CAMPOS de cada
+ * venta (`efectivo`, `tarjeta`, `transferencia`) y no su `metodo_pago`.
+ *
+ * Reportes y su Corte Z repartían por la etiqueta y sólo miraban `efectivo` y
+ * `tarjeta`: el dinero de una venta `mixto` no aparecía en ninguno de los dos,
+ * y la transferencia en ninguno (0.3.3, 19-nov). El corte de la caja
+ * (`calcularTotalesTurno`) ya sumaba los campos; con esto los dos papeles del
+ * mismo turno dicen lo mismo.
+ */
+export function dineroPorMetodo(ventas = []) {
+  return agregarVentas(ventas).porMetodo;
+}

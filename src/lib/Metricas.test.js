@@ -7,6 +7,7 @@ import {
   variacion,
   topPlatillos,
   resumenDelPeriodo,
+  dineroPorMetodo,
 } from './Metricas';
 
 // Miércoles 15 de julio de 2026, 13:00 local.
@@ -301,5 +302,35 @@ describe('calcularPyL · utilidad neta', () => {
     expect(p.gastos).toBe(0);
     expect(p.gastosPendientes).toBe(30);
     expect(p.utilidadNeta).toBe(60);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reportes y el Corte Z de Reportes repartían el dinero por `metodo_pago`, y
+// sólo miraban `efectivo` y `tarjeta`: el dinero de una venta `mixto` no
+// aparecía en ninguno de los dos (0.3.3, 19-nov). El corte de la caja ya
+// sumaba los campos; ahora los dos dicen lo mismo.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('dineroPorMetodo · los campos de cada venta, no su etiqueta', () => {
+  const ventas = [
+    { total: 100, metodo_pago: 'mixto', efectivo: 60, tarjeta: 40 },
+    { total: 50, metodo_pago: 'efectivo', efectivo: 50, tarjeta: 0 },
+    { total: 30, metodo_pago: 'transferencia', transferencia: 30 },
+    { total: 0, metodo_pago: 'cortesia', efectivo: 0 },
+  ];
+
+  it('una venta mixta cuenta en los dos métodos', () => {
+    const d = dineroPorMetodo(ventas);
+    expect(d.efectivo).toBe(110);
+    expect(d.tarjeta).toBe(40);
+  });
+
+  it('la transferencia también se cuenta', () => {
+    expect(dineroPorMetodo(ventas).transferencia).toBe(30);
+  });
+
+  it('lo repartido suma lo cobrado', () => {
+    const d = dineroPorMetodo(ventas);
+    expect(d.efectivo + d.tarjeta + d.transferencia).toBe(180);
   });
 });

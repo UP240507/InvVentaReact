@@ -34,6 +34,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { aISOLocal } from '../../lib/Fechas';
+import { dineroPorMetodo } from '../../lib/Metricas';
 import { FRANJAS, soloDeFranja, cuantasSinFranja } from '../../lib/Franjas';
 import { foliosSinVenta } from '../../lib/Folio';
 import { supabase } from '../../api/supabase';
@@ -182,26 +183,10 @@ export default function ReportesScreen() {
 
     // Financiero
     const tIngresos = vPeriodo.reduce((s, v) => s + Number(v.total || 0), 0);
-    const tEfectivo = vPeriodo.reduce(
-      (s, v) =>
-        s +
-        (v.metodo_pago === 'efectivo'
-          ? Number(v.total)
-          : v.metodo_pago === 'mixto'
-            ? Number(v.efectivo || 0)
-            : 0),
-      0,
-    );
-    const tTarjeta = vPeriodo.reduce(
-      (s, v) =>
-        s +
-        (v.metodo_pago === 'tarjeta'
-          ? Number(v.total)
-          : v.metodo_pago === 'mixto'
-            ? Number(v.tarjeta || 0)
-            : 0),
-      0,
-    );
+    // Por los campos de cada venta, no por su etiqueta (0.3.3): ver
+    // `dineroPorMetodo` en lib/Metricas.
+    const { efectivo: tEfectivo, tarjeta: tTarjeta } =
+      dineroPorMetodo(vPeriodo);
     const tPropinas = vPeriodo.reduce((s, v) => s + Number(v.propina || 0), 0);
     const tInsumos = cPeriodo.reduce((s, c) => s + Number(c.total || 0), 0);
     const tNominas = nPeriodo.reduce(
@@ -489,14 +474,10 @@ export default function ReportesScreen() {
   // porque el único momento en que se descubre es al cerrar el turno.
   const imprimirCorteZ = async (t, vts) => {
     const total = vts.reduce((s, v) => s + Number(v.total || 0), 0);
-    const efectivo = vts.reduce(
-      (s, v) => s + (v.metodo_pago === 'efectivo' ? Number(v.total) : 0),
-      0,
-    );
-    const tarjeta = vts.reduce(
-      (s, v) => s + (v.metodo_pago === 'tarjeta' ? Number(v.total) : 0),
-      0,
-    );
+    // El mismo reparto que el corte de la caja: si el Corte Z de Reportes
+    // repartiera por etiqueta, el dinero de las ventas `mixto` faltaría en el
+    // papel que se reimprime y sobraría en el del cierre.
+    const { efectivo, tarjeta } = dineroPorMetodo(vts);
     const propinas = vts.reduce((s, v) => s + Number(v.propina || 0), 0);
     const fondo = Number(t.fondo_inicial || 0);
 
@@ -891,16 +872,7 @@ export default function ReportesScreen() {
                     (s, v) => s + Number(v.total || 0),
                     0,
                   );
-                  const efectivo = ventasTurno.reduce(
-                    (s, v) =>
-                      s + (v.metodo_pago === 'efectivo' ? Number(v.total) : 0),
-                    0,
-                  );
-                  const tarjeta = ventasTurno.reduce(
-                    (s, v) =>
-                      s + (v.metodo_pago === 'tarjeta' ? Number(v.total) : 0),
-                    0,
-                  );
+                  const { efectivo, tarjeta } = dineroPorMetodo(ventasTurno);
                   const propinas = ventasTurno.reduce(
                     (s, v) => s + Number(v.propina || 0),
                     0,
