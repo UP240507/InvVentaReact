@@ -418,3 +418,71 @@ describe('H3 · la cortesía se guarda en la mesa al aplicarla', () => {
     expect(venta.items).toHaveLength(2);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL BUSCADOR DEL POS (Chris, 19-nov). Se activa tocándolo, filtra mientras se
+// escribe y Enter no hace nada: ninguna tecla agrega un producto sin mirar.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Buscador del POS', () => {
+  const montarConMenu = () => {
+    h.estado.s = {
+      ...h.estado.s,
+      recetas: [
+        { id: 1, nombre: 'Capuchino', precio_venta: 75, categoria: 'Café' },
+        { id: 5, nombre: 'Latte', precio_venta: 70, categoria: 'Café' },
+        {
+          id: 6,
+          nombre: 'Latte frío',
+          precio_venta: 80,
+          categoria: 'Fríos',
+          codigo_pos: 'LT FRIO',
+        },
+      ],
+    };
+    return montarDirecta();
+  };
+
+  it('filtra en todas las categorías mientras se escribe, sin acentos', async () => {
+    const user = userEvent.setup();
+    montarConMenu();
+    // Parado en «Café», el latte frío no se ve…
+    await user.click(screen.getByRole('button', { name: 'Café' }));
+    expect(screen.queryByRole('button', { name: /Latte frío/ })).toBeNull();
+
+    // …pero buscando sí: la búsqueda no mira la categoría.
+    await user.click(screen.getByRole('searchbox', { name: /Buscar/ }));
+    await user.keyboard('FRIO');
+    expect(screen.getByRole('button', { name: /Latte frío/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Capuchino/ })).toBeNull();
+  });
+
+  it('busca también por el código del POS', async () => {
+    const user = userEvent.setup();
+    montarConMenu();
+    await user.type(screen.getByRole('searchbox', { name: /Buscar/ }), 'lt');
+    expect(screen.getByRole('button', { name: /Latte frío/ })).toBeTruthy();
+  });
+
+  it('Enter no agrega nada al carrito', async () => {
+    const user = userEvent.setup();
+    montarConMenu();
+    await user.type(
+      screen.getByRole('searchbox', { name: /Buscar/ }),
+      'capuchino{Enter}',
+    );
+    expect(
+      screen.queryByRole('button', { name: /Cobrar Ticket/ }),
+    ).toBeDisabled();
+  });
+
+  it('borrar la búsqueda devuelve la categoría que había', async () => {
+    const user = userEvent.setup();
+    montarConMenu();
+    await user.click(screen.getByRole('button', { name: 'Fríos' }));
+    await user.type(screen.getByRole('searchbox', { name: /Buscar/ }), 'capu');
+    expect(screen.getByRole('button', { name: /Capuchino/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Borrar búsqueda/ }));
+    expect(screen.queryByRole('button', { name: /Capuchino/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Latte frío/ })).toBeTruthy();
+  });
+});

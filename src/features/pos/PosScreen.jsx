@@ -27,12 +27,14 @@ import {
   Percent,
   StickyNote,
   SlidersHorizontal,
+  Search,
 } from 'lucide-react';
 import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
 import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
 import { calcularVenta, importeDeLinea } from '../../lib/Fiscal';
 import { metodoDePago, montosDeVenta } from '../../lib/Pago';
+import { filtrarPorBusqueda } from '../../lib/BusquedaPos';
 import {
   fusionarConGuardado,
   aplicarDescuentoEnLineas,
@@ -236,6 +238,9 @@ export default function PosScreen() {
 
   const [carrito, setCarrito] = useState([]);
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
+  // Lo tecleado en el buscador (0.3.3). Mientras haya algo, la categoría se
+  // ignora y se busca en todo; al borrarlo, vuelve la categoría que había.
+  const [busqueda, setBusqueda] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showModalCobro, setShowModalCobro] = useState(false);
 
@@ -533,9 +538,11 @@ export default function PosScreen() {
     'Todas',
     ...new Set(menuList.map((p) => p.categoria || 'Sin Categoría')),
   ];
-  const productosFiltrados = menuList.filter(
-    (p) => categoriaActiva === 'Todas' || p.categoria === categoriaActiva,
-  );
+  const productosFiltrados = busqueda.trim()
+    ? filtrarPorBusqueda(menuList, busqueda)
+    : menuList.filter(
+        (p) => categoriaActiva === 'Todas' || p.categoria === categoriaActiva,
+      );
 
   // Las DOS conectividades. Aquí sólo interesa la local: sin hub no hay papel,
   // pero la venta se registra igual y sincroniza por su cuenta.
@@ -2166,6 +2173,40 @@ export default function PosScreen() {
               verlos aquí se aprenden. Salen del registro vivo, no de una lista
               escrita a mano. */}
           <HintsAtajos scope="pos" className="hidden xl:flex text-ops-muted" />
+        </div>
+
+        {/* ── EL BUSCADOR (0.3.3, Chris 19-nov) ──────────────────────────
+            Sólo se activa tocándolo: ninguna tecla del turno lo abre sola, y
+            con el foco aquí los atajos del POS (F2, F4, F9, +, −, Escape) no
+            disparan. Filtra mientras se escribe, en todas las categorías; Enter
+            no agrega nada, para que nada entre al carrito sin mirarlo. La
+            lógica está en lib/BusquedaPos.js. */}
+        <div className="bg-ops-panel px-4 pt-3 shrink-0 transition-colors duration-lenta">
+          <div className="flex items-center gap-2 bg-ops-panel-2 border-2 border-ops-border rounded-ui px-3 focus-within:border-ops-accent">
+            <Search className="w-5 h-5 text-ops-muted shrink-0" />
+            <input
+              type="search"
+              aria-label="Buscar producto"
+              placeholder="Buscar producto o código"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault();
+                if (e.key === 'Escape') setBusqueda('');
+              }}
+              className="w-full min-h-11 bg-transparent py-2 font-bold text-ops-ink outline-none placeholder:text-ops-muted"
+            />
+            {busqueda && (
+              <button
+                type="button"
+                aria-label="Borrar búsqueda"
+                onClick={() => setBusqueda('')}
+                className="w-11 h-11 -mr-2 flex items-center justify-center text-ops-muted hover:text-ops-ink shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="bg-ops-panel px-4 py-3 border-b border-ops-border flex gap-3 overflow-x-auto custom-scrollbar shrink-0 transition-colors duration-lenta">
