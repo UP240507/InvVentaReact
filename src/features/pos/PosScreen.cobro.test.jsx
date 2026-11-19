@@ -12,7 +12,7 @@
 // cambia en el almacén y la pantalla se rehace desde ella.
 // ─────────────────────────────────────────────────────────────────────────────
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { construirTicket } from '../../lib/Comanda';
@@ -73,6 +73,7 @@ vi.mock('../../lib/Hub', async (original) => ({
 vi.mock('./components/TicketImpresion', () => ({ default: () => null }));
 
 import PosScreen from './PosScreen';
+import { useAppStore } from '../../store/useAppStore';
 
 const GERENTE = { id: 50, nombre: 'Sairi', rol: 'Gerente', pin: '9876' };
 
@@ -94,6 +95,8 @@ beforeEach(() => {
     ],
     turnos: [],
     ventas: [],
+    // El almacén de verdad lo trae siempre; al cobrar una mesa se filtra.
+    comandas_activas: [],
     getIva: () => 0.16,
     descontarStock: vi.fn(),
     showToast: vi.fn(),
@@ -105,6 +108,8 @@ beforeEach(() => {
 
 const ventaEncolada = () =>
   h.enqueued.find((a) => a[0] === 'ventas' && a[1] === 'insert')?.[2];
+const mesaGuardada = () =>
+  h.enqueued.filter((a) => a[0] === 'mesas').at(-1)?.[2];
 
 const montarDirecta = () =>
   render(
@@ -241,6 +246,25 @@ const montarMesa = (mesa = mesaConJugos()) => {
   );
 };
 
+/** Abre el cuadro de descuento de la línea de Jugo. */
+const abrirDescuentoDeJugo = async (user, indice = 0) => {
+  const botones = screen.getAllByTitle('Descuento a este producto');
+  await user.click(botones[indice]);
+};
+
+/** Cortesía con el PIN del gerente, a `unidades` unidades si se pregunta. */
+const darCortesia = async (user, unidades = null) => {
+  await user.click(screen.getByRole('button', { name: /Cortesía/ }));
+  if (unidades != null) {
+    const campo = screen.getByLabelText(/¿A cuántas/);
+    await user.clear(campo);
+    await user.type(campo, String(unidades));
+  }
+  await user.click(screen.getByRole('button', { name: /Aplicar descuento/ }));
+  await user.type(screen.getByPlaceholderText('PIN'), GERENTE.pin);
+  await user.click(screen.getByRole('button', { name: /^Autorizar$/ }));
+};
+
 describe('Comensales · se preguntan al pedir la cuenta, no con un contador', () => {
   it('el POS de una mesa ya no tiene el contador +/−', () => {
     montarMesa();
@@ -258,5 +282,139 @@ describe('Comensales · se preguntan al pedir la cuenta, no con un contador', ()
     // Con 71f8522, con 4 ya puestos, el cuadro no salía y se imprimía directo.
     expect(await screen.findByText('¿Cuántas personas?')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('0')).toHaveValue(4);
+  });
+});
+
+describe('H3 · la cortesía se guarda en la mesa al aplicarla', () => {
+  it('cortesía a una línea enviada, salir y volver: sigue en cortesía', async () => {
+    const user = userEvent.setup();
+    const { unmount } = montarMesa(
+      mesaConJugos({
+        orden_actual: {
+          items: [
+            {
+              id: 4,
+              nombre: 'Jugo',
+              precio: 40,
+              cantidad: 1,
+              cantidad_enviada: 1,
+            },
+          ],
+          total: 40,
+        },
+      }),
+    );
+    await abrirDescuentoDeJugo(user);
+    await darCortesia(user);
+
+    // Se guardó en la mesa, sin mandar nada a producción.
+    const guardada = mesaGuardada();
+    expect(guardada, 'la cortesía escribe la mesa').toBeTruthy();
+    expect(guardada.orden_actual.items[0].descuento?.tipo).toBe('cortesia');
+
+    // Se sale de la pantalla y se vuelve.
+    unmount();
+    render(
+      <MemoryRouter initialEntries={['/pos?mesa=11']}>
+        <PosScreen />
+      </MemoryRouter>,
+    );
+    const mesa = useAppStore
+      .getState()
+      .mesas.find((m) => String(m.id) === '11');
+    expect(mesa.orden_actual.items[0].descuento?.tipo).toBe('cortesia');
+    // Y en pantalla la línea dice que es cortesía.
+    expect(screen.getAllByText(/Cortesía/).length).toBeGreaterThan(0);
+  });
+
+  it('quitar la cortesía también se guarda y deja rastro en Auditoría', async () => {
+    const user = userEvent.setup();
+    montarMesa(
+      mesaConJugos({
+        orden_actual: {
+          items: [
+            {
+              id: 4,
+              nombre: 'Jugo',
+              precio: 40,
+              cantidad: 1,
+              cantidad_enviada: 1,
+              descuento: { tipo: 'cortesia', valor: 100, autorizadoPor: 'X' },
+            },
+          ],
+          total: 0,
+        },
+      }),
+    );
+    await abrirDescuentoDeJugo(user);
+    await user.click(screen.getByRole('button', { name: /^Quitar$/ }));
+
+    expect(mesaGuardada()?.orden_actual.items[0].descuento ?? null).toBeNull();
+    expect(h.auditoria.map((a) => a.accion)).toContain(
+      'DESCUENTO_PRODUCTO_QUITADO',
+    );
+  });
+
+  it('una línea sin mandar sobrevive a que la mesa cambie en el almacén', async () => {
+    const user = userEvent.setup();
+    montarMesa();
+    // «Galleta» sale en el menú y, cuando se agrega, también en el carrito: se
+    // cuenta cuántas veces aparece para saber si la línea sigue ahí.
+    const enElMenu = screen.getAllByText('Galleta').length;
+    // El mesero agrega una galleta y todavía no la manda.
+    await user.click(screen.getByRole('button', { name: /Galleta/ }));
+    const conLaLinea = screen.getAllByText('Galleta').length;
+    expect(conLaLinea).toBeGreaterThan(enElMenu);
+
+    // Otro aparato toca la mesa (aquí: una cortesía al jugo).
+    act(() => {
+      useAppStore.setState((prev) => ({
+        mesas: prev.mesas.map((m) => ({
+          ...m,
+          orden_actual: {
+            ...m.orden_actual,
+            items: m.orden_actual.items.map((i) => ({
+              ...i,
+              descuento: { tipo: 'cortesia', valor: 100 },
+            })),
+          },
+        })),
+      }));
+    });
+
+    // Con 71f8522 el carrito se rehacía desde la mesa y la galleta desaparecía.
+    expect(screen.getAllByText('Galleta')).toHaveLength(conLaLinea);
+  });
+
+  it('cortesía a 1 de 2 jugos: la línea se parte y la mesa cobra 40', async () => {
+    const user = userEvent.setup();
+    montarMesa();
+    await abrirDescuentoDeJugo(user);
+    await darCortesia(user, 1);
+
+    const items = mesaGuardada().orden_actual.items;
+    expect(items).toHaveLength(2);
+    const conCortesia = items.filter((i) => i.descuento?.tipo === 'cortesia');
+    const sinCortesia = items.filter((i) => !i.descuento);
+    expect(conCortesia).toHaveLength(1);
+    expect(conCortesia[0].cantidad).toBe(1);
+    expect(sinCortesia[0].cantidad).toBe(1);
+    // Lo enviado se reparte: no se vuelve a mandar nada a cocina.
+    expect(items.reduce((n, i) => n + i.cantidad_enviada, 0)).toBe(2);
+
+    // Y al cobrar, la venta es de un jugo, no de cero ni de dos.
+    await user.click(
+      screen.getByRole('button', { name: /Cerrar Mesa y Cobrar/ }),
+    );
+    const restante = await screen.findByRole('button', {
+      name: /Pagar Restante/,
+    });
+    await user.click(restante);
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+    const venta = ventaEncolada();
+    expect(venta.total).toBe(40); // con 71f8522: 0 (los dos en cortesía)
+    expect(venta.items).toHaveLength(2);
   });
 });

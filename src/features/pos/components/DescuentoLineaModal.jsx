@@ -49,23 +49,46 @@ export default function DescuentoLineaModal({
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [error, setError] = useState('');
 
-  const { bruto } = importeDeLinea({ ...item, descuento: null });
+  // ── A CUÁNTAS UNIDADES (0.3.3, Chris 19-nov) ────────────────────────────
+  // Con dos jugos en una línea, la cortesía era para los dos. Ahora se escoge
+  // a cuántas; si son menos que todas, el POS parte la línea en dos
+  // (`aplicarDescuentoEnLineas`). Empieza en todas, que es lo que hacía antes.
+  const cantidadLinea = Math.max(1, Math.floor(Number(item?.cantidad) || 1));
+  const [unidades, setUnidades] = useState(String(cantidadLinea));
+  const unidadesValidas = Math.min(
+    cantidadLinea,
+    Math.max(0, Math.floor(Number(unidades) || 0)),
+  );
+
+  const { bruto } = importeDeLinea({
+    ...item,
+    cantidad: unidadesValidas,
+    descuento: null,
+  });
   const sesionAutoriza = puedeAutorizar(rolSesion, rolesPermisos);
 
   // Vista previa con el valor tecleado: el cajero ve cuánto va a quedar ANTES
   // de aplicar, que es cuando todavía puede rectificar.
   const previo = normalizarDescuento({ tipo: modo, valor }, bruto);
   const preview = previo.ok
-    ? importeDeLinea({ ...item, descuento: previo.descuento })
+    ? importeDeLinea({
+        ...item,
+        cantidad: unidadesValidas,
+        descuento: previo.descuento,
+      })
     : null;
 
   const confirmar = (autorizadoPor) => {
-    onAplicar({ ...previo.descuento, autorizadoPor });
+    onAplicar({ ...previo.descuento, autorizadoPor }, unidadesValidas);
     onCerrar();
   };
 
   const intentar = () => {
     setError('');
+    if (unidadesValidas < 1) {
+      setError(`Escoge de 1 a ${cantidadLinea} unidades.`);
+      return;
+    }
     if (!previo.ok) {
       setError(previo.error);
       return;
@@ -184,6 +207,30 @@ export default function DescuentoLineaModal({
               </button>
             ))}
           </div>
+
+          {cantidadLinea > 1 && (
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <label
+                htmlFor="descuento-unidades"
+                className="text-sm font-bold text-ops-ink"
+              >
+                ¿A cuántas de las {cantidadLinea}?
+              </label>
+              <input
+                id="descuento-unidades"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max={cantidadLinea}
+                value={unidades}
+                onChange={(e) => {
+                  setUnidades(e.target.value.replace(/[^0-9]/g, ''));
+                  setError('');
+                }}
+                className="w-20 text-center text-2xl font-black py-2 bg-ops-panel-2 border-2 border-ops-field rounded-ui text-ops-ink outline-none focus:border-ops-accent"
+              />
+            </div>
+          )}
 
           {modo !== 'cortesia' ? (
             <input

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { useSyncStore } from '../../store/useSyncStore';
@@ -33,6 +33,12 @@ import TicketImpresion from './components/TicketImpresion';
 import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
 import { calcularVenta, importeDeLinea } from '../../lib/Fiscal';
 import { metodoDePago, montosDeVenta } from '../../lib/Pago';
+import {
+  fusionarConGuardado,
+  aplicarDescuentoEnLineas,
+  quitarDescuentoEnLineas,
+  idDeParte,
+} from '../../lib/OrdenMesa';
 import {
   verificarStock,
   esPaquete,
@@ -468,18 +474,32 @@ export default function PosScreen() {
   };
   const [ticketGenerado, setTicketGenerado] = useState(null);
 
+  // ── EL CARRITO SE REHACE DESDE LA MESA, SIN BORRAR LO NO MANDADO (0.3.3) ──
+  // Este efecto corre cada vez que la mesa cambia en el almacén: la abre otro
+  // aparato, alguien le pone una cortesía, un traspaso. Hasta la 0.3.2
+  // reemplazaba el carrito entero con lo guardado, y lo que el mesero había
+  // agregado aquí y todavía no mandaba **desaparecía sin aviso** (medido en
+  // campo el 19-nov con el contador de comensales). Ahora, mientras sea la
+  // misma mesa, lo guardado se fusiona con lo que esta pantalla tiene sin
+  // mandar (`fusionarConGuardado`). Al cambiar de mesa sí se empieza de cero:
+  // lo de la otra mesa no es de ésta.
+  const mesaDelCarrito = useRef(null);
   useEffect(() => {
-    if (isMesa && mesaActual?.orden_actual?.items) {
-      const itemsSanitizados = mesaActual.orden_actual.items.map((item) => ({
-        ...item,
-        precio: safePriceString(item?.precio),
-        cantidad: safeNumber(item?.cantidad, 1),
-        cantidad_enviada: safeNumber(item?.cantidad_enviada, 0),
-      }));
-      setCarrito(itemsSanitizados);
-    } else {
+    const misma = mesaDelCarrito.current === mesaId;
+    mesaDelCarrito.current = mesaId;
+    if (!isMesa) {
       setCarrito([]);
+      return;
     }
+    const guardados = (mesaActual?.orden_actual?.items || []).map((item) => ({
+      ...item,
+      precio: safePriceString(item?.precio),
+      cantidad: safeNumber(item?.cantidad, 1),
+      cantidad_enviada: safeNumber(item?.cantidad_enviada, 0),
+    }));
+    setCarrito((prev) =>
+      misma ? fusionarConGuardado(guardados, prev) : guardados,
+    );
   }, [mesaId, isMesa, mesaActual]);
 
   // ── LA CARTA VIGENTE (09-oct) ─────────────────────────────────────────────
@@ -870,25 +890,96 @@ export default function PosScreen() {
   // y a la venta sin que nadie tenga que acordarse de propagarlo.
   const [lineaDescuento, setLineaDescuento] = useState(null);
 
-  const aplicarDescuentoLinea = (id, descuento) => {
-    setCarrito((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, descuento } : it)),
+  // ── EL DESCUENTO DE UNA LÍNEA SE GUARDA EN LA MESA AL APLICARLO (0.3.3) ──
+  // Hasta la 0.3.2 sólo cambiaba el carrito en pantalla. La mesa se escribía
+  // al mandar a producción, al imprimir o al cobrar una parte; una cortesía a
+  // una línea YA ENVIADA no tenía nada que mandar, y al salir de la pantalla y
+  // volver, el carrito se rehacía desde la mesa sin ella. Auditoría ya la
+  // tenía registrada: el gerente vio $0, quedó escrito que se regaló, y el
+  // cliente pagó $183.70 (H3, medido en AZUL el 17-nov). Chris, 17-nov: se
+  // guarda al aplicarla, porque «pueden hacer la cortesía antes, durante y
+  // después de que se entregó el producto».
+  //
+  // Se toca SÓLO esa línea de la mesa más reciente del almacén, no el carrito
+  // entero: lo que aquí no se ha mandado no tiene por qué aparecer en la mesa
+  // para los demás aparatos sin que cocina lo sepa. Una línea que todavía no
+  // está guardada se guarda con su descuento cuando se mande.
+  const guardarLineasEnMesa = (cambiar) => {
+    if (!isMesa) return;
+    const mesa = (useAppStore.getState().mesas || []).find(
+      (m) => String(m.id) === String(mesaId),
     );
+    const guardados = mesa?.orden_actual?.items;
+    if (!Array.isArray(guardados) || guardados.length === 0) return;
+    const nuevos = cambiar(guardados);
+    if (nuevos === guardados) return;
+    const { subtotal: sub, total } = calcularVenta({
+      items: nuevos.map((i) => ({
+        precio: getPrecio(i),
+        cantidad: safeNumber(i?.cantidad, 0),
+        descuento: i?.descuento ?? null,
+      })),
+      ivaRate: ivaRaw,
+      preciosIncluyenIva,
+    });
+    const mesaActualizada = {
+      ...mesa,
+      orden_actual: {
+        ...mesa.orden_actual,
+        items: nuevos,
+        subtotal: sub,
+        total,
+      },
+    };
+    enqueueAction('mesas', 'upsert', mesaActualizada);
+    useAppStore.setState((prev) => ({
+      mesas: prev.mesas.map((m) =>
+        String(m.id) === String(mesaId) ? mesaActualizada : m,
+      ),
+    }));
+  };
+
+  /**
+   * @param {string|number} id
+   * @param {object} descuento
+   * @param {number?} unidades  a cuántas de la línea; menos que todas la parte
+   */
+  const aplicarDescuentoLinea = (id, descuento, unidades = null) => {
     const linea = carrito.find((i) => i.id === id);
+    if (!linea) return;
+    const cantidad = safeNumber(linea.cantidad, 0);
+    const parcial = unidades != null && unidades < cantidad;
+    // Un solo id para la parte nueva, el mismo en pantalla y en la mesa: si
+    // cada lado inventara el suyo, al fusionarse no se reconocerían.
+    const idParte = parcial ? idDeParte(linea.id) : null;
+    const aplicar = (items) =>
+      aplicarDescuentoEnLineas(items, id, descuento, unidades, idParte);
+    setCarrito((prev) => aplicar(prev));
+    guardarLineasEnMesa(aplicar);
     // Auditoría: un descuento sin rastro de quién y sobre qué es justo lo que
     // convierte una promoción en una fuga.
     registrarAuditoria?.({
       accion: 'DESCUENTO_PRODUCTO',
       modulo: 'POS',
       nivel: 'warning',
-      detalles: `${linea?.nombre ?? id}: ${etiquetaDescuento(descuento)} · autorizó ${descuento?.autorizadoPor ?? '—'}`,
+      detalles: `${linea.nombre ?? id}${parcial ? ` (${unidades} de ${cantidad})` : ''}: ${etiquetaDescuento(descuento)} · autorizó ${descuento?.autorizadoPor ?? '—'}`,
     });
   };
 
-  const quitarDescuentoLinea = (id) =>
-    setCarrito((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, descuento: null } : it)),
-    );
+  // Quitar también se guarda y también deja rastro. Hasta la 0.3.2 no hacía
+  // ninguna de las dos: una cortesía se podía quitar sin que nadie lo supiera.
+  const quitarDescuentoLinea = (id) => {
+    const linea = carrito.find((i) => i.id === id);
+    const quitar = (items) => quitarDescuentoEnLineas(items, id);
+    setCarrito((prev) => quitar(prev));
+    guardarLineasEnMesa(quitar);
+    registrarAuditoria?.({
+      accion: 'DESCUENTO_PRODUCTO_QUITADO',
+      modulo: 'POS',
+      nivel: 'warning',
+      detalles: `${linea?.nombre ?? id}: se quitó ${etiquetaDescuento(linea?.descuento)}`,
+    });
+  };
 
   const removerDelCarrito = (id) => {
     if (bloqueadoPorCuenta()) return;
@@ -2534,7 +2625,9 @@ export default function PosScreen() {
           nombreSesion={user?.nombre}
           staff={staff}
           rolesPermisos={roles_permisos}
-          onAplicar={(d) => aplicarDescuentoLinea(lineaDescuento.id, d)}
+          onAplicar={(d, unidades) =>
+            aplicarDescuentoLinea(lineaDescuento.id, d, unidades)
+          }
           onQuitar={() => quitarDescuentoLinea(lineaDescuento.id)}
           onCerrar={() => setLineaDescuento(null)}
         />
