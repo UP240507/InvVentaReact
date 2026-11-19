@@ -127,10 +127,12 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
   /**
    * Monta una mesa de 4 cervezas ya guardada, en flujo de un solo papel.
    *
-   * `comensales` es un parámetro y no una constante **a propósito**: con 4 se
-   * salta el cuadro de «cuánta gente hay», y ese atajo es justo el que hizo que
-   * esta suite no viera el fallo del 31-ago durante ocho días. Con 0 se ejercita
-   * el camino que recorre una mesa recién sentada, que es el de todos los días.
+   * `comensales` es un parámetro y no una constante **a propósito**. Hasta la
+   * 0.3.2, con 4 se saltaba el cuadro de «cuánta gente hay», y ese atajo es
+   * justo el que hizo que esta suite no viera el fallo del 31-ago durante ocho
+   * días. Desde la 0.3.3 el cuadro sale siempre: con 4 sale con el 4 puesto
+   * (ver `confirmarComensales`), y con 0 sale vacío, que es el camino de una
+   * mesa recién sentada.
    */
   const montarMesa = (comensales = 4) => {
     Object.assign(h.app, {
@@ -170,6 +172,12 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
     );
   };
 
+  /** El cuadro de comensales sale siempre (0.3.3): se confirma el número. */
+  const confirmarComensales = async (user) => {
+    await screen.findByText('¿Cuántas personas?');
+    await user.click(screen.getByRole('button', { name: 'Imprimir cuenta' }));
+  };
+
   /** La reserva de folio que se encoló al imprimir: ahí está el número. */
   const folioReservado = () =>
     h.enqueued.find((a) => a[0] === 'folios_reservados')?.[2];
@@ -193,6 +201,7 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
     await user.click(
       screen.getByRole('button', { name: /Imprimir su cuenta/ }),
     );
+    await confirmarComensales(user);
 
     // 2 · Se imprimió UNA cuenta, con folio, y por 100 (2 × 50), no por 200.
     const reserva = folioReservado();
@@ -237,6 +246,7 @@ describe('Integración · cuenta parcial en mesa → cobro', () => {
     await user.click(
       screen.getByRole('button', { name: /Imprimir su cuenta/ }),
     );
+    await confirmarComensales(user);
     await user.click(
       await screen.findByRole('button', { name: /Cobrar esta/ }),
     );

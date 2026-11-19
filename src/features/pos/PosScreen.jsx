@@ -592,20 +592,11 @@ export default function PosScreen() {
     }).total;
 
   // ─── ACCIONES DEL CARRITO ────────────────────────────────────────────────
-  const handleCambiarComensales = (delta) => {
-    if (!isMesa) return;
-    const actuales = safeNumber(mesaActual.comensales_reales, 0);
-    const nuevos = Math.max(0, actuales + delta);
-    if (nuevos === actuales) return;
-
-    const mesaActualizada = { ...mesaActual, comensales_reales: nuevos };
-    enqueueAction('mesas', 'upsert', mesaActualizada);
-    useAppStore.setState((prev) => ({
-      mesas: prev.mesas.map((m) =>
-        m.id === mesaActual.id ? mesaActualizada : m,
-      ),
-    }));
-  };
+  // Aquí había un contador +/− de comensales en la cabecera del carrito. Se
+  // quitó en la 0.3.3: cada toque reescribía la mesa, el carrito se rehacía
+  // desde lo guardado y **se borraba lo que el mesero no había mandado**
+  // (medido en campo por Chris el 19-nov). Y el número ya se pide donde sirve,
+  // al pedir la cuenta (ver `handlePedirCuenta`).
 
   // PAQUETE CON ELECCIONES: el mesero elige 1 opción por grupo antes de que
   // el combo entre al carrito. { paquete, seleccion: {grupo: recetaId} } | null
@@ -1097,11 +1088,16 @@ export default function PosScreen() {
     //
     // Y NO se pide al mandar a cocina: frenar el servicio por un dato de
     // reporte sería cambiar un problema de reportes por uno de operación.
-    const comensalesCuenta = safeNumber(
-      comensales ?? mesaActual?.comensales_reales,
-      0,
-    );
-    if (comensalesCuenta < 1) {
+    //
+    // ── Y SE PIDE SIEMPRE, AUNQUE YA HAYA UN NÚMERO (0.3.3) ────────────────
+    // Hasta la 0.3.2 el cuadro sólo salía con el número en 0, y un traspaso o
+    // el contador de la cabecera lo dejaban puesto. Chris, 19-nov: lo que vale
+    // es cuántos llegaron de verdad. Una reservación dice ocho y llegan cinco,
+    // o no llega nadie; al juntar mesas alguien avisa cuántos serán, y no
+    // siempre se cumple. Así que el cuadro sale cada vez con el número que
+    // haya ya puesto, y confirmarlo es un toque.
+    const comensalesCuenta = safeNumber(comensales, 0);
+    if (comensales == null || comensalesCuenta < 1) {
       // ── LA SELECCIÓN VIAJA CON EL CUADRO ────────────────────────────────
       // Este `return` corta la petición para preguntar cuánta gente hay, y el
       // cuadro vuelve a llamar a `handlePedirCuenta`. Si la selección no viaja
@@ -1114,7 +1110,11 @@ export default function PosScreen() {
       // mesa se libera con `comensales_reales: 0`: el contador vuelve a cero
       // con cada gente nueva. Encontrado en campo el 31-ago —se separaron dos
       // pizzas de $376 y el papel salió por los $904 de la mesa—.
-      setModalComensales({ valor: '', seleccion });
+      const yaPuestos = safeNumber(mesaActual?.comensales_reales, 0);
+      setModalComensales({
+        valor: yaPuestos > 0 ? String(yaPuestos) : '',
+        seleccion,
+      });
       return;
     }
 
@@ -2157,7 +2157,7 @@ export default function PosScreen() {
         onAbrir={() => setCarritoAbierto(true)}
         onCerrar={() => setCarritoAbierto(false)}
         // Sin `titulo`: el carrito ya trae su propia cabecera con el nombre de
-        // la mesa y el contador de comensales.
+        // la mesa.
         etiquetaAbrir={isMesa ? 'Ver comanda' : 'Ver carrito'}
         resumen={`$${granTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         insignia={carrito.reduce((n, i) => n + (Number(i.cantidad) || 0), 0)}
@@ -2185,32 +2185,6 @@ export default function PosScreen() {
               </h2>
             </div>
           </div>
-
-          {isMesa && (
-            <div className="flex items-center gap-2 bg-white dark:bg-ops-bg px-3 py-1.5 rounded-ui border border-ops-border">
-              <Users className="w-4 h-4 text-ops-muted" />
-              <button
-                onClick={() => handleCambiarComensales(-1)}
-                className="w-6 h-6 flex items-center justify-center hover:bg-ops-panel-2 dark:hover:bg-ops-border rounded-ui text-lg font-black leading-none active:scale-95 text-ops-ink"
-              >
-                -
-              </button>
-              {/* Un 0 se pinta como hueco y NO como 1. Enseñar 1 por defecto
-                  era el fallo callado: el papel salía sin la línea «Personas»
-                  —`construirPreCuenta` sólo la imprime si es mayor que cero— y
-                  la pantalla decía que sí había una. Dos capas correctas y el
-                  hueco justo en medio. */}
-              <span className="font-black text-sm w-4 text-center text-ops-danger">
-                {safeNumber(mesaActual?.comensales_reales, 0) || '—'}
-              </span>
-              <button
-                onClick={() => handleCambiarComensales(1)}
-                className="w-6 h-6 flex items-center justify-center hover:bg-ops-panel-2 dark:hover:bg-ops-border rounded-ui text-lg font-black leading-none active:scale-95 text-ops-ink"
-              >
-                +
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar bg-ops-panel-2/50 transition-colors duration-lenta">
@@ -2566,10 +2540,11 @@ export default function PosScreen() {
         />
       )}
 
-      {/* MODAL: ¿cuántas personas? — se abre solo al pedir la cuenta de una
-          mesa sin el dato. No se puede cerrar sin contestar (no hay onClose que
-          siga adelante): es un candado, no un recordatorio. Cancelar deja la
-          mesa como estaba, sin imprimir y sin marcarla por cobrar. */}
+      {/* MODAL: ¿cuántas personas? — se abre cada vez que se pide la cuenta,
+          con el número que ya hubiera puesto. No se puede cerrar sin
+          contestar (no hay onClose que siga adelante): es un candado, no un
+          recordatorio. Cancelar deja la mesa como estaba, sin imprimir y sin
+          marcarla por cobrar. */}
       {modalComensales && (
         <OpsModal
           titulo="¿Cuántas personas?"

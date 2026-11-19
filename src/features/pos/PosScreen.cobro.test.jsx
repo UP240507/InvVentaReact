@@ -199,3 +199,64 @@ describe('H14 · la cuenta de $0', () => {
     expect(doc.abrirCajon).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MESAS: comensales y cortesía (H3).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Una mesa con dos jugos ya enviados a cocina. */
+const mesaConJugos = (extra = {}) => ({
+  id: 11,
+  nombre: '11',
+  estado: 'ocupada',
+  comensales_reales: 0,
+  orden_actual: {
+    items: [
+      {
+        id: 4,
+        nombre: 'Jugo',
+        precio: 40,
+        cantidad: 2,
+        cantidad_enviada: 2,
+      },
+    ],
+    total: 80,
+  },
+  ...extra,
+});
+
+const montarMesa = (mesa = mesaConJugos()) => {
+  h.estado.s = {
+    ...h.estado.s,
+    recetas: [
+      ...h.estado.s.recetas,
+      { id: 4, nombre: 'Jugo', precio_venta: 40, categoria: 'Bebidas' },
+    ],
+    mesas: [mesa],
+  };
+  return render(
+    <MemoryRouter initialEntries={[`/pos?mesa=${mesa.id}`]}>
+      <PosScreen />
+    </MemoryRouter>,
+  );
+};
+
+describe('Comensales · se preguntan al pedir la cuenta, no con un contador', () => {
+  it('el POS de una mesa ya no tiene el contador +/−', () => {
+    montarMesa();
+    // Era el único botón del POS con un «+» de texto: los de cantidad de cada
+    // línea son iconos.
+    expect(screen.queryByRole('button', { name: '+' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '-' })).toBeNull();
+  });
+
+  it('el cuadro sale aunque la mesa ya tenga número, con ese número puesto', async () => {
+    const user = userEvent.setup();
+    montarMesa(mesaConJugos({ comensales_reales: 4 }));
+    await user.click(screen.getByRole('button', { name: /Pedir Cuenta/ }));
+
+    // Con 71f8522, con 4 ya puestos, el cuadro no salía y se imprimía directo.
+    expect(await screen.findByText('¿Cuántas personas?')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('0')).toHaveValue(4);
+  });
+});
