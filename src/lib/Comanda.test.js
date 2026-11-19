@@ -248,7 +248,9 @@ describe('construirTicket — dinero', () => {
     propina: 40,
     total: 445,
     metodo_pago: 'efectivo',
-    efectivo: 500,
+    // Lo que se queda en la caja (0.3.3) y, aparte, lo que entregó el cliente.
+    efectivo: 445,
+    efectivo_recibido: 500,
     cambio_entregado: 55,
   };
 
@@ -658,7 +660,8 @@ describe('los datos del emisor', () => {
     iva: 6.21,
     total: 45,
     metodo_pago: 'efectivo',
-    efectivo: 50,
+    efectivo: 45,
+    efectivo_recibido: 50,
     cambio_entregado: 5,
   };
 
@@ -807,7 +810,13 @@ describe('el ticket sin pago — la cuenta que se lleva a la mesa', () => {
 
   it('con pago sí aparecen las dos cosas', () => {
     const doc = construirTicket(
-      { ...base, metodo_pago: 'efectivo', efectivo: 600, cambio_entregado: 33 },
+      {
+        ...base,
+        metodo_pago: 'efectivo',
+        efectivo: 567,
+        efectivo_recibido: 600,
+        cambio_entregado: 33,
+      },
       { configuracion: config },
     );
     expect(doc.totales.map((t) => t.etiqueta)).toContain('Recibido');
@@ -834,11 +843,46 @@ describe('el ticket sin pago — la cuenta que se lleva a la mesa', () => {
     expect(etiquetas).toContain('TOTAL');
   });
 
+  it('«Recibido» es lo que entregó el cliente, no lo que se queda (0.3.3)', () => {
+    // Desde la 0.3.3 `venta.efectivo` es lo que se QUEDA en la caja. Si el
+    // ticket siguiera leyéndolo, a un cliente que pagó $75 con $100 le diría
+    // «Recibido $75 · Cambio $25», que no cuadra en su propio papel.
+    const doc = construirTicket(
+      {
+        ...base,
+        total: 75,
+        metodo_pago: 'efectivo',
+        efectivo: 75,
+        efectivo_recibido: 100,
+        cambio_entregado: 25,
+      },
+      { configuracion: config },
+    );
+    const fila = (e) => doc.totales.find((t) => t.etiqueta === e)?.valor;
+    expect(fila('Recibido')).toBe('$100.00');
+    expect(fila('Recibido')).not.toBe('$75.00');
+    expect(fila('Cambio')).toBe('$25.00');
+  });
+
+  it('con el cambio pero sin lo recibido, no se inventa el recibido', () => {
+    const etiquetas = construirTicket(
+      { ...base, metodo_pago: 'efectivo', efectivo: 110, cambio_entregado: 0 },
+      { configuracion: config },
+    ).totales.map((t) => t.etiqueta);
+    expect(etiquetas).not.toContain('Recibido');
+  });
+
   it('un cambio de CERO de verdad sí se imprime', () => {
     // La distinción es «no lo sé» contra «fue cero». Pago exacto es un cero
     // legítimo y el cliente tiene derecho a verlo en el papel.
     const doc = construirTicket(
-      { ...base, metodo_pago: 'efectivo', efectivo: 110, cambio_entregado: 0 },
+      {
+        ...base,
+        metodo_pago: 'efectivo',
+        efectivo: 110,
+        efectivo_recibido: 110,
+        cambio_entregado: 0,
+      },
       { configuracion: config },
     );
     expect(doc.totales.map((t) => t.etiqueta)).toContain('Cambio');

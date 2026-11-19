@@ -44,7 +44,9 @@ const venta = {
   propina: 40,
   total: 445,
   metodo_pago: 'efectivo',
-  efectivo: 500,
+  // Lo que se queda en la caja (0.3.3) y, aparte, lo que entregó el cliente.
+  efectivo: 445,
+  efectivo_recibido: 500,
   cambio_entregado: 55,
 };
 

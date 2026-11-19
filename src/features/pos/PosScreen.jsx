@@ -32,6 +32,7 @@ import ModalCobro from '../operacion/components/ModalCobro';
 import TicketImpresion from './components/TicketImpresion';
 import PanelRondas, { hayRondasSinEntregar } from '../operacion/PanelRondas';
 import { calcularVenta, importeDeLinea } from '../../lib/Fiscal';
+import { metodoDePago, montosDeVenta } from '../../lib/Pago';
 import {
   verificarStock,
   esPaquete,
@@ -125,8 +126,6 @@ const getPrecio = (item) => {
   const v = item?.precio_venta ?? item?.precio ?? item?.precioVenta;
   return safePriceString(v);
 };
-
-const round2 = (num) => Math.round((Number(num) || 0) * 100) / 100;
 
 // ─── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────
 export default function PosScreen() {
@@ -1523,22 +1522,14 @@ export default function PosScreen() {
     const ivaTicket = fiscalTicket.iva;
     const granTotalTicket = fiscalTicket.total;
 
+    // ── LO QUE SE QUEDA EN LA CAJA, NO LO QUE SE ENTREGÓ (0.3.3) ────────────
+    // Hasta la 0.3.2 aquí se sumaban los pagos tal como se tecleaban, y una
+    // cuenta de $75 pagada con $100 quedaba con `efectivo = 100`. El corte
+    // suma ese campo, así que esperaba en el cajón el cambio que se le había
+    // devuelto al cliente: medido en campo el 17-nov, $285 de más en cuatro
+    // ventas. El cálculo vive en `lib/Pago.js`, donde se prueba sin pantalla.
     const pagosDetalle = datosPago?.pagosDetalle || [];
-    const montoEfectivo = round2(
-      pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'efectivo')
-        .reduce((acc, p) => acc + safeNumber(p.monto), 0),
-    );
-    const montoTarjeta = round2(
-      pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'tarjeta')
-        .reduce((acc, p) => acc + safeNumber(p.monto), 0),
-    );
-    const montoTransferencia = round2(
-      pagosDetalle
-        .filter((p) => p.metodo.toLowerCase() === 'transferencia')
-        .reduce((acc, p) => acc + safeNumber(p.monto), 0),
-    );
+    const montos = montosDeVenta(pagosDetalle, datosPago?.cambio);
 
     const turnoActivo =
       (turnos || []).find((t) => t.estado === 'abierto') || null;
@@ -1580,13 +1571,13 @@ export default function PosScreen() {
       iva: ivaTicket,
       descuento: fiscalTicket.descuento,
       total: granTotalTicket,
-      metodo_pago:
-        pagosDetalle.length > 1
-          ? 'mixto'
-          : pagosDetalle[0]?.metodo?.toLowerCase() || 'efectivo',
-      efectivo: montoEfectivo,
-      tarjeta: montoTarjeta,
-      transferencia: montoTransferencia,
+      // Por los MÉTODOS usados, no por cuántos pagos hubo: dos billetes eran
+      // «mixto» y Reportes contaba lo mixto aparte. Una cuenta de $0 es
+      // `cortesia`: no entró dinero y el cajón no tiene por qué abrirse.
+      metodo_pago: metodoDePago(pagosDetalle, granTotalTicket),
+      efectivo: montos.efectivo,
+      tarjeta: montos.tarjeta,
+      transferencia: montos.transferencia,
       usuario: user?.nombre ?? 'Sistema',
       fecha: cobradoEn.toISOString(),
       // ── LA FRANJA VA POR EL COBRO, NO POR LA APERTURA DE LA MESA ─────────
@@ -1624,7 +1615,9 @@ export default function PosScreen() {
     const ventaVisual = {
       ...nuevaVentaBD,
       iva: ivaTicket,
-      cambio_entregado: safeNumber(datosPago?.cambio, 0),
+      cambio_entregado: montos.cambio,
+      // Sólo para el papel: con cuánto pagó el cliente. No va a la base.
+      efectivo_recibido: montos.efectivo_recibido,
       mesa_nombre: isMesa ? mesaActual.nombre : 'Directa',
       _quedaGente:
         (isParcial || !!folioDeLaCuenta) && carritoRestante.length > 0,

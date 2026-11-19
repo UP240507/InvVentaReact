@@ -415,13 +415,27 @@ export function construirTicket(
   // el cliente no es un hueco, es una cifra equivocada. Mejor no decirlo que
   // decirlo mal. Un cambio de 0 de verdad (pago exacto) sí se imprime, porque
   // entonces el campo viene y vale 0.
+  //
+  // Lo recibido tampoco sale de `venta.efectivo` (0.3.3, 19-nov). Ese campo es
+  // lo que se QUEDA en la caja —lo entregado menos el cambio—, porque es lo
+  // que suma el corte; hasta la 0.3.2 guardaba lo entregado y el arqueo
+  // esperaba en el cajón el cambio que se le devolvió al cliente. Lo
+  // entregado viaja aparte, en `efectivo_recibido`, con la misma regla que el
+  // cambio: sólo en el momento de cobrar, nunca en la base.
   const sabemosElCambio =
     venta.cambio_entregado !== undefined && venta.cambio_entregado !== null;
+  const sabemosLoRecibido =
+    venta.efectivo_recibido !== undefined && venta.efectivo_recibido !== null;
 
-  if (hayPago && metodo === 'efectivo' && sabemosElCambio) {
+  if (
+    hayPago &&
+    metodo === 'efectivo' &&
+    sabemosElCambio &&
+    sabemosLoRecibido
+  ) {
     totales.push({
       etiqueta: 'Recibido',
-      valor: money(venta.efectivo),
+      valor: money(venta.efectivo_recibido),
       enfasis: false,
     });
     totales.push({
