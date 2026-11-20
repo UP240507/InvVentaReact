@@ -315,16 +315,6 @@ export default function LoginScreen() {
                   >
                     ¿Olvidaste tu contraseña?
                   </button>
-                  <span aria-hidden="true" className="text-adm-border">
-                    ·
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/registro')}
-                    className="text-xs font-semibold text-adm-accent hover:opacity-80 transition-opacity"
-                  >
-                    Crear restaurante
-                  </button>
                 </div>
               </div>
 

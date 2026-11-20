@@ -18,7 +18,6 @@ import { capturarTokenDeUrl, avisarAppLista, enTauri } from './lib/Hub';
 import SidebarLayout from './components/SidebarLayout';
 
 import LoginScreen from './features/auth/LoginScreen';
-import RegistroScreen from './features/auth/RegistroScreen';
 import RecuperarScreen from './features/auth/RecuperarScreen';
 import NuevaContrasenaScreen from './features/auth/NuevaContrasenaScreen';
 import RelojChecadorScreen from './features/rh/RelojChecadorScreen';
@@ -211,7 +210,11 @@ export default function App() {
           {/* dispositivo sin sesión. Si estuviera tras AdminRoute, sin user */}
           {/* lo rebotaría a /login (el del admin) y nunca renderizaría. */}
           <Route path="/login" element={<LoginScreen />} />
-          <Route path="/registro" element={<RegistroScreen />} />
+          {/* Registro cerrado mientras dura la prueba con los fundadores
+              (19-nov). Quien llegue con un enlace viejo cae en el login en vez
+              de en un formulario que el servidor va a rechazar. La pantalla se
+              queda en features/auth/RegistroScreen.jsx para reabrirlo. */}
+          <Route path="/registro" element={<Navigate to="/login" replace />} />
           {/* Recuperación de contraseña: PÚBLICAS y fuera de todo guard. Quien
               llega aquí no tiene sesión —es justo el problema— y /nueva-contrasena
               abre una sesión temporal desde el enlace del correo, así que un

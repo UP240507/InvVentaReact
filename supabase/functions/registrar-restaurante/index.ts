@@ -42,8 +42,32 @@ const sufijoCodigo = () => {
   return s;
 };
 
+// Registro cerrado mientras dura la prueba con los fundadores (19-nov).
+//
+// Quitar el enlace de la app no basta: la función es pública y cualquiera
+// que conozca la URL puede seguir dando de alta restaurantes, con plan
+// fundador y 14 días de prueba, que es justo lo que se quiere controlar a
+// mano en esta fase. Por eso el candado vive aquí.
+//
+// Se abre con el secreto REGISTRO_ABIERTO=si, sin volver a desplegar.
+// Cualquier otro valor, o ninguno, lo deja cerrado: si alguien borra el
+// secreto por error, el registro se cierra en vez de abrirse.
+const registroAbierto = () =>
+  (Deno.env.get('REGISTRO_ABIERTO') ?? '').trim().toLowerCase() === 'si';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+
+  // Antes de leer el cuerpo y de tocar la base: cerrado no escribe nada.
+  if (!registroAbierto())
+    return json(
+      {
+        ok: false,
+        cerrado: true,
+        error: 'El registro de restaurantes está cerrado por ahora.',
+      },
+      403,
+    );
 
   try {
     const URL = Deno.env.get('SUPABASE_URL')!;
