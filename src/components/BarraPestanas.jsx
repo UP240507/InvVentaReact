@@ -63,7 +63,7 @@ export default function BarraPestanas({ items = [] }) {
   );
 
   const claseTab = (activa) =>
-    `flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors ${
+    `flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[56px] transition-colors ${
       activa ? 'text-ops-accent' : 'text-ops-muted'
     }`;
 
@@ -114,7 +114,12 @@ export default function BarraPestanas({ items = [] }) {
                   }
                 >
                   <it.icon className="w-5 h-5 shrink-0" />
-                  <span className="truncate">{it.label}</span>
+                  <span className="min-w-0 flex flex-col">
+                    <span className="truncate">{it.carta}</span>
+                    <span className="truncate text-xs font-semibold text-ops-muted">
+                      {it.label}
+                    </span>
+                  </span>
                 </NavLink>
               ))}
             </div>
@@ -140,7 +145,13 @@ export default function BarraPestanas({ items = [] }) {
             {/* El rótulo va debajo del icono y no se esconde: un icono solo se
                 adivina, y aquí adivinar mal cuesta salir de la pantalla en la
                 que estabas trabajando. */}
-            <span className="text-[10px] font-black uppercase tracking-wide truncate max-w-full px-1">
+            {/* La carta en la pestaña y el nombre real debajo, como en todo el
+                sistema. A 12 px y sin mayúsculas: dos renglones en mayúsculas
+                de 10 px no se leen en la mano. */}
+            <span className="text-xs font-black leading-tight truncate max-w-full px-1">
+              {it.carta}
+            </span>
+            <span className="text-xs font-semibold leading-tight text-ops-muted truncate max-w-full px-1">
               {it.label}
             </span>
           </NavLink>

@@ -113,3 +113,28 @@ describe('la barra de pestañas', () => {
     expect(screen.queryByText('Mapa de Mesas')).toBeNull();
   });
 });
+
+describe('la barra de pestañas con cartas de lotería', () => {
+  it('cada pestaña dice su carta y, debajo, el nombre real', () => {
+    pintar([
+      {
+        path: '/mesas',
+        icon: Utensils,
+        label: 'Mapa de Mesas',
+        carta: 'La Mesa',
+      },
+      {
+        path: '/pos',
+        icon: Package,
+        label: 'Punto de Venta',
+        carta: 'La Caja',
+      },
+    ]);
+    const barra = screen.getByRole('navigation', {
+      name: 'Navegación principal',
+    });
+    expect(barra.textContent).toContain('La Mesa');
+    expect(barra.textContent).toContain('Mapa de Mesas');
+    expect(barra.textContent).toContain('La Caja');
+  });
+});

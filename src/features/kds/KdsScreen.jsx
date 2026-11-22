@@ -39,6 +39,9 @@ import {
   X,
   UserCircle,
 } from 'lucide-react';
+import { cartaDeRuta } from '../../lib/Navegacion';
+
+const CARTA_KDS = cartaDeRuta('/kds');
 
 // ── Helpers de modelo de item (compat hacia atrás) ──────────────────────────
 const itemEstaListo = (item) =>
@@ -525,8 +528,9 @@ export default function KdsScreen() {
           // el botón de abajo sigue siendo la salida de verdad.
           onIcono={salirDelKds}
           iconoTitulo={salidaEsPerfil ? 'Mi perfil' : 'Salir del monitor'}
-          titulo="Monitor de Producción"
-          subtitulo={`${comandasDeEstacion.length} pendiente${comandasDeEstacion.length !== 1 ? 's' : ''} en ${estacionActiva}`}
+          // Pantalla completa: la carta la dice el propio monitor.
+          titulo={CARTA_KDS.nombre}
+          subtitulo={`${CARTA_KDS.modulo} · ${comandasDeEstacion.length} pendiente${comandasDeEstacion.length !== 1 ? 's' : ''} en ${estacionActiva}`}
           scopeAtajos="kds"
           acciones={
             <>

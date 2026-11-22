@@ -378,9 +378,13 @@ export default function SidebarLayout() {
                     <li key={ii}>
                       <NavLink
                         to={item.path}
-                        title={colapsado ? item.label : undefined}
+                        title={
+                          colapsado
+                            ? `${item.carta} · ${item.label}`
+                            : undefined
+                        }
                         className={({ isActive }) =>
-                          `flex items-center gap-3 py-2.5 font-medium text-sm transition-colors border-l-2 ${
+                          `flex items-center gap-3 py-2 font-medium text-sm transition-colors border-l-2 ${
                             colapsado ? 'justify-center px-0' : 'px-3'
                           } ${
                             isActive
@@ -391,7 +395,14 @@ export default function SidebarLayout() {
                       >
                         <item.icon className="w-4 h-4 shrink-0" />
                         {!colapsado && (
-                          <span className="truncate">{item.label}</span>
+                          <span className="min-w-0 flex flex-col">
+                            <span className="truncate font-semibold">
+                              {item.carta}
+                            </span>
+                            <span className="truncate text-xs font-normal opacity-75">
+                              {item.label}
+                            </span>
+                          </span>
                         )}
                       </NavLink>
                     </li>

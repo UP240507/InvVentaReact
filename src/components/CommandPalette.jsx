@@ -162,8 +162,8 @@ function PaletteAbierta({
           etiqueta: 'Ir a',
           items: navItems.map((n) => ({
             id: `nav:${n.path}`,
-            titulo: n.label,
-            subtitulo: n.grupo,
+            titulo: n.carta || n.label,
+            subtitulo: n.carta ? `${n.label} · ${n.grupo}` : n.grupo,
             icono: n.icon,
             ruta: n.path,
             clase: 'destino',

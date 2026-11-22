@@ -28,7 +28,7 @@ import {
 import { useAppStore } from '../store/useAppStore';
 import { useShellStore } from '../store/useShellStore';
 import { usePermisos } from '../hooks/usePermisos';
-import { tituloDeRuta, grupoDeRuta } from '../lib/Navegacion';
+import { tituloDeRuta, cartaDeRuta } from '../lib/Navegacion';
 import { formatoCantidad } from '../lib/Inventario';
 import { useAcoplado } from '../hooks/useAcoplado';
 import { useAuthStore } from '../features/auth/useAuthStore';
@@ -106,8 +106,13 @@ export default function Topbar() {
     (verCompras ? ordenesPendientes.length : 0) +
     (verListos ? pedidosListos.length : 0);
 
-  const grupo = grupoDeRuta(location.pathname);
-  const titulo = tituloDeRuta(location.pathname);
+  // La carta es el rótulo y el nombre real va debajo, para no perder el hilo.
+  // El grupo deja este lugar: con el nombre real debajo, el grupo ya no dice
+  // nada que no se sepa. Una ruta fuera del menú (perfil, plan) no tiene carta
+  // y se titula como siempre.
+  const carta = cartaDeRuta(location.pathname);
+  const titulo = carta ? carta.nombre : tituloDeRuta(location.pathname);
+  const debajo = carta?.modulo;
 
   const alerta = (key, Icono, tono, titular, detalle, ruta) => (
     <button
@@ -161,14 +166,14 @@ export default function Topbar() {
           Ahora se ve SIEMPRE, y son las pantallas las que callan cuando no hay
           ancho. El título lo dice el chasis una vez, no cada pantalla. */}
       <div className="min-w-0 flex-1 lg:flex-none">
-        {grupo && (
-          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-adm-muted leading-none">
-            {grupo}
-          </p>
-        )}
         <h2 className="font-fraunces font-bold text-adm-ink text-lg leading-tight truncate">
           {titulo}
         </h2>
+        {debajo && (
+          <p className="text-xs font-semibold text-adm-muted leading-none truncate">
+            {debajo}
+          </p>
+        )}
       </div>
 
       {/* Disparador de la palette. Es un BOTÓN con pinta de campo: si fuera un

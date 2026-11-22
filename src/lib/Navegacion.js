@@ -6,8 +6,17 @@
 // Contrato de cada ítem:
 //   path   ruta de react-router (también la llave del gate de permisos)
 //   icon   componente lucide
-//   label  texto visible
+//   label  el nombre real del módulo
+//   carta  su nombre de lotería (Chris, 21-nov): el rótulo con que se reconoce
+//          el lugar en todo el sistema, siempre con `label` debajo para no
+//          perder el hilo
+//   numero el de su carta. Fijo a propósito: si mañana entra un módulo a media
+//          lista, ninguno cambia de número
 //   modulo (opcional) módulo premium: exige plan/addon vigente además del permiso
+//
+// La carta es el RÓTULO; `label` es el texto de trabajo. Lo que se registra o
+// se exporta (auditoría, reportes, errores, avisos) sigue con el nombre real:
+// «falló al guardar en El Bote» no le dice nada a un contador.
 
 import {
   LayoutDashboard,
@@ -37,46 +46,152 @@ import {
 export const MENU_GRUPOS = [
   {
     title: 'Principal',
-    items: [{ path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }],
+    items: [
+      {
+        path: '/dashboard',
+        icon: LayoutDashboard,
+        label: 'Dashboard',
+        carta: 'La Tabla',
+        numero: 1,
+      },
+    ],
   },
   {
     title: 'Operación',
     items: [
-      { path: '/mesas', icon: Utensils, label: 'Mapa de Mesas' },
-      { path: '/pos', icon: MonitorSmartphone, label: 'Punto de Venta' },
-      { path: '/kds', icon: MonitorPlay, label: 'Monitor Cocina' },
-      { path: '/propinas', icon: Coins, label: 'Propinero' },
+      {
+        path: '/mesas',
+        icon: Utensils,
+        label: 'Mapa de Mesas',
+        carta: 'La Mesa',
+        numero: 2,
+      },
+      {
+        path: '/pos',
+        icon: MonitorSmartphone,
+        label: 'Punto de Venta',
+        carta: 'La Caja',
+        numero: 3,
+      },
+      {
+        path: '/kds',
+        icon: MonitorPlay,
+        label: 'Monitor Cocina',
+        carta: 'El Comal',
+        numero: 4,
+      },
+      {
+        path: '/propinas',
+        icon: Coins,
+        label: 'Propinero',
+        carta: 'El Cochinito',
+        numero: 5,
+      },
     ],
   },
   {
     title: 'Catálogos',
     items: [
-      { path: '/recetas', icon: ChefHat, label: 'Recetas' },
-      { path: '/modificadores', icon: ListPlus, label: 'Modificadores' },
-      { path: '/ingredientes', icon: Package, label: 'Ingredientes' },
+      {
+        path: '/recetas',
+        icon: ChefHat,
+        label: 'Recetas',
+        carta: 'El Recetario',
+        numero: 6,
+      },
+      {
+        path: '/modificadores',
+        icon: ListPlus,
+        label: 'Modificadores',
+        carta: 'La Salsa',
+        numero: 7,
+      },
+      {
+        path: '/ingredientes',
+        icon: Package,
+        label: 'Ingredientes',
+        carta: 'La Canasta',
+        numero: 8,
+      },
     ],
   },
   {
     title: 'Compras y Almacén',
     items: [
-      { path: '/compras', icon: ShoppingCart, label: 'Órdenes de Compra' },
-      { path: '/recepcion', icon: ClipboardCheck, label: 'Recepción' },
-      { path: '/mermas', icon: Trash2, label: 'Ajustes y Mermas' },
-      { path: '/proveedores', icon: Truck, label: 'Proveedores' },
-      { path: '/gastos', icon: Wallet, label: 'Gastos y Costos' },
+      {
+        path: '/compras',
+        icon: ShoppingCart,
+        label: 'Órdenes de Compra',
+        carta: 'El Mandado',
+        numero: 9,
+      },
+      {
+        path: '/recepcion',
+        icon: ClipboardCheck,
+        label: 'Recepción',
+        carta: 'El Diablito',
+        numero: 10,
+      },
+      {
+        path: '/mermas',
+        icon: Trash2,
+        label: 'Ajustes y Mermas',
+        carta: 'El Bote',
+        numero: 11,
+      },
+      {
+        path: '/proveedores',
+        icon: Truck,
+        label: 'Proveedores',
+        carta: 'El Marchante',
+        numero: 12,
+      },
+      {
+        path: '/gastos',
+        icon: Wallet,
+        label: 'Gastos y Costos',
+        carta: 'La Cartera',
+        numero: 13,
+      },
     ],
   },
   {
     title: 'Equipo y Clientes',
     items: [
-      { path: '/empleados', icon: Users, label: 'Staff' },
-      { path: '/asistencias', icon: Clock, label: 'Reloj Checador' },
-      { path: '/nominas', icon: Coins, label: 'Nóminas' },
-      { path: '/permisos', icon: ShieldCheck, label: 'Roles y Permisos' },
+      {
+        path: '/empleados',
+        icon: Users,
+        label: 'Staff',
+        carta: 'El Mandil',
+        numero: 14,
+      },
+      {
+        path: '/asistencias',
+        icon: Clock,
+        label: 'Reloj Checador',
+        carta: 'El Reloj',
+        numero: 15,
+      },
+      {
+        path: '/nominas',
+        icon: Coins,
+        label: 'Nóminas',
+        carta: 'La Raya',
+        numero: 16,
+      },
+      {
+        path: '/permisos',
+        icon: ShieldCheck,
+        label: 'Roles y Permisos',
+        carta: 'La Llave',
+        numero: 17,
+      },
       {
         path: '/clientes',
         icon: HeartHandshake,
         label: 'CRM',
+        carta: 'El Comensal',
+        numero: 18,
         modulo: 'lealtad',
       },
     ],
@@ -84,11 +199,19 @@ export const MENU_GRUPOS = [
   {
     title: 'Análisis',
     items: [
-      { path: '/reportes', icon: FileBarChart, label: 'Reportes' },
+      {
+        path: '/reportes',
+        icon: FileBarChart,
+        label: 'Reportes',
+        carta: 'La Libreta',
+        numero: 19,
+      },
       {
         path: '/facturas',
         icon: FileText,
         label: 'Facturación CFDI',
+        carta: 'El Sello',
+        numero: 20,
         modulo: 'cfdi',
       },
     ],
@@ -96,14 +219,38 @@ export const MENU_GRUPOS = [
   {
     title: 'Sistema',
     items: [
-      { path: '/zonas-produccion', icon: Printer, label: 'Zonas de impresión' },
+      {
+        path: '/zonas-produccion',
+        icon: Printer,
+        label: 'Zonas de impresión',
+        carta: 'La Comanda',
+        numero: 21,
+      },
       // Separado de "Zonas de impresión" a propósito: aquélla responde "a qué
       // estación va cada categoría" (catálogo), ésta "por dónde salen los
       // bytes y qué pasó con lo que no salió" (hardware). Juntarlas mezcla una
       // decisión de menú con un diagnóstico de red.
-      { path: '/hub', icon: Server, label: 'Hub e impresora' },
-      { path: '/auditoria', icon: ShieldCheck, label: 'Auditoría' },
-      { path: '/configuracion', icon: Settings, label: 'Configuración' },
+      {
+        path: '/hub',
+        icon: Server,
+        label: 'Hub e impresora',
+        carta: 'La Antena',
+        numero: 22,
+      },
+      {
+        path: '/auditoria',
+        icon: ShieldCheck,
+        label: 'Auditoría',
+        carta: 'El Ojo',
+        numero: 23,
+      },
+      {
+        path: '/configuracion',
+        icon: Settings,
+        label: 'Configuración',
+        carta: 'El Engrane',
+        numero: 24,
+      },
     ],
   },
 ];
@@ -189,4 +336,16 @@ export function itemsVisibles(puedeVerRuta, tieneModulo) {
   return gruposVisibles(puedeVerRuta, tieneModulo).flatMap((g) =>
     g.items.map((it) => ({ ...it, grupo: g.title })),
   );
+}
+
+/**
+ * La carta de lotería de una ruta: `{ numero, nombre, modulo }`, o `null` si la
+ * ruta no está en el menú (perfil, plan…), que se titula como siempre.
+ */
+export function cartaDeRuta(path) {
+  const limpio = (path || '').replace(/\/+$/, '') || '/';
+  const item = MENU_ITEMS.find((i) => i.path === limpio);
+  return item
+    ? { numero: item.numero, nombre: item.carta, modulo: item.label }
+    : null;
 }

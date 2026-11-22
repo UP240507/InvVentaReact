@@ -113,6 +113,9 @@ import {
 import PanelAcoplable from '../../components/PanelAcoplable';
 import HintsAtajos from '../../components/HintsAtajos';
 import { OpsButton, OpsModal } from '../../components/ui';
+import { cartaDeRuta } from '../../lib/Navegacion';
+
+const CARTA_POS = cartaDeRuta('/pos');
 
 // ─── HELPERS DE SANITIZACIÓN Y MATEMÁTICA ──────────────────────────────────
 const safeNumber = (val, fallback = 0) => {
@@ -2160,11 +2163,13 @@ export default function PosScreen() {
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
+              {/* Pantalla completa: aquí no hay encabezado de arriba, así que
+                  la carta la dice el propio POS, con su nombre real debajo. */}
               <h1 className="text-xl font-black font-syne text-ops-ink">
-                Catálogo de Venta
+                {CARTA_POS.nombre}
               </h1>
-              <p className="text-xs font-bold text-ops-muted uppercase tracking-widest">
-                {productosFiltrados.length} listos
+              <p className="text-xs font-bold text-ops-muted uppercase tracking-[0.06em]">
+                {CARTA_POS.modulo} · {productosFiltrados.length} listos
               </p>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { construirIndice, buscar, normalizar, agrupar } from './BuscadorGlobal';
+import { MENU_ITEMS } from './Navegacion';
 
 const NAV = [
   { path: '/mesas', label: 'Mapa de Mesas', grupo: 'Operación' },
@@ -111,5 +112,31 @@ describe('agrupar', () => {
     const grupos = agrupar(buscar(indiceCompleto(), 'me'));
     expect(grupos[0].etiqueta).toBe('Ir a');
     expect(grupos.every((g) => g.items.length > 0)).toBe(true);
+  });
+});
+
+describe('Los nombres de lotería en el buscador', () => {
+  // Con el menú real, que trae las cartas.
+  const idx = construirIndice(
+    {},
+    { navItems: MENU_ITEMS, puedeVerRuta: () => true },
+  );
+  const rutaDe = (q) =>
+    buscar(idx, q).find((r) => r.tipo === 'navegacion')?.ruta;
+
+  it('se encuentra por la carta', () => {
+    expect(rutaDe('diablito')).toBe('/recepcion');
+    expect(rutaDe('comal')).toBe('/kds');
+  });
+
+  it('y también por el nombre de siempre', () => {
+    expect(rutaDe('recepcion')).toBe('/recepcion');
+    expect(rutaDe('nominas')).toBe('/nominas');
+  });
+
+  it('muestra la carta y, debajo, el nombre real', () => {
+    const r = buscar(idx, 'diablito').find((e) => e.tipo === 'navegacion');
+    expect(r.titulo).toBe('El Diablito');
+    expect(r.subtitulo).toMatch(/^Recepción/);
   });
 });

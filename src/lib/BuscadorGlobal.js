@@ -151,11 +151,17 @@ export function construirIndice(datos = {}, opciones = {}) {
       id: `nav:${item.path}`,
       tipo: 'navegacion',
       etiqueta: 'Ir a',
-      titulo: item.label,
-      subtitulo: item.grupo || '',
+      // La carta es lo que se ve, pero el primer día nadie sabe que Recepción
+      // se llama El Diablito: se busca por los dos nombres.
+      titulo: item.carta || item.label,
+      subtitulo: item.carta
+        ? `${item.label}${item.grupo ? ` · ${item.grupo}` : ''}`
+        : item.grupo || '',
       ruta: item.path,
       icono: item.icon || Compass,
-      texto: normalizar(`${item.label} ${item.grupo || ''} ${item.path}`),
+      texto: normalizar(
+        `${item.carta || ''} ${item.label} ${item.grupo || ''} ${item.path}`,
+      ),
     });
   }
 
