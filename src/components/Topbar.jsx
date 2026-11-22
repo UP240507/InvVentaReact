@@ -1,6 +1,7 @@
 // ─── TOPBAR ADMIN (Proyecto D · tandas 2-3) ──────────────────────────────────
-// Franja superior del shell editorial: colapsar sidebar, ubicación actual,
-// disparador de la búsqueda y centro de alertas.
+// Franja superior del shell editorial: ubicación actual, disparador de la
+// búsqueda y centro de alertas. El botón de plegar el menú se mudó al propio
+// menú (21-nov): aquí nadie lo encontraba.
 //
 // Tanda 3: el buscador inline con su propio dropdown SE FUE. Ahora este control
 // abre la command palette (Ctrl+K), que hace lo mismo y además ejecuta acciones.
@@ -15,8 +16,6 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Search,
-  PanelLeftClose,
-  PanelLeftOpen,
   Bell,
   X,
   CheckCircle,
@@ -42,8 +41,6 @@ export default function Topbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const sidebarColapsado = useShellStore((s) => s.sidebarColapsado);
-  const toggleSidebar = useShellStore((s) => s.toggleSidebar);
   const abrirPalette = useShellStore((s) => s.abrirBuscador);
 
   const { flag } = usePermisos();
@@ -137,27 +134,6 @@ export default function Topbar() {
 
   return (
     <header className="h-14 shrink-0 bg-adm-panel border-b border-adm-border flex items-center gap-3 px-3 font-figtree relative z-30">
-      {/* Colapsar / expandir sidebar. Sin riel que colapsar no pinta nada, y en
-          un teléfono ese botón ocupa la esquina donde debería estar el título. */}
-      {acoplado && (
-        <button
-          onClick={toggleSidebar}
-          title={
-            sidebarColapsado
-              ? 'Expandir menú (Ctrl+B)'
-              : 'Colapsar menú (Ctrl+B)'
-          }
-          aria-label={sidebarColapsado ? 'Expandir menú' : 'Colapsar menú'}
-          className="p-2 rounded-ui text-adm-muted hover:text-adm-ink hover:bg-adm-bg transition-colors shrink-0"
-        >
-          {sidebarColapsado ? (
-            <PanelLeftOpen className="w-5 h-5" />
-          ) : (
-            <PanelLeftClose className="w-5 h-5" />
-          )}
-        </button>
-      )}
-
       {/* Ubicación actual.
           Estaba en `hidden md:block`, o sea que en un teléfono el Topbar no
           decía dónde estabas y cada pantalla tenía que repetirlo por su cuenta

@@ -11,6 +11,8 @@ import {
   Sun,
   Moon,
   WifiOff,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { useSyncStore } from '../store/useSyncStore';
 import { useCierreConEscape } from '../hooks/useCierreConEscape';
@@ -411,6 +413,38 @@ export default function SidebarLayout() {
               </div>
             ))}
           </nav>
+
+          {/* Plegar y desplegar. Vivía como un ícono suelto en la esquina del
+              encabezado de arriba y nadie lo encontraba (Chris, 21-nov): ahí
+              no parece del menú. Aquí está pegado a lo que pliega, con flecha
+              y con su atajo escrito; plegado, queda la flecha sola. */}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={colapsado ? 'Desplegar el menú' : 'Plegar el menú'}
+            title={
+              colapsado
+                ? 'Desplegar el menú (Ctrl+B)'
+                : 'Plegar el menú (Ctrl+B)'
+            }
+            className={`min-h-11 flex items-center gap-2 border-t border-adm-sidebar-2 text-adm-sidebar-muted hover:text-adm-sidebar-fg hover:bg-adm-sidebar-2 transition-colors ${
+              colapsado ? 'justify-center px-0' : 'px-5'
+            }`}
+          >
+            {colapsado ? (
+              <ChevronsRight className="w-5 h-5 shrink-0" />
+            ) : (
+              <>
+                <ChevronsLeft className="w-5 h-5 shrink-0" />
+                <span className="flex-1 text-left text-sm font-semibold">
+                  Plegar menú
+                </span>
+                <kbd className="text-xs font-semibold border border-adm-sidebar-2 rounded px-1.5 py-0.5">
+                  Ctrl+B
+                </kbd>
+              </>
+            )}
+          </button>
 
           {/* Footer: theme + perfil + logout */}
           <div
