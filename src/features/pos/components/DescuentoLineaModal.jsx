@@ -14,12 +14,9 @@ import { useState } from 'react';
 import { Percent, DollarSign, Gift, ShieldCheck } from 'lucide-react';
 import { OpsModal, OpsButton } from '../../../components/ui';
 import { importeDeLinea } from '../../../lib/Fiscal';
-import {
-  puedeAutorizar,
-  buscarAutorizador,
-  normalizarDescuento,
-} from '../../../lib/Descuentos';
+import { puedeAutorizar, normalizarDescuento } from '../../../lib/Descuentos';
 import { formatoDinero } from '../../../lib/Dinero';
+import { autorizar } from '../../../api/autorizar';
 
 const MODOS = [
   { id: 'pct', label: 'Porcentaje', icono: Percent },
@@ -31,7 +28,6 @@ export default function DescuentoLineaModal({
   item,
   rolSesion,
   nombreSesion,
-  staff = [],
   rolesPermisos = [],
   onAplicar,
   onQuitar,
@@ -99,8 +95,8 @@ export default function DescuentoLineaModal({
     setPidiendoPin(true);
   };
 
-  const autorizarConPin = () => {
-    const autorizador = buscarAutorizador(pin, staff, rolesPermisos);
+  const autorizarConPin = async () => {
+    const autorizador = await autorizar({ pin, flag: 'autoriza_descuentos' });
     if (!autorizador) {
       setError('PIN inválido o sin permiso para autorizar.');
       setPin('');

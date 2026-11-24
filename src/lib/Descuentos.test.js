@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   puedeAutorizar,
-  buscarAutorizador,
   normalizarDescuento,
   etiquetaDescuento,
 } from './Descuentos';
@@ -12,51 +11,10 @@ const ROLES = [
   { rol: 'Mesero', capacidades: { autoriza_descuentos: false } },
 ];
 
-const staff = [
-  { id: 1, nombre: 'Ana', rol: 'Gerente', pin: '1234', activo: true },
-  { id: 2, nombre: 'Beto', rol: 'Mesero', pin: '5678', activo: true },
-  { id: 3, nombre: 'Cyn', rol: 'Gerente', pin_acceso: '4321', activo: true },
-  { id: 4, nombre: 'Dan', rol: 'Gerente', pin: '9999', activo: false },
-  { id: 5, nombre: 'Eva', rol: 'Gerente', pin: '', activo: true },
-];
-
 describe('puedeAutorizar', () => {
   it('lee la capacidad, no el nombre del rol', () => {
     expect(puedeAutorizar('Gerente', ROLES)).toBe(true);
     expect(puedeAutorizar('Mesero', ROLES)).toBe(false);
-  });
-});
-
-describe('buscarAutorizador', () => {
-  it('encuentra al autorizador por PIN', () => {
-    expect(buscarAutorizador('1234', staff, ROLES).nombre).toBe('Ana');
-  });
-
-  it('acepta el campo histórico pin_acceso', () => {
-    expect(buscarAutorizador('4321', staff, ROLES).nombre).toBe('Cyn');
-  });
-
-  it('SEGURIDAD: un PIN correcto SIN la capacidad no autoriza', () => {
-    expect(buscarAutorizador('5678', staff, ROLES)).toBe(null);
-  });
-
-  it('SEGURIDAD: un empleado dado de baja no autoriza', () => {
-    expect(buscarAutorizador('9999', staff, ROLES)).toBe(null);
-  });
-
-  it('SEGURIDAD: un PIN vacío en la ficha no autoriza a nadie', () => {
-    // Si no se filtrara, '' === '' haría que Eva autorizara cualquier cosa.
-    expect(buscarAutorizador('', staff, ROLES)).toBe(null);
-    expect(buscarAutorizador('   ', staff, ROLES)).toBe(null);
-  });
-
-  it('un PIN de menos de 4 dígitos ni se compara', () => {
-    expect(buscarAutorizador('123', staff, ROLES)).toBe(null);
-  });
-
-  it('no explota sin datos', () => {
-    expect(buscarAutorizador('1234')).toBe(null);
-    expect(buscarAutorizador(null, staff, ROLES)).toBe(null);
   });
 });
 

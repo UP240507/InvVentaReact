@@ -6,7 +6,6 @@ import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { getRolEfectivo, getCapacidades, tieneFlag } from '../../lib/Permisos';
-import { buscarAutorizador } from '../../lib/Autorizacion';
 import { useAuthStore } from '../auth/useAuthStore'; // FIX 3: sesión raíz (tenant)
 
 import {
@@ -27,6 +26,7 @@ import {
   cierreSugerido,
 } from '../../lib/Asistencias';
 import { siguienteIdUnico, SERIE_ASISTENCIA } from '../../lib/IdVenta';
+import { autorizar } from '../../api/autorizar';
 
 export default function RelojChecadorScreen() {
   // PIN: las altas nuevas son de 6 dígitos; PINs legados de 4-5 se toleran
@@ -101,8 +101,7 @@ export default function RelojChecadorScreen() {
   // La comprobación vive en `lib/Autorizacion.js`: la hacían tres pantallas por
   // su cuenta y la parte que se pierde al copiarla —que el empleado siga de
   // alta— es la única cuyo olvido no se nota probando.
-  const buscarPorPin = (pinCrudo, flag) =>
-    buscarAutorizador({ staff, roles_permisos, pin: pinCrudo, flag });
+  const buscarPorPin = (pinCrudo, flag) => autorizar({ pin: pinCrudo, flag });
 
   /**
    * Escribe una marca del checador. Una sola puerta para los cuatro caminos que
@@ -148,13 +147,13 @@ export default function RelojChecadorScreen() {
   const tenantId = () =>
     configuracion?.restaurante_id || useAuthStore.getState().restauranteId;
 
-  const abrirPlantilla = () => {
+  const abrirPlantilla = async () => {
     const p = String(pinPlantilla).trim();
     if (p.length < PIN_MIN) {
       setPinPlantillaError('PIN incompleto.');
       return;
     }
-    const quien = buscarPorPin(p, 'gestion');
+    const quien = await buscarPorPin(p, 'gestion');
     if (!quien) {
       setPinPlantillaError('PIN inválido para ver la plantilla.');
       setPinPlantilla('');
@@ -372,7 +371,7 @@ export default function RelojChecadorScreen() {
       setPinAdminError('PIN incompleto.');
       return;
     }
-    const autorizador = buscarPorPin(p, 'autoriza_salidas');
+    const autorizador = await buscarPorPin(p, 'autoriza_salidas');
     if (!autorizador) {
       setPinAdminError('PIN inválido: solo el Admin puede autorizar.');
       setPinAdminSalida('');

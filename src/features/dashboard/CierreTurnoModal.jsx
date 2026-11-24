@@ -7,7 +7,6 @@ import {
   arqueoDelTurno,
 } from '../../lib/Arqueo';
 import DesgloseEfectivo from './DesgloseEfectivo';
-import { buscarAutorizador } from '../../lib/Autorizacion';
 import { mesasAbiertas as mesasQueBloquean } from '../../lib/Franjas';
 import { abrirCajonConRegistro, MOTIVOS } from '../../lib/Cajon';
 import { abrirCajon } from '../../lib/Hub';
@@ -23,6 +22,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { formatoDinero } from '../../lib/Dinero';
+import { autorizar } from '../../api/autorizar';
 
 // El separador de miles no es adorno: con cuatro cifras, «$3302.50» se lee mal
 // justo donde hay que compararlo con lo que se acaba de contar.
@@ -38,8 +38,6 @@ export default function CierreTurnoModal({ onClose }) {
     configuracion,
     cerrarTurno,
     showToast,
-    staff,
-    roles_permisos,
     registrarAuditoria,
   } = useAppStore();
   const { empleadoActivo } = useSessionStore();
@@ -94,12 +92,7 @@ export default function CierreTurnoModal({ onClose }) {
   const handleConfirmarCierre = async () => {
     if (!turnoActivo || !conto || mesasAbiertas.length > 0) return;
 
-    const firmante = buscarAutorizador({
-      staff,
-      roles_permisos,
-      pin,
-      flag: 'autoriza_arqueo',
-    });
+    const firmante = await autorizar({ pin, flag: 'autoriza_arqueo' });
     if (!firmante) {
       setPin('');
       return showToast('Ese PIN no puede firmar el cierre.', 'error');

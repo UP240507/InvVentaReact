@@ -20,13 +20,12 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Button, Modal, Input, Field } from '../../components/ui';
 import { KeyRound } from 'lucide-react';
-import { buscarAutorizador } from '../../lib/Autorizacion';
 import { abrirCajonConRegistro, MOTIVOS } from '../../lib/Cajon';
 import { abrirCajon } from '../../lib/Hub';
+import { autorizar } from '../../api/autorizar';
 
 export default function BotonAbrirCajon({ abrir = abrirCajon }) {
-  const { staff, roles_permisos, registrarAuditoria, showToast } =
-    useAppStore();
+  const { registrarAuditoria, showToast } = useAppStore();
 
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [pin, setPin] = useState('');
@@ -41,12 +40,7 @@ export default function BotonAbrirCajon({ abrir = abrirCajon }) {
     e.preventDefault();
     if (ocupado) return;
 
-    const quien = buscarAutorizador({
-      staff,
-      roles_permisos,
-      pin,
-      flag: 'abre_cajon',
-    });
+    const quien = await autorizar({ pin, flag: 'abre_cajon' });
 
     // Un PIN que no corresponde a nadie con la capacidad NO abre y NO registra:
     // registrar un intento fallido como si fuera una apertura ensuciaría

@@ -92,6 +92,13 @@ describe('buscarAutorizador', () => {
     ).toBeNull();
   });
 
+  it('un PIN de menos de 4 dígitos ni se compara, aunque coincida', () => {
+    // Antes del 23-nov sólo los descuentos tenían este mínimo; las otras
+    // seis autorizaciones aceptaban cualquier PIN no vacío.
+    const corto = { id: 5, nombre: 'Lu', rol: 'Admin', pin: '123' };
+    expect(buscar('123', [corto])).toBe(null);
+  });
+
   it('sin staff no revienta', () => {
     expect(buscar('112233', [])).toBeNull();
     expect(buscarAutorizador({})).toBeNull();

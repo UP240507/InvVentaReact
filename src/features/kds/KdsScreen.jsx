@@ -12,7 +12,6 @@ import {
   getCapacidades,
   permisoDeMarcadoKds,
 } from '../../lib/Permisos';
-import { buscarAutorizador } from '../../lib/Autorizacion';
 import { rutaDeEscape, escapeEsPerfil } from '../../lib/Escape';
 import {
   OpsHeader,
@@ -40,6 +39,7 @@ import {
   UserCircle,
 } from 'lucide-react';
 import { cartaDeRuta } from '../../lib/Navegacion';
+import { autorizar } from '../../api/autorizar';
 
 const CARTA_KDS = cartaDeRuta('/kds');
 
@@ -296,7 +296,7 @@ export default function KdsScreen() {
     return true;
   };
 
-  const confirmarPin = () => {
+  const confirmarPin = async () => {
     const p = String(pin).trim();
     if (p.length < 4) return setPinError('PIN incompleto.');
 
@@ -305,12 +305,7 @@ export default function KdsScreen() {
     // porque un flag nuevo llegaría en `false` a todo local que ya tenga sus
     // filas de permisos —`getCapacidades` reemplaza, no mezcla— y la escotilla
     // no se abriría para nadie. Ver `lib/Permisos.js`.
-    const quien = buscarAutorizador({
-      staff: useAppStore.getState().staff,
-      roles_permisos,
-      pin: p,
-      flag: 'gestion',
-    });
+    const quien = await autorizar({ pin: p, flag: 'gestion' });
     if (!quien) {
       setPin('');
       return setPinError('PIN inválido o sin permiso.');

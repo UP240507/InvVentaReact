@@ -8,6 +8,8 @@
 //   · La sesión tiene `autoriza_descuentos` → aplica directo, sin fricción.
 //   · No la tiene → alguien de staff que SÍ la tenga teclea su PIN y queda
 //     registrado como autorizador. Sin autorizador válido no hay descuento.
+//     La búsqueda por PIN vive en `lib/Autorizacion.js` (una sola para todo el
+//     sistema desde el 23-nov) y las pantallas la piden por `api/autorizar.js`.
 //
 // Puro y testeable: nada de React ni de store.
 
@@ -19,33 +21,6 @@ export const TIPOS_DESCUENTO = ['pct', 'monto', 'cortesia'];
 /** ¿Este rol puede autorizar descuentos? */
 export function puedeAutorizar(rol, rolesPermisos) {
   return tieneFlag(getCapacidades(rol, rolesPermisos), 'autoriza_descuentos');
-}
-
-/**
- * Busca en la plantilla a alguien ACTIVO, con la capacidad y con ese PIN.
- * Acepta los dos campos históricos de PIN (`pin` y `pin_acceso`).
- *
- * Devuelve la fila del autorizador o null. Nunca lanza: un PIN mal tecleado es
- * un caso normal, no un error de programa.
- */
-export function buscarAutorizador(pin, staff = [], rolesPermisos = []) {
-  const p = String(pin ?? '').trim();
-  // Un PIN de menos de 4 dígitos no se compara siquiera: evita que un registro
-  // con el campo vacío autorice por accidente.
-  if (p.length < 4) return null;
-
-  return (
-    (staff || []).find((s) => {
-      if (!s) return false;
-      const activo =
-        s.activo !== false && s.activo !== 'false' && s.activo !== 0;
-      if (!activo) return false;
-      if (!puedeAutorizar(s.rol || s.puesto || '', rolesPermisos)) return false;
-      const p1 = String(s.pin ?? '').trim();
-      const p2 = String(s.pin_acceso ?? '').trim();
-      return (p1 !== '' && p1 === p) || (p2 !== '' && p2 === p);
-    }) || null
-  );
 }
 
 /**

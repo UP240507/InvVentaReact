@@ -76,7 +76,7 @@ import {
   firmaDeLinea,
   repartirPorNota,
 } from '../../lib/Modificadores';
-import { buscarAutorizador, sesionAutoriza } from '../../lib/Autorizacion';
+import { sesionAutoriza } from '../../lib/Autorizacion';
 import {
   siguienteFolio,
   reservaDeFolio,
@@ -115,6 +115,7 @@ import HintsAtajos from '../../components/HintsAtajos';
 import { OpsButton, OpsModal } from '../../components/ui';
 import { cartaDeRuta } from '../../lib/Navegacion';
 import { formatoDinero } from '../../lib/Dinero';
+import { autorizar } from '../../api/autorizar';
 
 const CARTA_POS = cartaDeRuta('/pos');
 
@@ -151,7 +152,6 @@ export default function PosScreen() {
     registrarComandaKDS,
     registrarAuditoria,
     turnos,
-    staff,
     roles_permisos,
     modificadores,
   } = useAppStore();
@@ -384,10 +384,8 @@ export default function PosScreen() {
     setPidiendoReapertura(true);
   };
 
-  const confirmarReapertura = () => {
-    const quien = buscarAutorizador({
-      staff,
-      roles_permisos,
+  const confirmarReapertura = async () => {
+    const quien = await autorizar({
       pin: pinReapertura,
       flag: 'autoriza_descuentos',
     });
@@ -2640,7 +2638,6 @@ export default function PosScreen() {
           item={lineaDescuento}
           rolSesion={user?.rol || user?.puesto}
           nombreSesion={user?.nombre}
-          staff={staff}
           rolesPermisos={roles_permisos}
           onAplicar={(d, unidades) =>
             aplicarDescuentoLinea(lineaDescuento.id, d, unidades)

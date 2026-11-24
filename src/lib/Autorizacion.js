@@ -3,9 +3,15 @@
  *
  * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────
  * El sistema tiene varias excepciones que alguien con mando autoriza tecleando
- * SU PIN: un descuento en `ModalCobro`, una salida antes de cumplir jornada en
- * el checador, y —desde el 12-ago— reabrir una cuenta ya impresa. Los tres
- * hacen exactamente la misma pregunta.
+ * SU PIN: un descuento (de ticket o de producto), una salida antes de cumplir
+ * jornada, reabrir una cuenta impresa, firmar el cierre, abrir el cajón y
+ * desbloquear el KDS. Todas hacen exactamente la misma pregunta, y desde la
+ * fase 1 (23-nov) la responde sólo esta función: la copia de `Descuentos.js`
+ * se retiró.
+ *
+ * Las pantallas no la llaman directo: pasan por `api/autorizar.js`, que es
+ * asíncrona para que en la fase 2 el PIN se compruebe fuera del teléfono sin
+ * tocar las pantallas.
  *
  * La comprobación tiene tres partes, y cada una se puede escribir a medias:
  *
@@ -24,6 +30,9 @@
  */
 
 import { getCapacidades, tieneFlag } from './Permisos';
+
+/** Dígitos mínimos de un PIN que autoriza. Los de AZUL tienen de 4 a 6. */
+export const PIN_MINIMO = 4;
 
 /** ¿Sigue de alta? Tolerante con los `false` que llegan como texto o como 0. */
 export function empleadoActivo(s) {
@@ -46,8 +55,11 @@ export function buscarAutorizador({
   pin = '',
   flag = '',
 } = {}) {
-  const p = String(pin).trim();
-  if (!p || !flag) return null;
+  const p = String(pin ?? '').trim();
+  // Un PIN de menos de 4 dígitos ni se compara (decisión del 23-nov, para
+  // todas las autorizaciones y no sólo los descuentos): evita que un campo
+  // corto o a medio teclear autorice por accidente.
+  if (p.length < PIN_MINIMO || !flag) return null;
 
   return (
     (staff || []).find((s) => {

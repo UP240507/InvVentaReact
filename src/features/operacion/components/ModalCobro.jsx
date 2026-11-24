@@ -20,10 +20,10 @@ import { useCierreConEscape } from '../../../hooks/useCierreConEscape';
 import { useAuthStore } from '../../auth/useAuthStore';
 import { useSyncStore } from '../../../store/useSyncStore';
 import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
-import { buscarAutorizador } from '../../../lib/Autorizacion';
 import { importeDeLinea, parteDeCuenta } from '../../../lib/Fiscal';
 import { useAcoplado } from '../../../hooks/useAcoplado';
 import { formatoDinero } from '../../../lib/Dinero';
+import { autorizar } from '../../../api/autorizar';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -109,7 +109,7 @@ export default function ModalCobro({
   //  - Sesión con el flag → aplica directo, sin fricción.
   //  - Cualquier otra sesión → pinpad de autorización: alguien de staff con el
   //    flag teclea SU PIN (4-6 dígitos) y queda registrado como autorizador.
-  const { staff, clientes, upsertCliente, configuracion, roles_permisos } =
+  const { clientes, upsertCliente, configuracion, roles_permisos } =
     useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
@@ -153,7 +153,7 @@ export default function ModalCobro({
     }
   };
 
-  const autorizarDescuentoConPin = () => {
+  const autorizarDescuentoConPin = async () => {
     const p = String(pinAuth).trim();
     if (p.length < 4) {
       setPinAuthError('PIN incompleto.');
@@ -169,9 +169,7 @@ export default function ModalCobro({
     // que diverge es siempre ésa, porque su fallo NO se nota probando: todo
     // funciona igual, sólo que autoriza descuentos alguien que ya no trabaja
     // aquí. Un fallo que no da error, otra vez.
-    const autorizador = buscarAutorizador({
-      staff,
-      roles_permisos,
+    const autorizador = await autorizar({
       pin: p,
       flag: 'autoriza_descuentos',
     });
