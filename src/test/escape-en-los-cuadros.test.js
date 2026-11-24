@@ -84,7 +84,6 @@ const CENSO = {
   'features/inventario/MermasScreen.jsx': [1, 'hook'],
   'features/operacion/MesasScreen.jsx': [6, 'hook'],
   'features/operacion/PanelRondas.jsx': [1, 'hook'],
-  'features/operacion/TurnoWidget.jsx': [2, 'hook'],
   'features/operacion/components/ModalCobro.jsx': [
     3,
     'el cobro lo cierra el scope `pos-modal`; el pinpad y el diálogo del excedente llevan el hook',

@@ -14,17 +14,3 @@ export const supabase = createClient(
   SUPABASE_URL || 'https://placeholder.supabase.co',
   SUPABASE_KEY || 'placeholder-key',
 );
-
-// Cliente secundario para flujos de auth sin persistencia
-export const supabaseAdminAuth = createClient(
-  SUPABASE_URL || 'https://placeholder.supabase.co',
-  SUPABASE_KEY || 'placeholder-key',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      storageKey: 'admin-auth-token', // 👈 ESTA LÍNEA ELIMINA EL WARNING
-    },
-  },
-);
