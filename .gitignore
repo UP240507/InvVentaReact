@@ -63,3 +63,11 @@ release/
 # que se ignora la carpeta `~/`.
 firmar.ps1
 compilar.ps1
+
+# La base local de prueba (npm run base:local). La carpeta de la pila es una
+# copia que el script rehace en cada corrida; .env.e2e lo genera el mismo script
+# con la llave de esa pila; dist-e2e es la app compilada contra ella, que no
+# debe confundirse con el dist/ que empaqueta Tauri.
+supabase/local/.pila/
+.env.e2e
+dist-e2e/
