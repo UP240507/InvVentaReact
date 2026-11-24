@@ -38,10 +38,9 @@ import { dineroPorMetodo } from '../../lib/Metricas';
 import { FRANJAS, soloDeFranja, cuantasSinFranja } from '../../lib/Franjas';
 import { foliosSinVenta } from '../../lib/Folio';
 import { supabase } from '../../api/supabase';
+import { formatoDinero } from '../../lib/Dinero';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-const fmt = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pct = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) : '0.0');
 
 // ─── KPI CARD ────────────────────────────────────────────────────────────────
@@ -638,7 +637,7 @@ export default function ReportesScreen() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
               <KPI
                 titulo="Ventas Totales"
-                valor={fmt(data.tIngresos)}
+                valor={formatoDinero(data.tIngresos)}
                 icono={DollarSign}
                 accentBg="bg-adm-ok/10"
                 accentText="text-adm-ok"
@@ -646,7 +645,7 @@ export default function ReportesScreen() {
               />
               <KPI
                 titulo="Ticket Promedio"
-                valor={fmt(
+                valor={formatoDinero(
                   data.vPeriodo.length
                     ? data.tIngresos / data.vPeriodo.length
                     : 0,
@@ -657,7 +656,7 @@ export default function ReportesScreen() {
               />
               <KPI
                 titulo="Gastos Operativos"
-                valor={fmt(data.tEgresos)}
+                valor={formatoDinero(data.tEgresos)}
                 icono={TrendingDown}
                 accentBg="bg-adm-danger/10"
                 accentText="text-adm-danger"
@@ -665,7 +664,7 @@ export default function ReportesScreen() {
               />
               <KPI
                 titulo="Utilidad Neta"
-                valor={fmt(data.utilNeta)}
+                valor={formatoDinero(data.utilNeta)}
                 icono={TrendingUp}
                 accentBg="bg-adm-warn/10"
                 accentText="text-adm-warn"
@@ -703,7 +702,7 @@ export default function ReportesScreen() {
                           {label}
                         </span>
                         <span className="text-sm font-black text-adm-ink">
-                          {fmt(valor)}
+                          {formatoDinero(valor)}
                         </span>
                       </div>
                       <Bar value={valor} max={data.tIngresos} color={color} />
@@ -731,7 +730,7 @@ export default function ReportesScreen() {
                           <span className="text-xs font-bold text-adm-muted ml-2 shrink-0">
                             {p.uds} uds ·{' '}
                             <span className="text-adm-ok font-black">
-                              {fmt(p.ingresosGenerados)}
+                              {formatoDinero(p.ingresosGenerados)}
                             </span>
                           </span>
                         </div>
@@ -793,7 +792,9 @@ export default function ReportesScreen() {
                     {h.dispositivo ? ` · ${h.dispositivo}` : ''}
                   </span>
                   <span className="font-black text-sm text-adm-warn">
-                    {h.total_impreso == null ? '—' : fmt(h.total_impreso)}
+                    {h.total_impreso == null
+                      ? '—'
+                      : formatoDinero(h.total_impreso)}
                   </span>
                 </div>
               ))}
@@ -927,17 +928,17 @@ export default function ReportesScreen() {
                           },
                           {
                             label: 'Efectivo',
-                            valor: fmt(efectivo),
+                            valor: formatoDinero(efectivo),
                             color: 'text-adm-ok',
                           },
                           {
                             label: 'Tarjeta',
-                            valor: fmt(tarjeta),
+                            valor: formatoDinero(tarjeta),
                             color: 'text-adm-info',
                           },
                           {
                             label: 'Propinas',
-                            valor: fmt(propinas),
+                            valor: formatoDinero(propinas),
                             color: 'text-adm-warn',
                           },
                         ].map(({ label, valor, color }) => (
@@ -960,8 +961,14 @@ export default function ReportesScreen() {
                       {/* Resumen caja */}
                       <div className="bg-adm-bg rounded-ui border-2 border-adm-border p-5 space-y-3">
                         {[
-                          { label: 'Fondo inicial', valor: fmt(fondo) },
-                          { label: 'Total ventas', valor: fmt(total) },
+                          {
+                            label: 'Fondo inicial',
+                            valor: formatoDinero(fondo),
+                          },
+                          {
+                            label: 'Total ventas',
+                            valor: formatoDinero(total),
+                          },
                         ].map(({ label, valor }) => (
                           <div
                             key={label}
@@ -980,7 +987,7 @@ export default function ReportesScreen() {
                             TOTAL EN CAJA
                           </span>
                           <span className="text-2xl font-black font-syne text-adm-ok">
-                            {fmt(totalCaja)}
+                            {formatoDinero(totalCaja)}
                           </span>
                         </div>
                       </div>
@@ -1044,7 +1051,7 @@ export default function ReportesScreen() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className="font-black text-sm text-adm-ok">
-                                    {fmt(v.total)}
+                                    {formatoDinero(v.total)}
                                   </span>
                                   {/* El botón vive aquí y no en una pantalla
                                       nueva porque esta lista ya está gateada
@@ -1157,11 +1164,15 @@ export default function ReportesScreen() {
                         {p.uds}
                       </td>
                       <td className="p-5 text-right font-bold">
-                        <span className="text-adm-danger">{fmt(p.costo)}</span>
+                        <span className="text-adm-danger">
+                          {formatoDinero(p.costo)}
+                        </span>
                         <span className="text-adm-muted dark:text-adm-border mx-1">
                           /
                         </span>
-                        <span className="text-adm-ok">{fmt(p.precio)}</span>
+                        <span className="text-adm-ok">
+                          {formatoDinero(p.precio)}
+                        </span>
                       </td>
                       <td className="p-5 text-right font-black">
                         <span
@@ -1173,7 +1184,7 @@ export default function ReportesScreen() {
                         </span>
                       </td>
                       <td className="p-5 text-right font-black text-adm-ink">
-                        {fmt(p.ingresosGenerados)}
+                        {formatoDinero(p.ingresosGenerados)}
                       </td>
                     </tr>
                   ))}
@@ -1217,7 +1228,7 @@ export default function ReportesScreen() {
                     <div>
                       <p className="font-black text-adm-ink">{m.nombre}</p>
                       <p className="text-xs font-bold text-adm-muted">
-                        {m.tickets} tickets · Vendió {fmt(m.total)}
+                        {m.tickets} tickets · Vendió {formatoDinero(m.total)}
                       </p>
                     </div>
                   </div>
@@ -1227,7 +1238,7 @@ export default function ReportesScreen() {
                         Propinas
                       </p>
                       <p className="font-black text-xl text-adm-warn font-syne">
-                        {fmt(m.propinas)}
+                        {formatoDinero(m.propinas)}
                       </p>
                     </div>
                     {m.propinas > 0 && (
@@ -1258,7 +1269,7 @@ export default function ReportesScreen() {
                   Valorización de Inventario
                 </p>
                 <h3 className="text-4xl font-black font-syne">
-                  {fmt(data.valorizacionTotal)}
+                  {formatoDinero(data.valorizacionTotal)}
                 </h3>
                 <p className="text-sm font-bold text-adm-info mt-2">
                   Capital congelado en almacén.
@@ -1269,7 +1280,7 @@ export default function ReportesScreen() {
                   <AlertTriangle className="w-4 h-4" /> Pérdida por Mermas
                 </p>
                 <h3 className="text-4xl font-black font-syne text-adm-danger">
-                  {fmt(data.totalPerdidaMermas)}
+                  {formatoDinero(data.totalPerdidaMermas)}
                 </h3>
                 <p className="text-sm font-bold text-adm-muted mt-2">
                   En el periodo seleccionado.
@@ -1312,7 +1323,7 @@ export default function ReportesScreen() {
                         {m.referencia || '—'}
                       </td>
                       <td className="p-4 text-right font-black text-adm-ink">
-                        {fmt(m.perdida)}
+                        {formatoDinero(m.perdida)}
                       </td>
                     </tr>
                   ))}

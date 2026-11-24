@@ -27,6 +27,12 @@
 // legítimos entre los que elegir: si se fija el mínimo, hay que fijar el
 // máximo. Así que esto no cuenta sitios, exige la pareja. Un sitio nuevo que
 // se olvide del máximo falla, sin que haya que actualizar ninguna lista.
+//
+// ── Y DESDE LA FASE 1 (23-nov): EL DINERO SALE DE `lib/Dinero.js` ──────────
+// La pareja mínimo-máximo evitaba el tercer decimal, pero seguía escrita a mano
+// en 60 sitios y 8 funciones locales. La tercera prueba exige que la pareja de
+// dos decimales viva sólo en `lib/Dinero.js`; las excepciones van en una lista
+// con su porqué, como en el censo de Escape.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,6 +71,30 @@ describe('el dinero nunca se enseña con tres decimales', () => {
     }
 
     expect(huerfanos).toEqual([]);
+  });
+
+  it('la pareja de dos decimales sólo vive en lib/Dinero.js', () => {
+    // Clave: ruta relativa a `src/`. Valor: por qué ese sitio puede.
+    const PERMITIDOS = {
+      'lib/Dinero.js': 'es la definición',
+      'lib/Letras.js':
+        'formatea en en-US para leer el número y pasarlo a letra, no para mostrarlo',
+    };
+    const PAREJA =
+      /minimumFractionDigits:\s*2,\s*maximumFractionDigits:\s*2\b/g;
+
+    const aMano = [];
+    for (const fichero of ficheros()) {
+      const rel = path.relative(RAIZ, fichero).split(path.sep).join('/');
+      if (PERMITIDOS[rel]) continue;
+      const texto = fs.readFileSync(fichero, 'utf8');
+      for (const m of texto.matchAll(PAREJA)) {
+        const linea = texto.slice(0, m.index).split('\n').length;
+        aMano.push(`${rel}:${linea}`);
+      }
+    }
+
+    expect(aMano).toEqual([]);
   });
 
   it('y el valor por omisión de Intl es el que justifica la regla', () => {

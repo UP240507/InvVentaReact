@@ -27,6 +27,7 @@ import {
   Calendar,
   AlertTriangle,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 export default function RecepcionScreen() {
   const { ordenesCompra, productos, proveedores, configuracion, showToast } =
@@ -201,11 +202,7 @@ export default function RecepcionScreen() {
       ancho: '1%',
       celda: (o) => (
         <span className="font-bold text-adm-ink">
-          $
-          {Number(o.total_estimado || o.total || 0).toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(Number(o.total_estimado || o.total || 0))}
         </span>
       ),
     },
@@ -293,13 +290,9 @@ export default function RecepcionScreen() {
                           Importe estimado
                         </p>
                         <p className="font-fraunces font-bold text-xl text-adm-ink tabular-nums">
-                          $
-                          {Number(
-                            orden.total_estimado || orden.total || 0,
-                          ).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(
+                            Number(orden.total_estimado || orden.total || 0),
+                          )}
                         </p>
                       </div>
                       <Button

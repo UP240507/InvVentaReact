@@ -60,9 +60,7 @@ import {
 } from '../../lib/Gastos';
 import { hoyLocalISO } from '../../lib/Fechas';
 import { franjaAlEscribir } from '../../lib/Franjas';
-
-const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatoDinero } from '../../lib/Dinero';
 
 // Fecha LOCAL, no UTC. Con toISOString() un gasto capturado después de las 18:00
 // en México se sellaba con el día siguiente y desaparecía del periodo: el filtro
@@ -508,7 +506,7 @@ export default function GastosScreen() {
         <span
           className={`font-bold ${g.estado === 'pendiente' ? 'text-adm-muted italic' : 'text-adm-ink'}`}
         >
-          {dinero(g.monto)}
+          {formatoDinero(g.monto)}
         </span>
       ),
     },
@@ -636,11 +634,11 @@ export default function GastosScreen() {
               Total del periodo
             </p>
             <p className="font-fraunces font-bold text-adm-ink text-3xl tabular-nums leading-tight">
-              {dinero(resumen.total)}
+              {formatoDinero(resumen.total)}
             </p>
             {resumen.pendientes > 0 && (
               <p className="text-xs text-adm-warn mt-1">
-                + {dinero(resumen.pendientes)} por confirmar
+                + {formatoDinero(resumen.pendientes)} por confirmar
               </p>
             )}
           </CardBody>
@@ -651,7 +649,7 @@ export default function GastosScreen() {
               Fijos
             </p>
             <p className="font-fraunces font-bold text-adm-ink text-3xl tabular-nums leading-tight">
-              {dinero(resumen.fijos)}
+              {formatoDinero(resumen.fijos)}
             </p>
             <p className="text-xs text-adm-muted mt-1">
               Se pagan haya o no venta
@@ -664,7 +662,7 @@ export default function GastosScreen() {
               Variables
             </p>
             <p className="font-fraunces font-bold text-adm-ink text-3xl tabular-nums leading-tight">
-              {dinero(resumen.variables)}
+              {formatoDinero(resumen.variables)}
             </p>
             <p className="text-xs text-adm-muted mt-1">
               Escalan con la operación
@@ -819,8 +817,9 @@ export default function GastosScreen() {
         >
           <p className="text-sm text-adm-muted mb-4">
             <strong className="text-adm-ink">{confirmarMonto.concepto}</strong>{' '}
-            se generó con un estimado de {dinero(confirmarMonto.monto)}. Escribe
-            lo que dice el recibo: hasta entonces no cuenta en la utilidad.
+            se generó con un estimado de {formatoDinero(confirmarMonto.monto)}.
+            Escribe lo que dice el recibo: hasta entonces no cuenta en la
+            utilidad.
           </p>
           <Field label="Importe real" requerido>
             <Input
@@ -894,7 +893,7 @@ export default function GastosScreen() {
                         </p>
                       </div>
                       <span className="font-bold text-adm-ink tabular-nums whitespace-nowrap">
-                        {dinero(p.monto_estimado)}
+                        {formatoDinero(p.monto_estimado)}
                       </span>
                       <div className="flex gap-1 shrink-0">
                         <IconButton

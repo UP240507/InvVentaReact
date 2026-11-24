@@ -32,6 +32,7 @@ import {
   Users,
   HeartHandshake,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 // (Proyecto D) Temas de color por tenant — swatches para el selector.
 const TEMAS_COLOR = [
@@ -1029,12 +1030,8 @@ export default function ConfiguracionScreen() {
                     </div>
                   </div>
                   <p className="text-xs font-bold text-adm-muted mt-3">
-                    Por cada $100.00 base cobrarás $
-                    {(100 * (1 + Number(form.iva) / 100)).toLocaleString(
-                      'es-MX',
-                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                    )}
-                    .
+                    Por cada $100.00 base cobrarás{' '}
+                    {formatoDinero(100 * (1 + Number(form.iva) / 100))}.
                   </p>
                 </div>
               </div>

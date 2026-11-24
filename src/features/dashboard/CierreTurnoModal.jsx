@@ -22,15 +22,10 @@ import {
   Receipt,
   CheckCircle2,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 // El separador de miles no es adorno: con cuatro cifras, «$3302.50» se lee mal
 // justo donde hay que compararlo con lo que se acaba de contar.
-const dinero = (n) =>
-  `$${(Number(n) || 0).toLocaleString('es-MX', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-
 export default function CierreTurnoModal({ onClose }) {
   // Escape cierra este cuadro. Se pinta con un `div` suelto, así que no hereda
   // el cierre de los componentes base.
@@ -226,17 +221,17 @@ export default function CierreTurnoModal({ onClose }) {
                 {[
                   {
                     label: 'Fondo inicial',
-                    val: dinero(turnoActivo.fondo_inicial || 0),
+                    val: formatoDinero(turnoActivo.fondo_inicial || 0),
                     color: 'text-adm-ink',
                   },
                   {
                     label: 'Ingresos del turno',
-                    val: `+ ${dinero(metricas?.efectivo || 0)}`,
+                    val: `+ ${formatoDinero(metricas?.efectivo || 0)}`,
                     color: 'text-adm-ok',
                   },
                   {
                     label: 'Sistema espera',
-                    val: dinero(esperadoEnCaja),
+                    val: formatoDinero(esperadoEnCaja),
                     color: 'text-adm-ink',
                     fuerte: true,
                   },
@@ -291,7 +286,7 @@ export default function CierreTurnoModal({ onClose }) {
                           : 'Faltante'}
                     </span>
                     <span className="font-black text-lg tabular-nums">
-                      {dinero(Math.abs(diferencia))}
+                      {formatoDinero(Math.abs(diferencia))}
                     </span>
                   </div>
                 )}
@@ -333,7 +328,7 @@ export default function CierreTurnoModal({ onClose }) {
                     <Icon className={`w-3.5 h-3.5 ${iconoTono}`} /> {label}
                   </span>
                   <p className="font-mono font-black text-lg mt-1 tabular-nums">
-                    {dinero(val)}
+                    {formatoDinero(val)}
                   </p>
                 </div>
               ))}
@@ -350,7 +345,7 @@ export default function CierreTurnoModal({ onClose }) {
                   Venta Total Neta
                 </p>
                 <p className="text-xl font-black text-adm-ink tabular-nums">
-                  {dinero(metricas?.totalVentas || 0)}
+                  {formatoDinero(metricas?.totalVentas || 0)}
                 </p>
               </div>
             </div>
@@ -368,9 +363,10 @@ export default function CierreTurnoModal({ onClose }) {
               PIN de quien autoriza el arqueo
             </label>
             <p className="text-xs font-bold text-adm-muted mb-3">
-              Firma los <strong>{dinero(contado)}</strong> contados y la
-              diferencia de <strong>{dinero(arqueo.diferencia ?? 0)}</strong>.
-              Queda guardado quién firmó.
+              Firma los <strong>{formatoDinero(contado)}</strong> contados y la
+              diferencia de{' '}
+              <strong>{formatoDinero(arqueo.diferencia ?? 0)}</strong>. Queda
+              guardado quién firmó.
             </p>
             <input
               type="password"

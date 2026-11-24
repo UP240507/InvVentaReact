@@ -23,6 +23,7 @@ import { getCapacidades, tieneFlag } from '../../../lib/Permisos';
 import { buscarAutorizador } from '../../../lib/Autorizacion';
 import { importeDeLinea, parteDeCuenta } from '../../../lib/Fiscal';
 import { useAcoplado } from '../../../hooks/useAcoplado';
+import { formatoDinero } from '../../../lib/Dinero';
 
 // HELPERS ORIGINALES (Intactos)
 const safeNumber = (val, fallback = 0) => {
@@ -473,11 +474,7 @@ export default function ModalCobro({
         <span
           className={`font-black text-2xl ${saldoPendiente > 0 ? 'text-ops-danger' : 'text-ops-ok'}`}
         >
-          $
-          {Math.max(0, saldoPendiente).toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(Math.max(0, saldoPendiente))}
         </span>
       </div>
       {cambio > 0 && (
@@ -486,11 +483,7 @@ export default function ModalCobro({
             Cambio a entregar
           </span>
           <span className="font-black text-3xl text-ops-ok">
-            $
-            {cambio.toLocaleString('es-MX', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
+            {formatoDinero(cambio)}
           </span>
         </div>
       )}
@@ -594,11 +587,7 @@ export default function ModalCobro({
                 Total Final
               </p>
               <p className="text-4xl font-black font-syne text-ops-ink leading-none tabular-nums">
-                $
-                {granTotal.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatoDinero(granTotal)}
               </p>
             </div>
             {propinaTotal > 0 && (
@@ -607,11 +596,7 @@ export default function ModalCobro({
                   Propina
                 </p>
                 <p className="text-sm font-black text-ops-ok tabular-nums">
-                  +$
-                  {propinaTotal.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  +{formatoDinero(propinaTotal)}
                 </p>
               </div>
             )}
@@ -668,12 +653,7 @@ export default function ModalCobro({
                 <div className="flex items-center justify-between bg-ops-accent/10 border border-ops-accent/30 rounded-ui px-4 py-3 mt-2">
                   <div>
                     <p className="font-black text-ops-accent">
-                      −$
-                      {montoDescuento.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      ({round2(pctDescuento)}%)
+                      −{formatoDinero(montoDescuento)} ({round2(pctDescuento)}%)
                     </p>
                     <p className="text-[10px] font-bold text-ops-muted flex items-center gap-1 mt-0.5">
                       <ShieldCheck className="w-3 h-3" /> Autorizó:{' '}
@@ -789,11 +769,7 @@ export default function ModalCobro({
                           {canjeSel.nombre}
                           {canjeDescuento > 0 && (
                             <span className="ml-2 text-ops-ok">
-                              −$
-                              {canjeDescuento.toLocaleString('es-MX', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              −{formatoDinero(canjeDescuento)}
                             </span>
                           )}
                         </p>
@@ -1067,11 +1043,7 @@ export default function ModalCobro({
                             {item.nombre || 'Sin nombre'}
                           </p>
                           <p className="text-xs font-black text-ops-accent mt-0.5">
-                            $
-                            {precioDisplay.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            {formatoDinero(precioDisplay)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 bg-white dark:bg-ops-panel rounded-ui border border-ops-border p-1 shadow-sm">
@@ -1118,11 +1090,7 @@ export default function ModalCobro({
                       Subtotal seleccionado
                     </span>
                     <span className="font-black text-ops-accent text-xl">
-                      $
-                      {subtotalSeleccion.toLocaleString('es-MX', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatoDinero(subtotalSeleccion)}
                     </span>
                   </div>
                 </div>
@@ -1133,12 +1101,7 @@ export default function ModalCobro({
             {tipoDivision === 'personas' && (
               <div className="mb-6 bg-white dark:bg-ops-panel p-6 rounded-ui border border-ops-border shadow-sm text-center animate-in slide-in-from-left-2 transition-colors">
                 <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest mb-4">
-                  Dividir $
-                  {granTotal.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{' '}
-                  entre:
+                  Dividir {formatoDinero(granTotal)} entre:
                 </p>
                 <div className="flex items-center justify-center gap-6 mb-6">
                   <button
@@ -1165,11 +1128,7 @@ export default function ModalCobro({
                   </button>
                 </div>
                 <p className="text-xl font-black text-ops-accent mb-6">
-                  Toca de $
-                  {montoPorPersona.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  Toca de {formatoDinero(montoPorPersona)}
                 </p>
                 <button
                   onClick={() => agregarPago(montoPorPersona)}
@@ -1280,24 +1239,12 @@ export default function ModalCobro({
               </p>
               <div className="flex justify-between items-center text-ops-muted font-bold mb-3">
                 <span>Subtotal (Consumo)</span>
-                <span>
-                  $
-                  {totalBase.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
+                <span>{formatoDinero(totalBase)}</span>
               </div>
               {montoDescuento > 0 && (
                 <div className="flex justify-between items-center text-ops-accent font-bold mb-3">
                   <span>Descuento ({round2(pctDescuento)}%)</span>
-                  <span>
-                    −$
-                    {montoDescuento.toLocaleString('es-MX', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
+                  <span>−{formatoDinero(montoDescuento)}</span>
                 </div>
               )}
               {propinaTotal > 0 && (
@@ -1305,13 +1252,7 @@ export default function ModalCobro({
                   <span>
                     Propina{propinaExtra > 0 ? ' (incl. excedente)' : ''}
                   </span>
-                  <span>
-                    $
-                    {propinaTotal.toLocaleString('es-MX', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
+                  <span>{formatoDinero(propinaTotal)}</span>
                 </div>
               )}
               {/* El solape original —«Total Final» y «$40.00» montados— salía
@@ -1334,11 +1275,7 @@ export default function ModalCobro({
                   Total Final
                 </span>
                 <h2 className="text-lg lg:text-5xl font-black font-syne text-ops-ink tabular-nums leading-none min-w-0">
-                  $
-                  {granTotal.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatoDinero(granTotal)}
                 </h2>
               </div>
             </div>
@@ -1387,11 +1324,7 @@ export default function ModalCobro({
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="font-black text-xl text-ops-ink">
-                          $
-                          {safeNumber(pago.monto).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(safeNumber(pago.monto))}
                         </span>
                         <button
                           onClick={() => removerPago(pago.id)}
@@ -1487,20 +1420,12 @@ export default function ModalCobro({
               <p className="text-ops-muted font-medium mb-1">
                 El pago con {dialogoExcedente.metodo.toLowerCase()} de{' '}
                 <span className="font-black text-ops-ink">
-                  $
-                  {dialogoExcedente.monto.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatoDinero(dialogoExcedente.monto)}
                 </span>{' '}
                 excede el saldo por:
               </p>
               <p className="text-4xl font-black font-syne text-ops-danger my-3">
-                $
-                {dialogoExcedente.excedente.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatoDinero(dialogoExcedente.excedente)}
               </p>
               <p className="text-sm text-ops-muted font-bold">
                 {propinaCalculada > 0

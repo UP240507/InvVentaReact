@@ -45,6 +45,7 @@ import {
   Save,
   AlertTriangle,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 export default function RecetasScreen() {
   const { recetas, productos, modificadores, configuracion, showToast } =
@@ -689,13 +690,7 @@ export default function RecetasScreen() {
       alinear: 'der',
       ancho: '1%',
       celda: (r) => (
-        <span className="text-adm-muted">
-          $
-          {r._costo.toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </span>
+        <span className="text-adm-muted">{formatoDinero(r._costo)}</span>
       ),
     },
     {
@@ -705,11 +700,7 @@ export default function RecetasScreen() {
       ancho: '1%',
       celda: (r) => (
         <span className="font-bold text-adm-ink">
-          $
-          {r._precio.toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(r._precio)}
         </span>
       ),
     },
@@ -1650,11 +1641,7 @@ export default function RecetasScreen() {
                                   )}
                                 </td>
                                 <td className="px-6 py-4 text-right font-black text-adm-ink dark:text-adm-ok">
-                                  $
-                                  {costoReal.toLocaleString('es-MX', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {formatoDinero(costoReal)}
                                 </td>
                                 <td className="px-4 py-4 text-right">
                                   <button
@@ -1733,11 +1720,7 @@ export default function RecetasScreen() {
                     Costo Producción
                   </p>
                   <p className="text-2xl font-black text-adm-danger leading-none">
-                    $
-                    {costoActual.toLocaleString('es-MX', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatoDinero(costoActual)}
                   </p>
                 </div>
                 <div className="hidden md:block h-10 w-px bg-adm-chip dark:bg-adm-border" />

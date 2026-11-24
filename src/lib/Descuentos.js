@@ -12,6 +12,7 @@
 // Puro y testeable: nada de React ni de store.
 
 import { getCapacidades, tieneFlag } from './Permisos';
+import { formatoDinero } from './Dinero';
 
 export const TIPOS_DESCUENTO = ['pct', 'monto', 'cortesia'];
 
@@ -85,5 +86,5 @@ export function etiquetaDescuento(d) {
   if (!d || !d.tipo) return '';
   if (d.tipo === 'cortesia') return 'Cortesía';
   if (d.tipo === 'pct') return `−${Number(d.valor)}%`;
-  return `−$${Number(d.valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `−${formatoDinero(Number(d.valor))}`;
 }

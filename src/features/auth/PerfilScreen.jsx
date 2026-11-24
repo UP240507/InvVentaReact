@@ -32,6 +32,7 @@ import {
   Store,
   Copy,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 export default function PerfilScreen() {
   const {
@@ -138,9 +139,6 @@ export default function PerfilScreen() {
         : null,
     };
   }, [ventas, asistencias, nombre, hoyStr]);
-
-  const fmt = (n) =>
-    `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // ── Teléfono → espejo en staff (offline-first) ─────────────────────────────
   const guardarTelefono = () => {
@@ -267,7 +265,7 @@ export default function PerfilScreen() {
               Ventas cobradas hoy
             </p>
             <p className="text-2xl font-black text-adm-ink">
-              {fmt(metricas.totalHoy)}
+              {formatoDinero(metricas.totalHoy)}
             </p>
           </div>
           <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">
@@ -278,7 +276,7 @@ export default function PerfilScreen() {
               Propinas generadas hoy
             </p>
             <p className="text-2xl font-black text-adm-ink">
-              {fmt(metricas.propinasHoy)}
+              {formatoDinero(metricas.propinasHoy)}
             </p>
           </div>
           <div className="bg-white dark:bg-adm-panel p-6 rounded-ui-lg border-2 border-adm-border shadow-sm transition-colors">

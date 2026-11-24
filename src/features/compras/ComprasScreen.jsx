@@ -41,6 +41,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
 import { abrirFuera, motivoLegible } from '../../lib/Abrir';
+import { formatoDinero, formatoImporte } from '../../lib/Dinero';
 
 // Las flechitas del `type="number"` roban ancho, y en una casilla estrecha ese
 // ancho es justo el que le falta al numero. Nadie las usa: la cantidad se
@@ -510,11 +511,7 @@ export default function ComprasScreen() {
       ancho: '1%',
       celda: (o) => (
         <span className="font-bold text-adm-ink">
-          $
-          {Number(o.total).toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(Number(o.total))}
         </span>
       ),
     },
@@ -861,13 +858,11 @@ export default function ComprasScreen() {
                                     en coma flotante, y el renglon acabaria
                                     diciendo 99.99 debajo de un total de 100.
                                     Las lineas viejas no traen `total`. */}
-                                {(item.total != null
-                                  ? Number(item.total)
-                                  : item.cantidad * item.precio_unitario
-                                ).toLocaleString('es-MX', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                {formatoImporte(
+                                  item.total != null
+                                    ? Number(item.total)
+                                    : item.cantidad * item.precio_unitario,
+                                )}
                               </td>
                               <td className="p-4 text-center">
                                 <button
@@ -911,33 +906,15 @@ export default function ComprasScreen() {
                   <div className="space-y-4 mb-8">
                     <div className="flex justify-between text-adm-muted font-bold text-sm">
                       <span>Subtotal</span>
-                      <span>
-                        $
-                        {subtotal.toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
+                      <span>{formatoDinero(subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-adm-muted font-bold text-sm border-b border-adm-border pb-4">
                       <span>IVA ({tasaIva * 100}%)</span>
-                      <span>
-                        $
-                        {ivaMonto.toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
+                      <span>{formatoDinero(ivaMonto)}</span>
                     </div>
                     <div className="flex justify-between text-3xl font-black text-adm-ok pt-2">
                       <span>Total</span>
-                      <span>
-                        $
-                        {total.toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
+                      <span>{formatoDinero(total)}</span>
                     </div>
                   </div>
 

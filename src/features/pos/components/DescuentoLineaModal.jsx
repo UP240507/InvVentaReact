@@ -19,9 +19,7 @@ import {
   buscarAutorizador,
   normalizarDescuento,
 } from '../../../lib/Descuentos';
-
-const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatoDinero } from '../../../lib/Dinero';
 
 const MODOS = [
   { id: 'pct', label: 'Porcentaje', icono: Percent },
@@ -161,8 +159,8 @@ export default function DescuentoLineaModal({
           {item?.nombre}
         </p>
         <p className="text-sm text-ops-muted">
-          {Number(item?.cantidad) || 1} × {dinero(item?.precio)} ={' '}
-          <strong className="text-ops-ink">{dinero(bruto)}</strong>
+          {Number(item?.cantidad) || 1} × {formatoDinero(item?.precio)} ={' '}
+          <strong className="text-ops-ink">{formatoDinero(bruto)}</strong>
         </p>
       </div>
 
@@ -258,10 +256,10 @@ export default function DescuentoLineaModal({
             <p className="text-center text-sm text-ops-muted mt-4">
               Queda en{' '}
               <strong className="text-ops-ok text-lg">
-                {dinero(preview.neto)}
+                {formatoDinero(preview.neto)}
               </strong>{' '}
               <span className="text-ops-danger">
-                (−{dinero(preview.descuento)})
+                (−{formatoDinero(preview.descuento)})
               </span>
             </p>
           )}

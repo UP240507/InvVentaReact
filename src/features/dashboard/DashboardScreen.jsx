@@ -45,9 +45,7 @@ import {
   SegmentedControl,
   EmptyState,
 } from '../../components/ui';
-
-const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatoDinero } from '../../lib/Dinero';
 
 const TONO_ALERTA = {
   critica: 'peligro',
@@ -112,7 +110,7 @@ function Barras({ serie }) {
         <div
           key={i}
           className="flex-1 min-w-0 flex flex-col justify-end h-full group relative"
-          title={`${c.etiqueta}: ${dinero(c.total)} · ${c.tickets} ticket${c.tickets !== 1 ? 's' : ''}`}
+          title={`${c.etiqueta}: ${formatoDinero(c.total)} · ${c.tickets} ticket${c.tickets !== 1 ? 's' : ''}`}
         >
           <div
             className="w-full bg-adm-accent/70 group-hover:bg-adm-accent transition-colors rounded-t-ui"
@@ -267,7 +265,7 @@ export default function DashboardScreen() {
                   Fondo
                 </p>
                 <p className="font-bold tabular-nums">
-                  {dinero(turnoActivo.fondo_inicial)}
+                  {formatoDinero(turnoActivo.fondo_inicial)}
                 </p>
               </div>
             </div>
@@ -363,17 +361,17 @@ export default function DashboardScreen() {
         <Kpi
           etiqueta="Ingresos"
           icono={Wallet}
-          valor={dinero(actual.ingresos)}
+          valor={formatoDinero(actual.ingresos)}
           pie={`${actual.tickets} ticket${actual.tickets !== 1 ? 's' : ''}`}
           delta={comparativa.ingresos}
         />
         <Kpi
           etiqueta="Ticket promedio"
           icono={Receipt}
-          valor={dinero(actual.ticketPromedio)}
+          valor={formatoDinero(actual.ticketPromedio)}
           pie={
             actual.propinas > 0
-              ? `${dinero(actual.propinas)} en propinas`
+              ? `${formatoDinero(actual.propinas)} en propinas`
               : 'Sin propinas registradas'
           }
           delta={comparativa.ticketPromedio}
@@ -429,7 +427,7 @@ export default function DashboardScreen() {
                   pyl.hayGastos && pyl.utilidadNeta < 0 ? 'text-adm-danger' : ''
                 }`}
               >
-                {dinero(pyl.hayGastos ? pyl.utilidadNeta : pyl.margen)}
+                {formatoDinero(pyl.hayGastos ? pyl.utilidadNeta : pyl.margen)}
               </p>
               <p className="text-xs text-adm-muted mt-1">
                 {pyl.hayGastos
@@ -441,13 +439,13 @@ export default function DashboardScreen() {
                 <div className="flex justify-between">
                   <dt className="text-adm-muted">Ingresos</dt>
                   <dd className="tabular-nums font-bold">
-                    {dinero(pyl.ingresos)}
+                    {formatoDinero(pyl.ingresos)}
                   </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-adm-muted">Costo de insumos</dt>
                   <dd className="tabular-nums font-bold">
-                    −{dinero(pyl.costo)}
+                    −{formatoDinero(pyl.costo)}
                   </dd>
                 </div>
                 {pyl.hayGastos && (
@@ -455,13 +453,13 @@ export default function DashboardScreen() {
                     <div className="flex justify-between">
                       <dt className="text-adm-muted">Gastos y costos fijos</dt>
                       <dd className="tabular-nums font-bold">
-                        −{dinero(pyl.gastos)}
+                        −{formatoDinero(pyl.gastos)}
                       </dd>
                     </div>
                     <div className="flex justify-between pt-1.5 border-t border-adm-border">
                       <dt className="text-adm-muted">Margen bruto</dt>
                       <dd className="tabular-nums font-bold">
-                        {dinero(pyl.margen)}
+                        {formatoDinero(pyl.margen)}
                       </dd>
                     </div>
                   </>
@@ -489,8 +487,8 @@ export default function DashboardScreen() {
                 <p className="mt-3 text-xs text-adm-warn flex gap-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>
-                    Hay {dinero(pyl.gastosPendientes)} en gastos recurrentes sin
-                    confirmar; aún no cuentan aquí.
+                    Hay {formatoDinero(pyl.gastosPendientes)} en gastos
+                    recurrentes sin confirmar; aún no cuentan aquí.
                   </span>
                 </p>
               )}
@@ -542,7 +540,7 @@ export default function DashboardScreen() {
                       {p.cantidad} u.
                     </span>
                     <span className="font-bold tabular-nums w-24 text-right">
-                      {dinero(p.importe)}
+                      {formatoDinero(p.importe)}
                     </span>
                   </li>
                 ))}

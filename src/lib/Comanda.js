@@ -50,6 +50,7 @@ import { aISOLocal } from './Fechas';
 import { importeEnLetra } from './Letras';
 import { logoDeConfiguracion } from './LogoTermico';
 import { arqueoDelTurno } from './Arqueo';
+import { formatoDinero } from './Dinero';
 
 /**
  * Marca que se estampa al pie del ticket de cobro.
@@ -184,12 +185,10 @@ function advertenciasDelPie(propina) {
   return avisos;
 }
 
-export function money(v) {
-  return `$${num(v).toLocaleString('es-MX', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+// El ticket y la pre-cuenta escriben el dinero con la misma regla que las
+// pantallas (lib/Dinero.js). Se conserva el nombre `money` porque el resto de
+// este archivo y sus pruebas lo usan.
+export const money = formatoDinero;
 
 /**
  * Sufijo de copia para el id. La copia 1 no lleva sufijo: así el id de la

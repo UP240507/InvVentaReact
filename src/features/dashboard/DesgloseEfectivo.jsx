@@ -24,13 +24,11 @@
 //
 // Ver `docs/DISENO_ARQUEO_Y_CAJON.md` §4.
 import { arqueoDeDesglose } from '../../lib/Arqueo';
-
-const dinero = (n) =>
-  `$${(Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatoDinero } from '../../lib/Dinero';
 
 /** «1000» → «$1,000»; «0.5» → «50¢», que es como lo llama quien cuenta. */
 const etiqueta = (den) =>
-  den < 1 ? `${Math.round(den * 100)}¢` : dinero(den).replace('.00', '');
+  den < 1 ? `${Math.round(den * 100)}¢` : formatoDinero(den).replace('.00', '');
 
 function Fila({ den, piezas, onPiezas }) {
   const subtotal = (Number(piezas) || 0) * den;
@@ -52,7 +50,7 @@ function Fila({ den, piezas, onPiezas }) {
         className="w-20 bg-adm-bg border-2 border-adm-field focus:border-adm-ok rounded-ui px-3 py-2 font-black text-adm-ink text-center outline-none transition-colors tabular-nums"
       />
       <span className="flex-1 text-right font-bold text-adm-muted tabular-nums">
-        {subtotal > 0 ? dinero(subtotal) : ''}
+        {subtotal > 0 ? formatoDinero(subtotal) : ''}
       </span>
     </div>
   );
@@ -133,7 +131,7 @@ export default function DesgloseEfectivo({
           className="text-3xl font-black font-syne text-adm-ink tabular-nums"
           aria-label="Total contado"
         >
-          {dinero(contado)}
+          {formatoDinero(contado)}
         </p>
       </div>
     </div>

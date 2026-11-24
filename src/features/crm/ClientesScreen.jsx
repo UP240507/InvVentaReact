@@ -33,6 +33,7 @@ import {
   Receipt,
   History,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 // ¿El cliente cumple años este mes? (cumpleanos = 'YYYY-MM-DD' del input date)
 const cumpleEsteMes = (cumpleanos) => {
@@ -277,11 +278,7 @@ export default function CrmScreen() {
       ancho: '1%',
       celda: (c) => (
         <span className="font-bold text-adm-ink">
-          $
-          {Number(c.total_gastado || 0).toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(Number(c.total_gastado || 0))}
         </span>
       ),
     },
@@ -615,11 +612,7 @@ acking-widest px-2 flex justify-between"
                     Total Gastado
                   </p>
                   <p className="text-2xl font-black text-adm-ink">
-                    $
-                    {Number(clienteVivo.total_gastado || 0).toLocaleString(
-                      'es-MX',
-                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                    )}
+                    {formatoDinero(Number(clienteVivo.total_gastado || 0))}
                   </p>
                 </div>
                 <div className="bg-adm-warn/10 p-4 rounded-ui border border-adm-warn/30 text-center">
@@ -685,11 +678,7 @@ acking-widest px-2 flex justify-between"
                           </p>
                         </div>
                         <p className="font-black text-adm-ink">
-                          $
-                          {Number(v.total || 0).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(Number(v.total || 0))}
                         </p>
                       </div>
                     ))}

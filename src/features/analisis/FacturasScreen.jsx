@@ -26,6 +26,7 @@ import {
   Hash,
   Receipt,
 } from 'lucide-react';
+import { formatoDinero } from '../../lib/Dinero';
 
 // Usos de CFDI válidos en México
 const USOS_CFDI = [
@@ -270,11 +271,7 @@ export default function FacturasScreen() {
       ancho: '1%',
       celda: (f) => (
         <span className="font-bold text-adm-ink">
-          $
-          {Number(f.total).toLocaleString('es-MX', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+          {formatoDinero(Number(f.total))}
         </span>
       ),
     },
@@ -424,11 +421,7 @@ export default function FacturasScreen() {
                           </p>
                         </div>
                         <span className="font-black text-adm-ok">
-                          $
-                          {Number(v.total).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(Number(v.total))}
                         </span>
                       </button>
                     ))

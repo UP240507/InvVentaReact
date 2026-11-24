@@ -28,16 +28,11 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { hoyLocalISO } from '../../lib/Fechas';
+import { formatoImporte } from '../../lib/Dinero';
 
 // ── Helpers numéricos ─────────────────────────────────────────────────────────
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const floor2 = (n) => Math.floor((Number(n) || 0) * 100) / 100;
-const money = (n) =>
-  (Number(n) || 0).toLocaleString('es-MX', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 const METODOS = [
   {
     id: 'equitativo',
@@ -407,7 +402,7 @@ export default function PropineroScreen() {
         accion: 'REPARTO_PROPINAS',
         modulo: 'PROPINERO',
         nivel: 'info',
-        detalles: `Bote $${money(bote)} repartido (${metodo}) entre ${participantesPayload.length} personas. Remanente $${money(remanente)}.`,
+        detalles: `Bote $${formatoImporte(bote)} repartido (${metodo}) entre ${participantesPayload.length} personas. Remanente $${formatoImporte(remanente)}.`,
       });
 
       showToast('Reparto registrado. Bote vaciado.', 'success');
@@ -575,7 +570,7 @@ export default function PropineroScreen() {
               <p className="text-sm font-bold text-ops-muted flex justify-between">
                 <span>Ventas del periodo:</span>
                 <span className="text-ops-ink">
-                  ${money(ventasTotales)} · {ventasScope.length}
+                  ${formatoImporte(ventasTotales)} · {ventasScope.length}
                 </span>
               </p>
             </div>
@@ -595,7 +590,7 @@ export default function PropineroScreen() {
                   Propinas sin repartir
                 </span>
                 <span className="text-3xl font-black tabular-nums">
-                  ${money(bote)}
+                  ${formatoImporte(bote)}
                 </span>
               </div>
               {propinasYaRepartidas > 0 && (
@@ -604,7 +599,7 @@ export default function PropineroScreen() {
                     <CheckCircle2 className="w-3.5 h-3.5" /> Ya repartidas
                   </span>
                   <span className="font-black text-ops-muted">
-                    ${money(propinasYaRepartidas)}
+                    ${formatoImporte(propinasYaRepartidas)}
                   </span>
                 </div>
               )}
@@ -623,7 +618,7 @@ export default function PropineroScreen() {
               </h3>
               {historial.length > 0 && (
                 <span className="text-xs font-black text-ops-ok">
-                  ${money(acumuladoHistorial)}
+                  ${formatoImporte(acumuladoHistorial)}
                 </span>
               )}
             </div>
@@ -640,7 +635,7 @@ export default function PropineroScreen() {
                   >
                     <div>
                       <p className="font-black text-ops-ink">
-                        ${money(h.total_repartido)}{' '}
+                        ${formatoImporte(h.total_repartido)}{' '}
                         <span className="font-bold text-ops-muted capitalize">
                           · {h.metodo} · {h.modo}
                         </span>
@@ -700,8 +695,9 @@ export default function PropineroScreen() {
             <div className="flex items-center gap-3 px-4 py-3 mb-5 bg-ops-ok/10 border-2 border-ops-ok/30 rounded-ui">
               <CheckCircle2 className="w-5 h-5 text-ops-ok shrink-0" />
               <p className="text-sm font-bold text-ops-ok leading-snug">
-                Este periodo ya fue repartido (${money(propinasYaRepartidas)}).
-                El bote está vacío; no se puede repartir de nuevo.
+                Este periodo ya fue repartido ($
+                {formatoImporte(propinasYaRepartidas)}). El bote está vacío; no
+                se puede repartir de nuevo.
               </p>
             </div>
           )}
@@ -772,7 +768,7 @@ export default function PropineroScreen() {
 
                     <div className="text-right w-24 shrink-0">
                       <p className="text-base font-black text-ops-ok">
-                        ${money(dist.monto)}
+                        ${formatoImporte(dist.monto)}
                       </p>
                     </div>
                   </div>
@@ -787,14 +783,16 @@ export default function PropineroScreen() {
               <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
                 Bote
               </p>
-              <p className="text-lg font-black text-ops-ink">${money(bote)}</p>
+              <p className="text-lg font-black text-ops-ink">
+                ${formatoImporte(bote)}
+              </p>
             </div>
             <div className="bg-ops-panel-2 rounded-ui p-3 text-center border border-ops-border">
               <p className="text-[10px] font-black text-ops-muted uppercase tracking-widest">
                 Repartido
               </p>
               <p className="text-lg font-black text-ops-ok">
-                ${money(totalRepartido)}
+                ${formatoImporte(totalRepartido)}
               </p>
             </div>
             <div
@@ -813,21 +811,21 @@ export default function PropineroScreen() {
                   remanente < -0.001 ? 'text-ops-danger' : 'text-ops-ink'
                 }`}
               >
-                ${money(remanente)}
+                ${formatoImporte(remanente)}
               </p>
             </div>
           </div>
 
           {remanente > 0.001 && metodo !== 'manual' && (
             <p className="text-[11px] font-bold text-ops-muted text-center mb-4">
-              El remanente de ${money(remanente)} (centavos no divisibles) queda
-              en caja.
+              El remanente de ${formatoImporte(remanente)} (centavos no
+              divisibles) queda en caja.
             </p>
           )}
           {remanente < -0.001 && (
             <p className="text-[11px] font-bold text-ops-danger text-center mb-4">
-              Asignaste ${money(Math.abs(remanente))} más que el bote. Ajusta
-              antes de registrar.
+              Asignaste ${formatoImporte(Math.abs(remanente))} más que el bote.
+              Ajusta antes de registrar.
             </p>
           )}
 
@@ -854,7 +852,9 @@ export default function PropineroScreen() {
             <div className="flex flex-col gap-3 p-4 bg-ops-panel-2 rounded-ui border-2 border-ops-border">
               <p className="text-sm font-bold text-ops-ink text-center">
                 Repartir{' '}
-                <span className="font-black">${money(totalRepartido)}</span>{' '}
+                <span className="font-black">
+                  ${formatoImporte(totalRepartido)}
+                </span>{' '}
                 entre {incluidosConMonto.filter((p) => p.monto > 0).length}{' '}
                 personas. El bote se vacía y queda en auditoría.
               </p>

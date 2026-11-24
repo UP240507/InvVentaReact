@@ -35,9 +35,7 @@ import {
   Edit2,
   MousePointerClick,
 } from 'lucide-react';
-
-const dinero = (n) =>
-  `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatoDinero } from '../../../lib/Dinero';
 
 const ESTADO_UI = {
   libre: { texto: 'Libre', clase: 'text-ops-ok' },
@@ -152,7 +150,7 @@ export default function InspectorMesa({
           Cuenta actual
         </p>
         <p className="text-4xl font-black font-syne text-ops-ok leading-none tabular-nums">
-          {dinero(total)}
+          {formatoDinero(total)}
         </p>
         {ocupada && minutosAbierta != null && (
           <p className="mt-2 text-xs text-ops-muted flex items-center gap-1.5">
@@ -219,7 +217,7 @@ export default function InspectorMesa({
                 </span>
                 <span className="flex-1 min-w-0 leading-snug">{it.nombre}</span>
                 <span className="font-bold tabular-nums shrink-0">
-                  {dinero(
+                  {formatoDinero(
                     (Number(it.precio) || 0) * (Number(it.cantidad) || 1),
                   )}
                 </span>

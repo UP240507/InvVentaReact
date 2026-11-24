@@ -114,6 +114,7 @@ import PanelAcoplable from '../../components/PanelAcoplable';
 import HintsAtajos from '../../components/HintsAtajos';
 import { OpsButton, OpsModal } from '../../components/ui';
 import { cartaDeRuta } from '../../lib/Navegacion';
+import { formatoDinero } from '../../lib/Dinero';
 
 const CARTA_POS = cartaDeRuta('/pos');
 
@@ -2270,13 +2271,9 @@ export default function PosScreen() {
                     </p>
                   )}
                   <p className="text-ops-ok font-black mt-2 text-lg">
-                    $
-                    {getPrecio(
-                      conPrecioDeCarta(prod, franjaCarta),
-                    ).toLocaleString('es-MX', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatoDinero(
+                      getPrecio(conPrecioDeCarta(prod, franjaCarta)),
+                    )}
                   </p>
                 </div>
               </button>
@@ -2296,7 +2293,7 @@ export default function PosScreen() {
         // Sin `titulo`: el carrito ya trae su propia cabecera con el nombre de
         // la mesa.
         etiquetaAbrir={isMesa ? 'Ver comanda' : 'Ver carrito'}
-        resumen={`$${granTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        resumen={`${formatoDinero(granTotal)}`}
         insignia={carrito.reduce((n, i) => n + (Number(i.cantidad) || 0), 0)}
         // Con el carrito vacío no hay nada que ver: la barra sólo taparía
         // productos. Aparece en cuanto entra la primera línea.
@@ -2357,20 +2354,12 @@ export default function PosScreen() {
                     return (
                       <div className="mt-1 flex items-baseline gap-2 flex-wrap">
                         <p className="text-ops-ok font-black text-sm">
-                          $
-                          {linea.neto.toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(linea.neto)}
                         </p>
                         {linea.descuento > 0 && (
                           <>
                             <span className="text-[11px] text-ops-muted line-through">
-                              $
-                              {linea.bruto.toLocaleString('es-MX', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              {formatoDinero(linea.bruto)}
                             </span>
                             <span className="text-[10px] font-black uppercase tracking-widest text-ops-warn bg-ops-warn/10 border border-ops-warn/30 px-2 py-0.5 rounded-ui">
                               {etiquetaDescuento(item.descuento)}
@@ -2480,33 +2469,15 @@ export default function PosScreen() {
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-ops-muted font-bold text-sm">
               <span>Subtotal</span>
-              <span>
-                $
-                {subtotal.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
+              <span>{formatoDinero(subtotal)}</span>
             </div>
             <div className="flex justify-between text-ops-muted font-bold text-sm">
               <span>IVA ({ivaRaw * 100}%)</span>
-              <span>
-                $
-                {totalIva.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
+              <span>{formatoDinero(totalIva)}</span>
             </div>
             <div className="flex justify-between text-ops-ink font-black text-3xl pt-4 border-t border-ops-border border-dashed">
               <span>Total</span>
-              <span className="text-ops-ok">
-                $
-                {granTotal.toLocaleString('es-MX', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
+              <span className="text-ops-ok">{formatoDinero(granTotal)}</span>
             </div>
           </div>
 
@@ -3026,14 +2997,7 @@ export default function PosScreen() {
                                 cuánto cuesta el extra antes de cobrárselo. */}
                             {Number(op.precio_extra) > 0 && (
                               <span className="block text-[11px] font-bold opacity-80">
-                                +$
-                                {Number(op.precio_extra).toLocaleString(
-                                  'es-MX',
-                                  {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  },
-                                )}
+                                +{formatoDinero(Number(op.precio_extra))}
                               </span>
                             )}
                           </button>

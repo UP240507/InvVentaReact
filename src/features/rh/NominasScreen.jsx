@@ -10,6 +10,7 @@ import { useSyncStore } from '../../store/useSyncStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { Banknote, FileText, History, CheckCircle2, Coins } from 'lucide-react';
 import { aISOLocal } from '../../lib/Fechas';
+import { formatoDinero } from '../../lib/Dinero';
 
 export default function NominaScreen() {
   const { staff, nominas, asistencias, turnos, showToast } = useAppStore();
@@ -359,11 +360,7 @@ export default function NominaScreen() {
                         </td>
                         <td className="p-5 text-right">
                           <p className="font-bold text-adm-muted dark:text-adm-ink">
-                            $
-                            {linea.sueldo_diario.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            {formatoDinero(linea.sueldo_diario)}
                           </p>
                           <p className="text-[9px] font-black uppercase tracking-widest text-adm-info">
                             por{' '}
@@ -374,11 +371,7 @@ export default function NominaScreen() {
                                 : 'día'}
                           </p>
                           <p className="text-[9px] font-bold text-adm-muted">
-                            Total: $
-                            {linea.total_sueldo.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            Total: {formatoDinero(linea.total_sueldo)}
                           </p>
                         </td>
                         <td className="p-5">
@@ -387,13 +380,9 @@ export default function NominaScreen() {
                             title="Suma de los repartos del Propinero en el periodo"
                           >
                             <p className="font-black text-adm-ok text-lg leading-none">
-                              $
-                              {Number(
-                                draft[linea.id_empleado]?.propinas || 0,
-                              ).toLocaleString('es-MX', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              {formatoDinero(
+                                Number(draft[linea.id_empleado]?.propinas || 0),
+                              )}
                             </p>
                             <span className="text-[9px] font-black uppercase tracking-widest text-adm-ok">
                               Propinero
@@ -402,11 +391,7 @@ export default function NominaScreen() {
                         </td>
                         <td className="p-5 text-right">
                           <p className="font-black text-adm-ink text-lg">
-                            $
-                            {linea.total_pagar.toLocaleString('es-MX', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            {formatoDinero(linea.total_pagar)}
                           </p>
                         </td>
                       </tr>
@@ -425,11 +410,7 @@ export default function NominaScreen() {
                   Total Sueldos
                 </p>
                 <p className="text-xl font-black text-adm-bg dark:text-adm-ink leading-none">
-                  $
-                  {resumenNomina.totalSueldos.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatoDinero(resumenNomina.totalSueldos)}
                 </p>
               </div>
               <div className="h-10 w-px bg-adm-ink dark:bg-adm-border shrink-0" />
@@ -438,11 +419,7 @@ export default function NominaScreen() {
                   <Coins className="w-3 h-3 text-adm-ok" /> Total Propinas
                 </p>
                 <p className="text-xl font-black text-adm-ok leading-none">
-                  $
-                  {resumenNomina.totalPropinas.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatoDinero(resumenNomina.totalPropinas)}
                 </p>
               </div>
               <div className="h-10 w-px bg-adm-ink dark:bg-adm-border shrink-0" />
@@ -451,11 +428,7 @@ export default function NominaScreen() {
                   Gran Total Nómina
                 </p>
                 <p className="text-3xl font-black text-adm-info leading-none">
-                  $
-                  {resumenNomina.granTotal.toLocaleString('es-MX', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatoDinero(resumenNomina.granTotal)}
                 </p>
               </div>
             </div>
@@ -518,11 +491,7 @@ export default function NominaScreen() {
                           Sueldos Fijos
                         </p>
                         <p className="font-bold text-adm-ink">
-                          $
-                          {Number(nom.total_sueldos).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(Number(nom.total_sueldos))}
                         </p>
                       </div>
                       <div className="bg-adm-ok/10 rounded-ui p-3 border border-adm-ok/30">
@@ -530,11 +499,7 @@ export default function NominaScreen() {
                           Propinas Dispersadas
                         </p>
                         <p className="font-bold text-adm-ok">
-                          $
-                          {Number(nom.total_propinas).toLocaleString('es-MX', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatoDinero(Number(nom.total_propinas))}
                         </p>
                       </div>
                     </div>
@@ -544,11 +509,7 @@ export default function NominaScreen() {
                         Gran Total
                       </p>
                       <p className="text-xl font-black text-adm-ink">
-                        $
-                        {Number(nom.gran_total).toLocaleString('es-MX', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatoDinero(Number(nom.gran_total))}
                       </p>
                     </div>
                   </div>
