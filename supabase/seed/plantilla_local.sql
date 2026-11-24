@@ -125,7 +125,7 @@ insert into public.roles_permisos (restaurante_id, rol, capacidades) values
 insert into public.configuracion (
   restaurante_id, nombre_empresa, iva, mensaje_ticket,
   unidades, categorias, categorias_insumo, denominaciones,
-  flujo_cuenta, precios_incluyen_iva,
+  flujo_cuenta,
   franjas_activas, franja_corte
 ) values (
   :rid,
@@ -145,9 +145,10 @@ insert into public.configuracion (
   -- folio. El otro flujo (`precuenta_y_ticket`) existe para quien ya trabaja
   -- asi, pero para un local nuevo dos papeles es papel de mas.
   'ticket_final',
-  -- En Mexico el precio de la carta ya trae IVA. Ponerlo en false hace que la
-  -- caja sume 16 % encima de lo que dice el menu.
-  true,
+  -- `precios_incluyen_iva` NO va aqui: la columna no existe en la base (medido
+  -- el 23-nov, H26). La caja y el servidor lo leen con `?? true` / `coalesce
+  -- (..., true)`, asi que el precio de la carta ya trae IVA, que es lo que esta
+  -- plantilla queria. Si la columna debe existir es decision aparte.
   -- Franjas apagadas: un local de un solo turno no tiene por que enterarse de
   -- que esto existe.
   false,
