@@ -191,6 +191,45 @@ function advertenciasDelPie(propina) {
 export const money = formatoDinero;
 
 /**
+ * El renglón de un producto en el ticket y en la pre-cuenta: cantidad, nombre,
+ * importe ya con su descuento, y debajo lo elegido, lo que trae el paquete y el
+ * descuento. Los dos papeles lo pintan igual; antes vivía copiado en los dos.
+ * Devuelve `null` si la cantidad no es positiva.
+ */
+function renglonConImporte(item) {
+  const cantidad = num(item?.cantidad);
+  if (cantidad <= 0) return null;
+
+  const linea = importeDeLinea(item);
+  // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
+  // descuento es una operación sobre eso.
+  const sublineas = sublineasDeModificadores(item, { conPrecio: true });
+
+  // Los componentes de un paquete se listan: el cliente pagó "Desayuno
+  // completo" y tiene derecho a ver qué incluía.
+  const componentes = (item?.componentes || []).filter(
+    (c) => c?.recetaId != null,
+  );
+  for (const c of componentes) {
+    sublineas.push(`  ${num(c.cantidad) || 1}x ${c.nombre || ''}`.trimEnd());
+  }
+
+  if (linea.descuento > 0) {
+    sublineas.push(
+      `  ${etiquetaDescuento(item.descuento)} (−${money(linea.descuento)})`,
+    );
+  }
+
+  return {
+    cantidad: String(cantidad),
+    nombre: item?.nombre || 'Producto',
+    nota: '',
+    importe: money(linea.neto),
+    sublineas,
+  };
+}
+
+/**
  * Sufijo de copia para el id. La copia 1 no lleva sufijo: así el id de la
  * impresión normal es el mismo que se generaría sin pensar en reimpresiones,
  * y no hay dos formas de nombrar la misma cosa.
@@ -344,36 +383,8 @@ export function construirTicket(
   const cuerpo = [];
 
   for (const item of items) {
-    const cantidad = num(item?.cantidad);
-    if (cantidad <= 0) continue;
-
-    const linea = importeDeLinea(item);
-    // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
-    // descuento es una operación sobre eso.
-    const sublineas = sublineasDeModificadores(item, { conPrecio: true });
-
-    // Los componentes de un paquete se listan: el cliente pagó "Desayuno
-    // completo" y tiene derecho a ver qué incluía.
-    const componentes = (item?.componentes || []).filter(
-      (c) => c?.recetaId != null,
-    );
-    for (const c of componentes) {
-      sublineas.push(`  ${num(c.cantidad) || 1}x ${c.nombre || ''}`.trimEnd());
-    }
-
-    if (linea.descuento > 0) {
-      sublineas.push(
-        `  ${etiquetaDescuento(item.descuento)} (−${money(linea.descuento)})`,
-      );
-    }
-
-    cuerpo.push({
-      cantidad: String(cantidad),
-      nombre: item?.nombre || 'Producto',
-      nota: '',
-      importe: money(linea.neto),
-      sublineas,
-    });
+    const renglon = renglonConImporte(item);
+    if (renglon) cuerpo.push(renglon);
   }
 
   // El TOTAL va PRIMERO y grande; el desglose baja al pie. Ver
@@ -578,34 +589,8 @@ export function construirPreCuenta(cuenta, { configuracion = {} } = {}) {
   const cuerpo = [];
 
   for (const item of items) {
-    const cantidad = num(item?.cantidad);
-    if (cantidad <= 0) continue;
-
-    const linea = importeDeLinea(item);
-    // Lo elegido va antes que el descuento: describe QUÉ se vendió, y el
-    // descuento es una operación sobre eso.
-    const sublineas = sublineasDeModificadores(item, { conPrecio: true });
-
-    const componentes = (item?.componentes || []).filter(
-      (c) => c?.recetaId != null,
-    );
-    for (const c of componentes) {
-      sublineas.push(`  ${num(c.cantidad) || 1}x ${c.nombre || ''}`.trimEnd());
-    }
-
-    if (linea.descuento > 0) {
-      sublineas.push(
-        `  ${etiquetaDescuento(item.descuento)} (−${money(linea.descuento)})`,
-      );
-    }
-
-    cuerpo.push({
-      cantidad: String(cantidad),
-      nombre: item?.nombre || 'Producto',
-      nota: '',
-      importe: money(linea.neto),
-      sublineas,
-    });
+    const renglon = renglonConImporte(item);
+    if (renglon) cuerpo.push(renglon);
   }
 
   // Mismo orden que el ticket: TOTAL primero y grande, desglose al pie. Ver

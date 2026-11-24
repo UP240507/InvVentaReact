@@ -19,8 +19,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useAtajos } from '../../hooks/useAtajos';
-
-const unir = (...c) => c.filter(Boolean).join(' ');
+import { unir } from '../../lib/Clases';
 
 const ALINEACION = {
   izq: 'text-left',

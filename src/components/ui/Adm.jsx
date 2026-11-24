@@ -16,8 +16,7 @@
 import { X } from 'lucide-react';
 import HintsAtajos from '../HintsAtajos';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
-
-const unir = (...cls) => cls.filter(Boolean).join(' ');
+import { unir } from '../../lib/Clases';
 
 // ── Contenedor de pantalla ───────────────────────────────────────────────────
 export function PageShell({ children, className = '', ancho = 'max-w-7xl' }) {
