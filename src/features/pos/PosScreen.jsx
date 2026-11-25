@@ -2160,6 +2160,15 @@ export default function PosScreen() {
     { titulo: 'Cuadro abierto', activo: hayModalAbierto },
   );
 
+  // El rótulo de la hoja del carrito en el teléfono. «Mesa 11» y no «11» a
+  // secas; si la mesa ya se llama «Mesa algo», no se repite la palabra.
+  const nombreMesa = String(mesaActual?.nombre ?? '').trim();
+  const tituloCarrito = !isMesa
+    ? 'Mostrador'
+    : /^mesa\b/i.test(nombreMesa)
+      ? nombreMesa
+      : `Mesa ${nombreMesa}`;
+
   return (
     <div className="h-screen flex bg-ops-panel-2 font-sans overflow-hidden text-ops-ink transition-colors duration-lenta">
       {/* ─── PANEL IZQUIERDO: MENÚ DE PRODUCTOS ───
@@ -2311,8 +2320,14 @@ export default function PosScreen() {
         abierto={carritoAbierto}
         onAbrir={() => setCarritoAbierto(true)}
         onCerrar={() => setCarritoAbierto(false)}
-        // Sin `titulo`: el carrito ya trae su propia cabecera con el nombre de
-        // la mesa.
+        // ── EN EL TELÉFONO, EL NOMBRE VA EN LA FILA DE LA ✕ (0.3.4) ─────────
+        // La hoja ya gasta una fila sólo con el botón de cerrar, y debajo el
+        // carrito ponía un bloque de dos renglones («COMANDA PARA» / «11»).
+        // Chris, 25-nov: en el teléfono hay que aprovechar todo el espacio.
+        // Así que el nombre sube a esa fila y el bloque se esconde en el
+        // teléfono; en caja y tablet, donde el carrito es columna y no hoja,
+        // queda igual.
+        titulo={tituloCarrito}
         etiquetaAbrir={isMesa ? 'Ver comanda' : 'Ver carrito'}
         resumen={`${formatoDinero(granTotal)}`}
         insignia={carrito.reduce((n, i) => n + (Number(i.cantidad) || 0), 0)}
@@ -2320,27 +2335,31 @@ export default function PosScreen() {
         // productos. Aparece en cuanto entra la primera línea.
         disparador={carrito.length > 0}
       >
-        <div
-          className={`p-6 flex items-center justify-between border-b border-ops-border transition-colors duration-lenta ${isMesa ? 'bg-ops-danger/5' : 'bg-ops-panel-2'}`}
-        >
-          <div className="flex items-center gap-3 text-ops-ink">
-            {isMesa ? (
-              <ChefHat
-                className={`w-7 h-7 ${isMesa ? 'text-ops-danger' : 'text-ops-accent'}`}
-              />
-            ) : (
-              <ShoppingCart className="w-7 h-7 text-ops-accent" />
-            )}
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-0.5">
-                {isMesa ? 'Comanda para' : 'Venta Rápida'}
-              </p>
-              <h2 className="text-xl font-black font-syne tracking-tight leading-none">
-                {isMesa ? mesaActual.nombre : 'Mostrador'}
-              </h2>
+        {/* En el teléfono el nombre ya va en la fila de la ✕ (arriba,
+            `titulo`): este bloque sólo existe donde el carrito es columna. */}
+        {acoplado && (
+          <div
+            className={`p-6 flex items-center justify-between border-b border-ops-border transition-colors duration-lenta ${isMesa ? 'bg-ops-danger/5' : 'bg-ops-panel-2'}`}
+          >
+            <div className="flex items-center gap-3 text-ops-ink">
+              {isMesa ? (
+                <ChefHat
+                  className={`w-7 h-7 ${isMesa ? 'text-ops-danger' : 'text-ops-accent'}`}
+                />
+              ) : (
+                <ShoppingCart className="w-7 h-7 text-ops-accent" />
+              )}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-ops-muted mb-0.5">
+                  {isMesa ? 'Comanda para' : 'Venta Rápida'}
+                </p>
+                <h2 className="text-xl font-black font-syne tracking-tight leading-none">
+                  {isMesa ? mesaActual.nombre : 'Mostrador'}
+                </h2>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar bg-ops-panel-2/50 transition-colors duration-lenta">
           {carrito.length === 0 ? (

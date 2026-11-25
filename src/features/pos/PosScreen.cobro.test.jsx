@@ -11,8 +11,8 @@
 // no se puede ver el fallo de H3, que vive justo en lo que pasa cuando la mesa
 // cambia en el almacén y la pantalla se rehace desde ella.
 // ─────────────────────────────────────────────────────────────────────────────
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
@@ -587,5 +587,45 @@ describe('H29 · reimprimir el ticket de cobro sube sólo columnas de la base', 
       (k) => !COLUMNAS_DE_VENTAS.has(k),
     );
     expect(ajenas).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La cabecera del carrito en el teléfono (Chris, 25-nov): «COMANDA PARA» / «11»
+// gastaba dos renglones debajo de una fila que sólo tenía la ✕. En el teléfono
+// el nombre sube a esa fila y el bloque se esconde; en caja y tablet, igual.
+// jsdom no trae `matchMedia`, y sin él `useAcoplado` dice «acoplado»: aquí se
+// simula un teléfono para ver la hoja.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('El carrito en el teléfono: el nombre en la fila de la ✕', () => {
+  const simularAncho = (esAncho) => {
+    window.matchMedia = () => ({
+      matches: esAncho,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+  };
+  afterEach(() => {
+    delete window.matchMedia;
+  });
+
+  it('en el teléfono la hoja se llama «Mesa 11» y no repite «Comanda para»', async () => {
+    simularAncho(false);
+    const user = userEvent.setup();
+    montarMesa();
+    await user.click(screen.getByRole('button', { name: /Ver comanda/ }));
+
+    const hoja = screen.getByRole('dialog', { name: 'Mesa 11' });
+    expect(hoja).toBeTruthy();
+    // ── LA AFIRMACIÓN, Y SU CONTROL NEGATIVO ─────────────────────────────
+    // Con `7bf7133` la hoja no tenía nombre y debajo salía el bloque.
+    expect(within(hoja).getByRole('heading', { name: 'Mesa 11' })).toBeTruthy();
+    expect(within(hoja).queryByText(/Comanda para/i)).toBeNull();
+  });
+
+  it('en caja y tablet el carrito conserva su cabecera', () => {
+    simularAncho(true);
+    montarMesa();
+    expect(screen.getByText(/Comanda para/i)).toBeTruthy();
   });
 });
