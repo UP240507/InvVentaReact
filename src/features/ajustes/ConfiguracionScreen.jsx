@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
-import { PageShell, PageHeader, Card } from '../../components/ui';
+import { PageShell, PageHeader, Card, Interruptor } from '../../components/ui';
 import { getCapacidades, tieneFlag } from '../../lib/Permisos';
 import { useAuthStore } from '../auth/useAuthStore';
 import { usePlan } from '../../hooks/usePlan';
@@ -153,25 +153,15 @@ const Field = ({
   </div>
 );
 
+// El interruptor de la pantalla. La pieza vive en `ui/Adm.jsx` (`Interruptor`,
+// 0.3.4); aquí sólo se conecta a un campo del formulario.
 const Toggle = ({ label, field, description, form, setForm }) => (
-  <label className="flex items-center justify-between gap-4 p-4 bg-adm-bg border-2 border-adm-border rounded-ui cursor-pointer hover:border-adm-info/30 dark:hover:border-adm-info/50 transition-all">
-    <div>
-      <p className="text-sm font-bold text-adm-ink">{label}</p>
-      {description && (
-        <p className="text-[10px] font-bold text-adm-muted mt-0.5">
-          {description}
-        </p>
-      )}
-    </div>
-    <div
-      onClick={() => setForm((f) => ({ ...f, [field]: !f[field] }))}
-      className={`w-12 h-6 rounded-full relative transition-all duration-media ${form[field] ? 'bg-adm-info' : 'bg-adm-chip dark:bg-adm-border'}`}
-    >
-      <div
-        className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-media ${form[field] ? 'left-7' : 'left-1'}`}
-      />
-    </div>
-  </label>
+  <Interruptor
+    etiqueta={label}
+    descripcion={description}
+    encendido={!!form[field]}
+    onCambiar={(v) => setForm((f) => ({ ...f, [field]: v }))}
+  />
 );
 
 export default function ConfiguracionScreen() {

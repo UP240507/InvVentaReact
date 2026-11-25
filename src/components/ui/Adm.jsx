@@ -491,3 +491,62 @@ export function ConfirmModal({
     </div>
   );
 }
+
+// ── Interruptor (encendido / apagado) ───────────────────────────────────────
+// Salió de ConfiguracionScreen en la 0.3.4 (D2, 25-nov), donde tenía dos
+// fallos que Chris vio en la caja y uno que no se ve:
+//
+//  · El carril se encogía. Iba en una fila flexible junto al texto, sin
+//    `shrink-0`; con una descripción de tres renglones el texto lo apretaba y
+//    la bola, posicionada en absoluto a 28 px, se quedaba fuera de un carril
+//    que ya medía menos. Por eso «La tarde empieza con el primer corte» salía
+//    con la bola pegada al borde de la tarjeta.
+//  · No era un control: un `div` con `onClick` dentro de un `label` sin nada
+//    que etiquetar (el mismo patrón que «Recordarme», H16). No se activaba con
+//    el teclado y un lector de pantalla no lo anunciaba.
+//
+// Ahora es un botón con `role="switch"` y `aria-checked`, y el `label` lo
+// envuelve: el texto es su nombre accesible, y tocar cualquier parte de la
+// tarjeta lo cambia. Antes sólo respondía el carril: el `label` no tenía
+// control que etiquetar, así que tocar el texto no hacía nada.
+export function Interruptor({
+  etiqueta,
+  descripcion,
+  encendido = false,
+  onCambiar,
+  className = '',
+}) {
+  return (
+    <label
+      className={unir(
+        'flex items-center justify-between gap-4 p-4 bg-adm-bg border-2 border-adm-border rounded-ui cursor-pointer hover:border-adm-info/30 dark:hover:border-adm-info/50 transition-all',
+        className,
+      )}
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-adm-ink">{etiqueta}</span>
+        {descripcion && (
+          <span className="block text-[10px] font-bold text-adm-muted mt-0.5">
+            {descripcion}
+          </span>
+        )}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={!!encendido}
+        onClick={() => onCambiar?.(!encendido)}
+        className={`shrink-0 w-12 h-6 rounded-full relative transition-all duration-media focus:outline-none focus-visible:ring-2 focus-visible:ring-adm-info ${
+          encendido ? 'bg-adm-info' : 'bg-adm-chip dark:bg-adm-border'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-media ${
+            encendido ? 'left-7' : 'left-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
