@@ -1,0 +1,33 @@
+# Fin de linea: LF en todo el repositorio y en cada copia, sea Windows o no.
+#
+# Por que LF y no CRLF: el 88 % del repo ya estaba en LF, Prettier lo exige
+# (`endOfLine: "lf"`), los `.sh` no corren con CRLF, y Deno, Supabase y la
+# nube trabajan en LF. Node, Vite, Tauri, VS Code y PowerShell leen LF sin
+# problema en Windows. Lo que habia en CRLF (19 archivos en el repo, 41 en la
+# copia de Chris) no lo pidio nadie: lo dejaba cada editor segun su gusto, y
+# un `compilar.ps1` que exige el arbol limpio se atoraba con archivos
+# "cambiados" que eran identicos (H22, 24-nov).
+#
+# `eol=lf` manda sobre el `core.autocrlf` de cada maquina: git escribe LF al
+# sacar archivos y convierte a LF al guardar, configure lo que configure cada
+# quien.
+* text=auto eol=lf
+
+# Lo unico que Windows necesita en CRLF. Hoy no hay ninguno; queda por si llega.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binarios: ni se convierten ni se comparan como texto.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.bin binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.exe binary

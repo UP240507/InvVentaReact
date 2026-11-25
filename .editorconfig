@@ -1,0 +1,8 @@
+# Lo minimo para que el editor no meta CRLF ni otra codificacion en archivos
+# nuevos. La sangria y lo demas los decide Prettier, no esto.
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
