@@ -526,6 +526,18 @@
   background: transparent;
 }
 
+/* ── Una sola cruz en los campos de búsqueda (D3, 0.3.4) ─────────────────────
+   Chromium —y con él el WebView de la caja— le pinta su propia cruz a todo
+   `type="search"`, y en el POS salía al lado de la nuestra, que mide 44 px
+   para el dedo. No se cambia el tipo de campo: en el teléfono es lo que pone
+   la tecla «Buscar» en el teclado. Se esconde la del navegador. La prueba que
+   lo cuida es `src/test/buscador-una-cruz.test.js`. */
+.sin-cruz-nativa::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 /* ── «Cambio sincronizado» que se ilumina (0.3.4, Chris 25-nov) ──────────────
    Lo que antes era un toast en cada subida. La frase vive en la barra de
    arriba y, al subir algo, brilla en el verde de «bien» de su familia

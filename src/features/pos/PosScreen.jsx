@@ -2230,7 +2230,7 @@ export default function PosScreen() {
                 if (e.key === 'Enter') e.preventDefault();
                 if (e.key === 'Escape') setBusqueda('');
               }}
-              className="w-full min-h-11 bg-transparent py-2 font-bold text-ops-ink outline-none placeholder:text-ops-muted"
+              className="sin-cruz-nativa w-full min-h-11 bg-transparent py-2 font-bold text-ops-ink outline-none placeholder:text-ops-muted"
             />
             {busqueda && (
               <button
