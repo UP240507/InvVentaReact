@@ -2013,10 +2013,21 @@ export default function PosScreen() {
       // otra vez la copia 2 y el hub la descartara en silencio.
       const actualizada = { ...venta, copias_impresas: copia };
       setTicketGenerado(actualizada);
-      enqueueAction('ventas', 'update', {
-        ...actualizada,
-        _quedaGente: undefined,
-      });
+      // ── SUBE LA FILA DE LA BASE, NO LA DEL PAPEL (H29, 25-nov) ──────────
+      // `venta` es el ticket de pantalla (`ventaVisual`): lleva el cambio, lo
+      // recibido y el nombre de la mesa, que sólo existen para imprimirse. Si
+      // viajan, PostgREST rechaza la fila entera (PGRST204) y queda «1 cambio
+      // sin sincronizar» permanente. Se quitan aquí y no se manda sólo el
+      // contador: la cola sube un update como upsert y reemplaza la copia
+      // local, así que necesita la fila completa.
+      const {
+        cambio_entregado,
+        efectivo_recibido,
+        mesa_nombre,
+        _quedaGente,
+        ...fila
+      } = actualizada;
+      enqueueAction('ventas', 'update', fila);
       useAppStore.setState((prev) => ({
         ventas: (prev.ventas || []).map((x) =>
           String(x.id) === String(venta.id)

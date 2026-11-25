@@ -15,7 +15,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { construirTicket } from '../../lib/Comanda';
+import { sinCamposDerivados } from '../../lib/Payload';
 
 const h = vi.hoisted(() => ({
   enqueued: [],
@@ -64,13 +68,23 @@ vi.mock('../../lib/Hub', async (original) => ({
   // imprime, no lo que se guarda.
   enviarTicket: async (venta) => {
     h.tickets.push(venta);
-    return { ok: true };
+    // Como contesta el hub cuando el papel sale de verdad: `salioPapel` pide
+    // `estado: 'encolado'`, y sin él la reimpresión se detiene antes de subir.
+    return { ok: true, estado: 'encolado' };
   },
   enviarComanda: async () => ({ ok: true }),
   enviarPreCuenta: async () => ({ ok: true }),
   abrirCajon: async () => ({ ok: true }),
 }));
-vi.mock('./components/TicketImpresion', () => ({ default: () => null }));
+// El ticket en pantalla se reduce a su botón de reimprimir: es lo único de él
+// que mueve datos (H29). Lo demás es papel.
+vi.mock('./components/TicketImpresion', () => ({
+  default: ({ onImprimir }) => (
+    <button type="button" onClick={onImprimir}>
+      Reimprimir ticket
+    </button>
+  ),
+}));
 
 import PosScreen from './PosScreen';
 import { useAppStore } from '../../store/useAppStore';
@@ -484,5 +498,94 @@ describe('Buscador del POS', () => {
     await user.click(screen.getByRole('button', { name: /Borrar búsqueda/ }));
     expect(screen.queryByRole('button', { name: /Capuchino/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Latte frío/ })).toBeTruthy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H29 · Reimprimir desde el ticket de cobro no puede subir campos del papel.
+//
+// En la barrida de la 0.3.3 (25-nov) reimprimir dejó «1 cambio sin
+// sincronizar» permanente: `Could not find the 'cambio_entregado' column of
+// 'ventas'`. El ticket de pantalla lleva campos que sólo existen para el papel
+// y la reimpresión los mandaba a la cola. La prueba no lista esos tres: compara
+// lo que sube contra las columnas reales de `ventas` en el esquema base, así
+// que también atrapa el siguiente campo de pantalla que se cuele.
+// ─────────────────────────────────────────────────────────────────────────────
+const COLUMNAS_DE_VENTAS = (() => {
+  const sql = readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../supabase/local/esquema_base.sql',
+    ),
+    'utf8',
+  );
+  const inicio = sql.indexOf('CREATE TABLE IF NOT EXISTS "public"."ventas" (');
+  const cuerpo = sql.slice(inicio, sql.indexOf('\n);', inicio));
+  return new Set([...cuerpo.matchAll(/^\s+"([a-z_]+)" /gm)].map((m) => m[1]));
+})();
+
+describe('H29 · reimprimir el ticket de cobro sube sólo columnas de la base', () => {
+  it('el esquema base trae las columnas de ventas (la prueba no compara contra nada)', () => {
+    expect(COLUMNAS_DE_VENTAS.has('copias_impresas')).toBe(true);
+    expect(COLUMNAS_DE_VENTAS.has('folio')).toBe(true);
+    expect(COLUMNAS_DE_VENTAS.has('cambio_entregado')).toBe(false);
+  });
+
+  it('cobro con cambio y reimpresión: el update lleva la fila completa, sin campos del papel', async () => {
+    const user = userEvent.setup();
+    montarDirecta();
+    await user.click(screen.getByRole('button', { name: /Capuchino/ }));
+    await user.click(screen.getByRole('button', { name: /Cobrar Ticket/ }));
+    await pagar(user, 100);
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'Reimprimir ticket' }),
+    );
+
+    const update = h.enqueued.find(
+      (a) => a[0] === 'ventas' && a[1] === 'update',
+    )?.[2];
+    expect(update).toBeTruthy();
+
+    // ── LA AFIRMACIÓN, Y SU CONTROL NEGATIVO ─────────────────────────────
+    // Con `fb6edca` sobraban `cambio_entregado`, `efectivo_recibido` y
+    // `mesa_nombre`, y PostgREST rechazaba la fila entera (PGRST204).
+    // Lo que de verdad sube: la cola quita sola los `_derivados`
+    // (`sinCamposDerivados`), así que se compara después de esa misma puerta.
+    const ajenas = Object.keys(sinCamposDerivados(update)).filter(
+      (k) => !COLUMNAS_DE_VENTAS.has(k),
+    );
+    expect(ajenas).toEqual([]);
+
+    // La cola sube un update como upsert y reemplaza la copia local: tiene
+    // que ir la fila entera, no sólo el contador.
+    const venta = ventaEncolada();
+    expect(update.folio).toBe(venta.folio);
+    expect(update.items).toEqual(venta.items);
+    expect(update.efectivo).toBe(75);
+    expect(update.copias_impresas).toBe(venta.copias_impresas + 1);
+
+    // Y la copia sí lleva el cambio en el papel.
+    const doc = construirTicket(h.tickets.at(-1), { configuracion: {} });
+    expect(doc.totales.find((t) => t.etiqueta === 'Cambio')?.valor).toBe(
+      '$25.00',
+    );
+  });
+
+  it('el insert del cobro tampoco lleva columnas que la base no tiene', async () => {
+    const user = userEvent.setup();
+    montarDirecta();
+    await user.click(screen.getByRole('button', { name: /Capuchino/ }));
+    await user.click(screen.getByRole('button', { name: /Cobrar Ticket/ }));
+    await pagar(user, 100);
+    await user.click(
+      screen.getByRole('button', { name: /Confirmar y Cerrar Cuenta/ }),
+    );
+    const ajenas = Object.keys(sinCamposDerivados(ventaEncolada())).filter(
+      (k) => !COLUMNAS_DE_VENTAS.has(k),
+    );
+    expect(ajenas).toEqual([]);
   });
 });
