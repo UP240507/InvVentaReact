@@ -1252,9 +1252,12 @@ export default function ConfiguracionScreen() {
                   />
                 </div>
 
-                {/* Vista previa ticket */}
+                {/* Vista previa ticket. La hoja es papel y el papel no sigue el
+                    tema: tinta negra y grises fijos, como TicketImpresion. Con
+                    los colores del tema, en oscuro salía blanco sobre blanco
+                    (D1, 0.3.4). El marco de alrededor sí sigue el tema. */}
                 <div className="bg-adm-chip dark:bg-adm-bg rounded-ui p-6 border-2 border-dashed border-adm-border flex justify-center items-start">
-                  <div className="bg-white p-5 w-full max-w-[260px] shadow-sm font-mono text-[11px] text-adm-ink space-y-1 text-center rounded-ui">
+                  <div className="bg-white p-5 w-full max-w-[260px] shadow-sm font-mono text-[11px] text-black space-y-1 text-center rounded-ui">
                     <p className="font-black text-sm uppercase">
                       {form.nombre_empresa || 'MI RESTAURANTE'}
                     </p>
@@ -1264,14 +1267,14 @@ export default function ConfiguracionScreen() {
                       </p>
                     )}
                     {form.rfc && <p>RFC: {form.rfc}</p>}
-                    <p className="border-t border-dashed border-adm-border pt-1 mt-1">
+                    <p className="border-t border-dashed border-gray-300 pt-1 mt-1">
                       - - - - - - - - - - - -
                     </p>
                     <div className="text-left">
                       <p>Mesa: 05 | #0012</p>
                       <p>Mesero: Carlos</p>
                     </div>
-                    <p className="border-t border-dashed border-adm-border pt-1 mt-1">
+                    <p className="border-t border-dashed border-gray-300 pt-1 mt-1">
                       - - - - - - - - - - - -
                     </p>
                     <div className="flex justify-between">
@@ -1282,7 +1285,7 @@ export default function ConfiguracionScreen() {
                       <p>1x Chilaquiles</p>
                       <p>$110</p>
                     </div>
-                    <p className="border-t border-dashed border-adm-border pt-1 mt-1">
+                    <p className="border-t border-dashed border-gray-300 pt-1 mt-1">
                       - - - - - - - - - - - -
                     </p>
                     <div className="flex justify-between font-black">
@@ -1290,7 +1293,7 @@ export default function ConfiguracionScreen() {
                       <p>$165</p>
                     </div>
                     {form.mostrar_propinas && (
-                      <div className="text-left mt-2 pt-2 border-t border-adm-border text-[10px]">
+                      <div className="text-left mt-2 pt-2 border-t border-gray-300 text-[10px]">
                         <p className="font-bold text-center mb-1">
                           Propina sugerida:
                         </p>
@@ -1304,7 +1307,7 @@ export default function ConfiguracionScreen() {
                         </div>
                       </div>
                     )}
-                    <p className="border-t border-dashed border-adm-border pt-2 mt-2 text-adm-muted italic text-[10px] whitespace-pre-wrap">
+                    <p className="border-t border-dashed border-gray-300 pt-2 mt-2 text-gray-600 italic text-[10px] whitespace-pre-wrap">
                       {form.mensaje_ticket}
                     </p>
                   </div>
