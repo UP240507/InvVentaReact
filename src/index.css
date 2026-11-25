@@ -526,6 +526,35 @@
   background: transparent;
 }
 
+/* ── «Cambio sincronizado» que se ilumina (0.3.4, Chris 25-nov) ──────────────
+   Lo que antes era un toast en cada subida. La frase vive en la barra de
+   arriba y, al subir algo, brilla en el verde de «bien» de su familia
+   (`--brillo`, lo pone AvisoSincronizado) y se apaga sola. El componente
+   vuelve a montarse con cada subida, así que la animación arranca de nuevo sin
+   temporizadores.
+
+   Sin movimiento (`prefers-reduced-motion`) no se desvanece: se queda
+   iluminada y se apaga de golpe al final, con `steps`. Sigue avisando, sin
+   animar nada. */
+@keyframes brillo-sincronizado {
+  0%,
+  55% {
+    color: var(--brillo);
+    background-color: color-mix(in srgb, var(--brillo) 14%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.aviso-sync-brillo {
+  animation: brillo-sincronizado 3.2s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aviso-sync-brillo {
+    animation-timing-function: steps(1, end);
+  }
+}
+
 /* El ticket impreso y su vista previa se quedan con la barra nativa a
    propósito: ese bloque simula papel térmico y no debe seguir el tema. */
 #area-impresion {

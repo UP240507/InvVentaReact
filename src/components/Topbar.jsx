@@ -32,6 +32,7 @@ import { formatoCantidad } from '../lib/Inventario';
 import { useAcoplado } from '../hooks/useAcoplado';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { useSessionStore } from '../store/useSessionStore';
+import AvisoSincronizado from './AvisoSincronizado';
 
 // Estados de comanda que cuentan como "lista para entregar" (mismo criterio que
 // tenía el sidebar; si cambia el flujo del KDS, se cambia en un solo lugar).
@@ -181,6 +182,10 @@ export default function Topbar() {
           </>
         )}
       </button>
+
+      {/* Lo que subió a la nube, como frase que se ilumina y no como toast
+          (0.3.4). En el teléfono, sólo el icono. */}
+      <AvisoSincronizado compacto={!acoplado} />
 
       {/* ── QUIÉN ESTÁ DENTRO, Y LA SALIDA ── */}
       {quien && (

@@ -117,6 +117,9 @@ export const useSyncStore = create((set, get) => ({
   isProcessingQueue: false,
   pendingTasks: 0,
   deadTasks: 0, // tareas en dead-letter (para badge/diagnóstico en UI)
+  // Lo último que subió la cola: `{ cantidad, en }`. Lo lee AvisoSincronizado
+  // para iluminarse en la barra; ver el comentario al final de processQueue.
+  ultimaSubida: null,
 
   setOfflineStatus: (status) => {
     set({ isOffline: status });
@@ -649,21 +652,16 @@ export const useSyncStore = create((set, get) => ({
         deadTasks: dead,
       });
 
-      // ✅ Aviso de sincronización donde DE VERDAD ocurre (no en el evento de red,
-      // que depende de navigator.onLine y es poco confiable). Se dispara siempre
-      // que se haya subido al menos una tarea, sin importar el origen del drenado.
+      // ── LO QUE SUBIÓ, SIN NOTIFICACIÓN (Chris, 25-nov) ──────────────────
+      // Se anota aquí porque es donde DE VERDAD ocurre (el evento de red
+      // depende de navigator.onLine y no es de fiar). Pero ya no salta como
+      // toast: con conexión la cola sube algo en casi cada toque, y en la
+      // barrida de la 0.3.3 «1 cambio sincronizado» tapaba la pantalla para
+      // todo. Ahora es una frase en la barra de arriba que se ilumina
+      // (`AvisoSincronizado`). Los avisos de error siguen siendo toasts: esos
+      // sí tienen que interrumpir.
       if (processedCount > 0) {
-        try {
-          const { useAppStore } = await import('./useAppStore');
-          useAppStore
-            .getState()
-            .showToast?.(
-              `${processedCount} cambio${processedCount === 1 ? '' : 's'} sincronizado${processedCount === 1 ? '' : 's'}.`,
-              'success',
-            );
-        } catch {
-          /* noop */
-        }
+        set({ ultimaSubida: { cantidad: processedCount, en: Date.now() } });
       }
 
       // 🔁 Condición de carrera: si entraron tareas MIENTRAS este processQueue

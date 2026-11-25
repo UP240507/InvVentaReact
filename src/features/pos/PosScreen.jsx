@@ -116,6 +116,8 @@ import { OpsButton, OpsModal } from '../../components/ui';
 import { cartaDeRuta } from '../../lib/Navegacion';
 import { formatoDinero } from '../../lib/Dinero';
 import { autorizar } from '../../api/autorizar';
+import { useAcoplado } from '../../hooks/useAcoplado';
+import AvisoSincronizado from '../../components/AvisoSincronizado';
 
 const CARTA_POS = cartaDeRuta('/pos');
 
@@ -142,6 +144,8 @@ const getPrecio = (item) => {
 
 // ─── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────
 export default function PosScreen() {
+  // Teléfono o no: el mismo criterio que usa la hoja del carrito.
+  const acoplado = useAcoplado();
   const {
     recetas,
     mesas,
@@ -2187,7 +2191,15 @@ export default function PosScreen() {
           {/* Atajos a la vista: en un turno nadie abre la ayuda, pero de tanto
               verlos aquí se aprenden. Salen del registro vivo, no de una lista
               escrita a mano. */}
-          <HintsAtajos scope="pos" className="hidden xl:flex text-ops-muted" />
+          <div className="flex items-center gap-3">
+            <HintsAtajos
+              scope="pos"
+              className="hidden xl:flex text-ops-muted"
+            />
+            {/* Pantalla completa: aquí no hay barra de arriba, así que el aviso
+                de lo que subió a la nube va en el encabezado propio (0.3.4). */}
+            <AvisoSincronizado familia="ops" compacto={!acoplado} />
+          </div>
         </div>
 
         {/* ── EL BUSCADOR (0.3.3, Chris 19-nov) ──────────────────────────

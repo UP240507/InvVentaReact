@@ -39,6 +39,8 @@ import {
   UserCircle,
 } from 'lucide-react';
 import { cartaDeRuta } from '../../lib/Navegacion';
+import { useAcoplado } from '../../hooks/useAcoplado';
+import AvisoSincronizado from '../../components/AvisoSincronizado';
 import { autorizar } from '../../api/autorizar';
 
 const CARTA_KDS = cartaDeRuta('/kds');
@@ -90,6 +92,7 @@ const iconoEstacion = (nombre) => {
 };
 
 export default function KdsScreen() {
+  const acoplado = useAcoplado();
   const { comandas_activas, configuracion, showToast } = useAppStore();
   const { enqueueAction } = useSyncStore();
   const { user } = useAuthStore();
@@ -529,6 +532,9 @@ export default function KdsScreen() {
           scopeAtajos="kds"
           acciones={
             <>
+              {/* Pantalla completa: sin barra de arriba, el aviso de lo que
+                  subió a la nube vive aquí (0.3.4). */}
+              <AvisoSincronizado familia="ops" compacto={!acoplado} />
               {/* El navegador no deja sonar hasta que alguien toca la pantalla.
                   En vez de fallar callado —que es como no tener aviso— se pide
                   el toque a la vista. Desaparece en cuanto queda activado. */}
