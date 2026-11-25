@@ -36,6 +36,7 @@ import {
   MousePointerClick,
 } from 'lucide-react';
 import { formatoDinero } from '../../../lib/Dinero';
+import { puedeTraspasar } from '../../../lib/OrdenMesa';
 
 const ESTADO_UI = {
   libre: { texto: 'Libre', clase: 'text-ops-ok' },
@@ -249,7 +250,7 @@ export default function InspectorMesa({
           tecla="T"
           icono={ArrowRightLeft}
           onClick={onTraspasar}
-          disabled={!ocupada || items.length === 0}
+          disabled={!puedeTraspasar(mesa)}
         >
           Traspasar cuenta
         </Accion>

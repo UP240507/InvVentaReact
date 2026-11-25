@@ -5,6 +5,7 @@ import { useSyncStore } from '../../store/useSyncStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAuthStore } from '../auth/useAuthStore';
 import { calcularVenta } from '../../lib/Fiscal';
+import { puedeTraspasar } from '../../lib/OrdenMesa';
 import { useAtajos } from '../../hooks/useAtajos';
 import { useAcoplado } from '../../hooks/useAcoplado';
 import { useCierreConEscape } from '../../hooks/useCierreConEscape';
@@ -329,6 +330,16 @@ export default function MesasScreen() {
 
   // ── TRASPASO DE CUENTAS ─────────────────────────────────────────────────
   const abrirModalTraspaso = (mesa) => {
+    // La tecla T llega aquí con cualquier mesa seleccionada; la tarjeta y el
+    // inspector ya esconden el botón, pero la regla se cumple aquí también.
+    if (!puedeTraspasar(mesa)) {
+      return showToast(
+        mesa?.estado === 'por_cobrar'
+          ? 'La cuenta ya se imprimió: reábrela con PIN en La Caja para traspasar'
+          : 'No hay nada que traspasar en esta mesa',
+        'error',
+      );
+    }
     setModalTraspaso({ show: true, mesaOrigen: mesa });
     setFormTraspaso({ mesaDestinoId: '', itemsSeleccionados: [] });
   };
@@ -1183,7 +1194,7 @@ export default function MesasScreen() {
                           <BookMarked className="w-4 h-4" />
                         </button>
                       )}
-                      {mesa.estado !== 'libre' && (
+                      {puedeTraspasar(mesa) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

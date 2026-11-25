@@ -154,3 +154,15 @@ export function quitarDescuentoEnLineas(items = [], id) {
     String(x?.id) === String(id) ? { ...x, descuento: null } : x,
   );
 }
+
+// ── ¿SE PUEDE TRASPASAR? (H1, salida rápida de la 0.3.4) ────────────────────
+// Sólo una mesa ocupada con algo en la cuenta. Con la cuenta impresa
+// (`por_cobrar`) el POS ya no deja tocar la orden sin reabrirla con PIN, y
+// sacarle líneas por un traspaso era la misma puerta sin candado. Para
+// traspasar, primero se reabre en La Caja. La misma regla decide la tarjeta,
+// el inspector y la tecla T, para que no vuelvan a separarse.
+export function puedeTraspasar(mesa) {
+  return (
+    mesa?.estado === 'ocupada' && (mesa.orden_actual?.items || []).length > 0
+  );
+}
